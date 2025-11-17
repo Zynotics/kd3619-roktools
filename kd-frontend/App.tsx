@@ -8,7 +8,7 @@ const BACKEND_URL = process.env.NODE_ENV === 'production'
   : 'http://localhost:4000';
 
 // Einfaches clientseitiges Passwort – nur UI, keine echte Sicherheit
-const ADMIN_PASSWORD = 'admin';
+const ADMIN_PASSWORD = '*3619rocks!';
 
 type ActiveView = 'overview' | 'honor';
 
