@@ -301,7 +301,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
               htmlFor="start-date-select"
               className="text-sm font-medium text-gray-400 mb-1"
             >
-              Start File
+              Start Date
             </label>
             <select
               id="start-date-select"
@@ -309,7 +309,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
               onChange={(e) => setStartFileId(e.target.value)}
               className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
             >
-              <option value="">Select Start File</option>
+              <option value="">Select Start Date</option>
               {uploadedFiles.map((file) => (
                 <option key={file.id} value={file.id} disabled={file.id === endFileId}>
                   {cleanFileName(file.name)}
@@ -323,7 +323,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
               htmlFor="end-date-select"
               className="text-sm font-medium text-gray-400 mb-1"
             >
-              End File
+              End Date
             </label>
             <select
               id="end-date-select"
@@ -331,7 +331,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
               onChange={(e) => setEndFileId(e.target.value)}
               className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
             >
-              <option value="">Select End File</option>
+              <option value="">Select End Date</option>
               {uploadedFiles.map((file) => (
                 <option key={file.id} value={file.id} disabled={file.id === startFileId}>
                   {cleanFileName(file.name)}
