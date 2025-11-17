@@ -24,7 +24,6 @@ interface PlayerAnalyticsRecord {
   t3Kills: number;
   t4Kills: number;
   t5Kills: number;
-  totalKills: number;
 }
 
 declare var Chart: any;
@@ -90,12 +89,6 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
           return index !== undefined ? String(row[index] ?? '') : '';
         };
 
-        const t1Kills = parseGermanNumber(getVal(['t1', 't1kills']));
-        const t2Kills = parseGermanNumber(getVal(['t2', 't2kills']));
-        const t3Kills = parseGermanNumber(getVal(['t3', 't3kills']));
-        const t4Kills = parseGermanNumber(getVal(['t4', 't4kills']));
-        const t5Kills = parseGermanNumber(getVal(['t5', 't5kills']));
-
         return {
           id: getString(['governorid', 'id']),
           name: getString(['name']),
@@ -104,12 +97,11 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
           troopsPower: parseGermanNumber(getVal(['troopspower'])),
           totalKillPoints: parseGermanNumber(getVal(['killpoints', 'kp'])),
           deadTroops: parseGermanNumber(getVal(['dead'])),
-          t1Kills,
-          t2Kills,
-          t3Kills,
-          t4Kills,
-          t5Kills,
-          totalKills: t1Kills + t2Kills + t3Kills + t4Kills + t5Kills,
+          t1Kills: parseGermanNumber(getVal(['t1', 't1kills'])),
+          t2Kills: parseGermanNumber(getVal(['t2', 't2kills'])),
+          t3Kills: parseGermanNumber(getVal(['t3', 't3kills'])),
+          t4Kills: parseGermanNumber(getVal(['t4', 't4kills'])),
+          t5Kills: parseGermanNumber(getVal(['t5', 't5kills'])),
         };
       });
 
@@ -137,7 +129,6 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
           t3Kills: player.t3Kills,
           t4Kills: player.t4Kills,
           t5Kills: player.t5Kills,
-          totalKills: player.totalKills,
         });
       });
     });
@@ -263,7 +254,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       });
     }
 
-    // Kills Chart
+    // Kill Points Chart (neu mit allen Kill-Typen)
     if (killsChartRef.current) {
       if (killsChartInstance.current) {
         killsChartInstance.current.destroy();
@@ -275,18 +266,52 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
           labels,
           datasets: [
             {
-              label: 'Total Kills',
-              data: history.map(h => h.totalKills),
+              label: 'Kill Points',
+              data: history.map(h => h.totalKillPoints),
               borderColor: 'rgba(245, 158, 11, 0.8)',
               backgroundColor: 'rgba(245, 158, 11, 0.2)',
               fill: true,
               tension: 0.4,
             },
             {
-              label: 'Kill Points',
-              data: history.map(h => h.totalKillPoints),
+              label: 'T1 Kills',
+              data: history.map(h => h.t1Kills),
+              borderColor: 'rgba(156, 163, 175, 0.8)',
+              backgroundColor: 'rgba(156, 163, 175, 0.2)',
+              fill: true,
+              tension: 0.4,
+              borderDash: [5, 5],
+            },
+            {
+              label: 'T2 Kills',
+              data: history.map(h => h.t2Kills),
+              borderColor: 'rgba(107, 114, 128, 0.8)',
+              backgroundColor: 'rgba(107, 114, 128, 0.2)',
+              fill: true,
+              tension: 0.4,
+              borderDash: [5, 5],
+            },
+            {
+              label: 'T3 Kills',
+              data: history.map(h => h.t3Kills),
+              borderColor: 'rgba(55, 65, 81, 0.8)',
+              backgroundColor: 'rgba(55, 65, 81, 0.2)',
+              fill: true,
+              tension: 0.4,
+            },
+            {
+              label: 'T4 Kills',
+              data: history.map(h => h.t4Kills),
               borderColor: 'rgba(249, 115, 22, 0.8)',
               backgroundColor: 'rgba(249, 115, 22, 0.2)',
+              fill: true,
+              tension: 0.4,
+            },
+            {
+              label: 'T5 Kills',
+              data: history.map(h => h.t5Kills),
+              borderColor: 'rgba(220, 38, 38, 0.8)',
+              backgroundColor: 'rgba(220, 38, 38, 0.2)',
               fill: true,
               tension: 0.4,
             }
@@ -512,9 +537,9 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
               </div>
             </div>
 
-            {/* Kills Chart */}
+            {/* Kill Points Chart (umbenannt) */}
             <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
-              <h5 className="text-lg font-semibold text-gray-200 mb-4">Kills & Kill Points</h5>
+              <h5 className="text-lg font-semibold text-gray-200 mb-4">Kill Points</h5>
               <div className="relative h-64">
                 <canvas ref={killsChartRef}></canvas>
               </div>
@@ -529,7 +554,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
             </div>
           </div>
 
-          {/* Daten Tabelle */}
+          {/* Daten Tabelle (ohne Total Kills) */}
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
             <h5 className="text-lg font-semibold text-gray-200 mb-4">Historical Data</h5>
             <div className="overflow-x-auto relative border border-gray-700 rounded-lg max-h-96">
@@ -540,7 +565,6 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
                     <th className="px-4 py-3 text-right">Power</th>
                     <th className="px-4 py-3 text-right">Troops Power</th>
                     <th className="px-4 py-3 text-right">Kill Points</th>
-                    <th className="px-4 py-3 text-right">Total Kills</th>
                     <th className="px-4 py-3 text-right">Dead Troops</th>
                   </tr>
                 </thead>
@@ -551,7 +575,6 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
                       <td className="px-4 py-2 text-right">{formatNumber(record.power)}</td>
                       <td className="px-4 py-2 text-right">{formatNumber(record.troopsPower)}</td>
                       <td className="px-4 py-2 text-right">{formatNumber(record.totalKillPoints)}</td>
-                      <td className="px-4 py-2 text-right">{formatNumber(record.totalKills)}</td>
                       <td className="px-4 py-2 text-right">{formatNumber(record.deadTroops)}</td>
                     </tr>
                   ))}
