@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import OverviewDashboard from './components/OverviewDashboard';
 import HonorDashboard from './components/HonorDashboard';
 
-// zentrale Backend-URL (lokal)
-const BACKEND_URL = 'http://localhost:4000';
+// zentrale Backend-URL
+const BACKEND_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://kd3619-backend.onrender.com'
+  : 'http://localhost:4000';
 
 // Einfaches clientseitiges Passwort – nur UI, keine echte Sicherheit
 const ADMIN_PASSWORD = 'admin';
