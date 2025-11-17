@@ -1,10 +1,10 @@
-// server.js
+// server.js - mit better-sqlite3
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const XLSX = require('xlsx');
 
 const app = express();
@@ -13,12 +13,11 @@ const PORT = process.env.PORT || 4000;
 // CORS für Production und Development
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://your-frontend-app.onrender.com' // Hier später Ihre Frontend-URL eintragen
+  'https://kd3619-frontend.onrender.com'
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Erlaube requests ohne origin (wie mobile apps oder curl requests)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
@@ -31,9 +30,6 @@ app.use(cors({
 
 app.use(express.json());
 
-// Static files für Uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 // 📂 Upload-Ordner erstellen
 const uploadsOverviewDir = path.join(__dirname, 'uploads', 'overview');
 const uploadsHonorDir = path.join(__dirname, 'uploads', 'honor');
@@ -45,17 +41,22 @@ const uploadsHonorDir = path.join(__dirname, 'uploads', 'honor');
 });
 
 // SQLite Datenbank Setup
-const dbPath = process.env.NODE_ENV === 'production' 
-  ? path.join('/tmp', 'uploads.db') // Render.com verwendet /tmp für persistente Daten
-  : path.join(__dirname, 'uploads.db');
-
+const dbPath = path.join(__dirname, 'uploads.db');
 console.log('Database path:', dbPath);
 
-const db = new sqlite3.Database(dbPath);
+// Database connection
+let db;
+try {
+  db = new Database(dbPath);
+  console.log('✅ Database connected successfully');
+} catch (error) {
+  console.error('❌ Database connection failed:', error);
+  process.exit(1);
+}
 
 // Tabellen erstellen falls nicht vorhanden
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS overview_files (
+db.exec(`
+  CREATE TABLE IF NOT EXISTS overview_files (
     id TEXT PRIMARY KEY,
     name TEXT,
     filename TEXT,
@@ -65,9 +66,11 @@ db.serialize(() => {
     fileOrder INTEGER DEFAULT 0,
     headers TEXT,
     data TEXT
-  )`);
+  )
+`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS honor_files (
+db.exec(`
+  CREATE TABLE IF NOT EXISTS honor_files (
     id TEXT PRIMARY KEY,
     name TEXT,
     filename TEXT,
@@ -77,8 +80,8 @@ db.serialize(() => {
     fileOrder INTEGER DEFAULT 0,
     headers TEXT,
     data TEXT
-  )`);
-});
+  )
+`);
 
 // Hilfsfunktion zum Parsen von Zahlen mit deutschen Format (1.000,00)
 function parseGermanNumber(value) {
@@ -195,11 +198,9 @@ const honorUpload = multer({
 // ==================== OVERVIEW ENDPOINTS ====================
 
 app.get('/overview/files-data', (req, res) => {
-  db.all("SELECT * FROM overview_files ORDER BY fileOrder, uploadDate", (err, rows) => {
-    if (err) {
-      console.error('Error fetching overview files:', err);
-      return res.status(500).json({ error: 'Failed to fetch files' });
-    }
+  try {
+    const stmt = db.prepare("SELECT * FROM overview_files ORDER BY fileOrder, uploadDate");
+    const rows = stmt.all();
     
     const files = rows.map(row => ({
       ...row,
@@ -208,7 +209,10 @@ app.get('/overview/files-data', (req, res) => {
     }));
     
     res.json(files);
-  });
+  } catch (err) {
+    console.error('Error fetching overview files:', err);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
 });
 
 app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => {
@@ -230,35 +234,30 @@ app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => 
       data: JSON.stringify(parsedData.data)
     };
 
-    db.run(
-      `INSERT INTO overview_files (id, name, filename, path, size, uploadDate, headers, data) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [newFile.id, newFile.name, newFile.filename, newFile.path, newFile.size, newFile.uploadDate, newFile.headers, newFile.data],
-      (err) => {
-        if (err) {
-          console.error('Error saving to database:', err);
-          if (fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-          }
-          return res.status(500).json({ error: 'Database error' });
-        }
-        
-        console.log('Overview file uploaded and parsed:', newFile.name);
-        res.json({ 
-          message: 'Datei erfolgreich hochgeladen und verarbeitet', 
-          file: {
-            id: newFile.id,
-            name: newFile.name,
-            filename: newFile.filename,
-            path: newFile.path,
-            size: newFile.size,
-            uploadDate: newFile.uploadDate,
-            headers: parsedData.headers,
-            data: parsedData.data
-          }
-        });
-      }
+    const stmt = db.prepare(`
+      INSERT INTO overview_files (id, name, filename, path, size, uploadDate, headers, data) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    stmt.run(
+      newFile.id, newFile.name, newFile.filename, newFile.path, 
+      newFile.size, newFile.uploadDate, newFile.headers, newFile.data
     );
+    
+    console.log('Overview file uploaded and parsed:', newFile.name);
+    res.json({ 
+      message: 'Datei erfolgreich hochgeladen und verarbeitet', 
+      file: {
+        id: newFile.id,
+        name: newFile.name,
+        filename: newFile.filename,
+        path: newFile.path,
+        size: newFile.size,
+        uploadDate: newFile.uploadDate,
+        headers: parsedData.headers,
+        data: parsedData.data
+      }
+    });
     
   } catch (error) {
     console.error('Upload error:', error);
@@ -273,26 +272,21 @@ app.delete('/overview/files/:id', (req, res) => {
   try {
     const fileId = req.params.id;
     
-    db.get("SELECT * FROM overview_files WHERE id = ?", [fileId], (err, file) => {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
-      
-      if (!file) {
-        return res.status(404).json({ error: 'Datei nicht gefunden' });
-      }
+    const stmt = db.prepare("SELECT * FROM overview_files WHERE id = ?");
+    const file = stmt.get(fileId);
+    
+    if (!file) {
+      return res.status(404).json({ error: 'Datei nicht gefunden' });
+    }
 
-      if (fs.existsSync(file.path)) {
-        fs.unlinkSync(file.path);
-      }
+    if (fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
 
-      db.run("DELETE FROM overview_files WHERE id = ?", [fileId], (err) => {
-        if (err) {
-          return res.status(500).json({ error: 'Database error' });
-        }
-        res.json({ message: 'Datei erfolgreich gelöscht' });
-      });
-    });
+    const deleteStmt = db.prepare("DELETE FROM overview_files WHERE id = ?");
+    deleteStmt.run(fileId);
+    
+    res.json({ message: 'Datei erfolgreich gelöscht' });
     
   } catch (error) {
     console.error('Delete error:', error);
@@ -307,21 +301,13 @@ app.post('/overview/files/reorder', (req, res) => {
       return res.status(400).json({ error: 'Ungültige Reihenfolge' });
     }
 
-    const updatePromises = order.map((id, index) => {
-      return new Promise((resolve, reject) => {
-        db.run("UPDATE overview_files SET fileOrder = ? WHERE id = ?", [index, id], (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
+    const updateStmt = db.prepare("UPDATE overview_files SET fileOrder = ? WHERE id = ?");
+    
+    order.forEach((id, index) => {
+      updateStmt.run(index, id);
     });
 
-    Promise.all(updatePromises)
-      .then(() => res.json({ message: 'Reihenfolge aktualisiert' }))
-      .catch(err => {
-        console.error('Reorder error:', err);
-        res.status(500).json({ error: 'Reihenfolge konnte nicht aktualisiert werden' });
-      });
+    res.json({ message: 'Reihenfolge aktualisiert' });
     
   } catch (error) {
     console.error('Reorder error:', error);
@@ -332,11 +318,9 @@ app.post('/overview/files/reorder', (req, res) => {
 // ==================== HONOR ENDPOINTS ====================
 
 app.get('/honor/files-data', (req, res) => {
-  db.all("SELECT * FROM honor_files ORDER BY fileOrder, uploadDate", (err, rows) => {
-    if (err) {
-      console.error('Error fetching honor files:', err);
-      return res.status(500).json({ error: 'Failed to fetch files' });
-    }
+  try {
+    const stmt = db.prepare("SELECT * FROM honor_files ORDER BY fileOrder, uploadDate");
+    const rows = stmt.all();
     
     const files = rows.map(row => ({
       ...row,
@@ -345,7 +329,10 @@ app.get('/honor/files-data', (req, res) => {
     }));
     
     res.json(files);
-  });
+  } catch (err) {
+    console.error('Error fetching honor files:', err);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
 });
 
 app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
@@ -367,35 +354,30 @@ app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
       data: JSON.stringify(parsedData.data)
     };
 
-    db.run(
-      `INSERT INTO honor_files (id, name, filename, path, size, uploadDate, headers, data) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [newFile.id, newFile.name, newFile.filename, newFile.path, newFile.size, newFile.uploadDate, newFile.headers, newFile.data],
-      (err) => {
-        if (err) {
-          console.error('Error saving to database:', err);
-          if (fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-          }
-          return res.status(500).json({ error: 'Database error' });
-        }
-        
-        console.log('Honor file uploaded and parsed:', newFile.name);
-        res.json({ 
-          message: 'Datei erfolgreich hochgeladen und verarbeitet', 
-          file: {
-            id: newFile.id,
-            name: newFile.name,
-            filename: newFile.filename,
-            path: newFile.path,
-            size: newFile.size,
-            uploadDate: newFile.uploadDate,
-            headers: parsedData.headers,
-            data: parsedData.data
-          }
-        });
-      }
+    const stmt = db.prepare(`
+      INSERT INTO honor_files (id, name, filename, path, size, uploadDate, headers, data) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    stmt.run(
+      newFile.id, newFile.name, newFile.filename, newFile.path, 
+      newFile.size, newFile.uploadDate, newFile.headers, newFile.data
     );
+    
+    console.log('Honor file uploaded and parsed:', newFile.name);
+    res.json({ 
+      message: 'Datei erfolgreich hochgeladen und verarbeitet', 
+      file: {
+        id: newFile.id,
+        name: newFile.name,
+        filename: newFile.filename,
+        path: newFile.path,
+        size: newFile.size,
+        uploadDate: newFile.uploadDate,
+        headers: parsedData.headers,
+        data: parsedData.data
+      }
+    });
     
   } catch (error) {
     console.error('Upload error:', error);
@@ -410,26 +392,21 @@ app.delete('/honor/files/:id', (req, res) => {
   try {
     const fileId = req.params.id;
     
-    db.get("SELECT * FROM honor_files WHERE id = ?", [fileId], (err, file) => {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
-      
-      if (!file) {
-        return res.status(404).json({ error: 'Datei nicht gefunden' });
-      }
+    const stmt = db.prepare("SELECT * FROM honor_files WHERE id = ?");
+    const file = stmt.get(fileId);
+    
+    if (!file) {
+      return res.status(404).json({ error: 'Datei nicht gefunden' });
+    }
 
-      if (fs.existsSync(file.path)) {
-        fs.unlinkSync(file.path);
-      }
+    if (fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
 
-      db.run("DELETE FROM honor_files WHERE id = ?", [fileId], (err) => {
-        if (err) {
-          return res.status(500).json({ error: 'Database error' });
-        }
-        res.json({ message: 'Datei erfolgreich gelöscht' });
-      });
-    });
+    const deleteStmt = db.prepare("DELETE FROM honor_files WHERE id = ?");
+    deleteStmt.run(fileId);
+    
+    res.json({ message: 'Datei erfolgreich gelöscht' });
     
   } catch (error) {
     console.error('Delete error:', error);
@@ -444,21 +421,13 @@ app.post('/honor/files/reorder', (req, res) => {
       return res.status(400).json({ error: 'Ungültige Reihenfolge' });
     }
 
-    const updatePromises = order.map((id, index) => {
-      return new Promise((resolve, reject) => {
-        db.run("UPDATE honor_files SET fileOrder = ? WHERE id = ?", [index, id], (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
+    const updateStmt = db.prepare("UPDATE honor_files SET fileOrder = ? WHERE id = ?");
+    
+    order.forEach((id, index) => {
+      updateStmt.run(index, id);
     });
 
-    Promise.all(updatePromises)
-      .then(() => res.json({ message: 'Reihenfolge aktualisiert' }))
-      .catch(err => {
-        console.error('Reorder error:', err);
-        res.status(500).json({ error: 'Reihenfolge konnte nicht aktualisiert werden' });
-      });
+    res.json({ message: 'Reihenfolge aktualisiert' });
     
   } catch (error) {
     console.error('Reorder error:', error);
@@ -495,6 +464,4 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Backend Server läuft auf Port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`💾 Datenbank: ${dbPath}`);
-  console.log(`📁 Overview Upload-Verzeichnis: ${uploadsOverviewDir}`);
-  console.log(`📁 Honor Upload-Verzeichnis: ${uploadsHonorDir}`);
 });
