@@ -1,17 +1,33 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { cleanFileName, parseGermanNumber, findColumnIndex } from '../utils';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { cleanFileName, parseGermanNumber, findColumnIndex, formatNumber, abbreviateNumber } from '../utils';
 
 interface PowerAnalyticsDashboardProps {
   isAdmin: boolean;
   backendUrl: string;
 }
 
-interface PlayerInfo {
+interface PlayerAnalyticsHistory {
   id: string;
   name: string;
   alliance: string;
-  power: number;
+  history: PlayerAnalyticsRecord[];
 }
+
+interface PlayerAnalyticsRecord {
+  fileName: string;
+  power: number;
+  troopsPower: number;
+  totalKillPoints: number;
+  deadTroops: number;
+  t1Kills: number;
+  t2Kills: number;
+  t3Kills: number;
+  t4Kills: number;
+  t5Kills: number;
+  totalKills: number;
+}
+
+declare var Chart: any;
 
 const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdmin, backendUrl }) => {
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
@@ -20,8 +36,18 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   const [isDataLoaded, setIsDataLoaded] = useState<boolean>(false);
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<PlayerInfo[] | 'not_found' | null>(null);
-  const [selectedPlayer, setSelectedPlayer] = useState<PlayerInfo | null>(null);
+  const [searchResults, setSearchResults] = useState<any[] | 'not_found' | null>(null);
+  const [selectedPlayerHistory, setSelectedPlayerHistory] = useState<PlayerAnalyticsHistory | null>(null);
+
+  const powerChartRef = useRef<HTMLCanvasElement>(null);
+  const troopsChartRef = useRef<HTMLCanvasElement>(null);
+  const killsChartRef = useRef<HTMLCanvasElement>(null);
+  const deadChartRef = useRef<HTMLCanvasElement>(null);
+
+  const powerChartInstance = useRef<any>(null);
+  const troopsChartInstance = useRef<any>(null);
+  const killsChartInstance = useRef<any>(null);
+  const deadChartInstance = useRef<any>(null);
 
   // Dateien laden
   const fetchFiles = useCallback(async () => {
@@ -49,6 +75,76 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
     fetchFiles();
   }, [fetchFiles]);
 
+  // Player Analytics History berechnen
+  const playerAnalyticsHistories = useMemo(() => {
+    const histories = new Map<string, PlayerAnalyticsHistory>();
+    
+    uploadedFiles.forEach((file) => {
+      const players = file.data.map((row: any[]) => {
+        const getVal = (keywords: string[]) => {
+          const index = findColumnIndex(file.headers, keywords);
+          return index !== undefined ? row[index] : 0;
+        };
+        const getString = (keywords: string[]) => {
+          const index = findColumnIndex(file.headers, keywords);
+          return index !== undefined ? String(row[index] ?? '') : '';
+        };
+
+        const t1Kills = parseGermanNumber(getVal(['t1', 't1kills']));
+        const t2Kills = parseGermanNumber(getVal(['t2', 't2kills']));
+        const t3Kills = parseGermanNumber(getVal(['t3', 't3kills']));
+        const t4Kills = parseGermanNumber(getVal(['t4', 't4kills']));
+        const t5Kills = parseGermanNumber(getVal(['t5', 't5kills']));
+
+        return {
+          id: getString(['governorid', 'id']),
+          name: getString(['name']),
+          alliance: getString(['alliance']),
+          power: parseGermanNumber(getVal(['power'])),
+          troopsPower: parseGermanNumber(getVal(['troopspower'])),
+          totalKillPoints: parseGermanNumber(getVal(['killpoints', 'kp'])),
+          deadTroops: parseGermanNumber(getVal(['dead'])),
+          t1Kills,
+          t2Kills,
+          t3Kills,
+          t4Kills,
+          t5Kills,
+          totalKills: t1Kills + t2Kills + t3Kills + t4Kills + t5Kills,
+        };
+      });
+
+      players.forEach((player) => {
+        if (!histories.has(player.id)) {
+          histories.set(player.id, {
+            id: player.id,
+            name: player.name,
+            alliance: player.alliance,
+            history: [],
+          });
+        }
+        const historyEntry = histories.get(player.id)!;
+        historyEntry.name = player.name;
+        historyEntry.alliance = player.alliance;
+        
+        historyEntry.history.push({
+          fileName: cleanFileName(file.name),
+          power: player.power,
+          troopsPower: player.troopsPower,
+          totalKillPoints: player.totalKillPoints,
+          deadTroops: player.deadTroops,
+          t1Kills: player.t1Kills,
+          t2Kills: player.t2Kills,
+          t3Kills: player.t3Kills,
+          t4Kills: player.t4Kills,
+          t5Kills: player.t5Kills,
+          totalKills: player.totalKills,
+        });
+      });
+    });
+    
+    return Array.from(histories.values());
+  }, [uploadedFiles]);
+
   // Alle aktuellen Spieler für die Suche
   const allPlayersLatest = useMemo(() => {
     if (uploadedFiles.length === 0) return [];
@@ -75,14 +171,196 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
     return players;
   }, [uploadedFiles]);
 
+  // Charts erstellen/aktualisieren
+  useEffect(() => {
+    if (!selectedPlayerHistory) {
+      // Charts zerstören wenn kein Spieler ausgewählt
+      [powerChartInstance, troopsChartInstance, killsChartInstance, deadChartInstance].forEach(chartRef => {
+        if (chartRef.current) {
+          chartRef.current.destroy();
+          chartRef.current = null;
+        }
+      });
+      return;
+    }
+
+    const history = selectedPlayerHistory.history;
+    const labels = history.map(h => h.fileName);
+
+    // Power Chart
+    if (powerChartRef.current) {
+      if (powerChartInstance.current) {
+        powerChartInstance.current.destroy();
+      }
+      const ctx = powerChartRef.current.getContext('2d');
+      powerChartInstance.current = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Power',
+            data: history.map(h => h.power),
+            borderColor: 'rgba(59, 130, 246, 0.8)',
+            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+            fill: true,
+            tension: 0.4,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context: any) => `Power: ${formatNumber(context.parsed.y)}`
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+            y: { ticks: { color: '#9ca3af', callback: (v: any) => abbreviateNumber(v) }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+          }
+        }
+      });
+    }
+
+    // Troops Power Chart
+    if (troopsChartRef.current) {
+      if (troopsChartInstance.current) {
+        troopsChartInstance.current.destroy();
+      }
+      const ctx = troopsChartRef.current.getContext('2d');
+      troopsChartInstance.current = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Troops Power',
+            data: history.map(h => h.troopsPower),
+            borderColor: 'rgba(16, 185, 129, 0.8)',
+            backgroundColor: 'rgba(16, 185, 129, 0.2)',
+            fill: true,
+            tension: 0.4,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context: any) => `Troops Power: ${formatNumber(context.parsed.y)}`
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+            y: { ticks: { color: '#9ca3af', callback: (v: any) => abbreviateNumber(v) }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+          }
+        }
+      });
+    }
+
+    // Kills Chart
+    if (killsChartRef.current) {
+      if (killsChartInstance.current) {
+        killsChartInstance.current.destroy();
+      }
+      const ctx = killsChartRef.current.getContext('2d');
+      killsChartInstance.current = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Total Kills',
+              data: history.map(h => h.totalKills),
+              borderColor: 'rgba(245, 158, 11, 0.8)',
+              backgroundColor: 'rgba(245, 158, 11, 0.2)',
+              fill: true,
+              tension: 0.4,
+            },
+            {
+              label: 'Kill Points',
+              data: history.map(h => h.totalKillPoints),
+              borderColor: 'rgba(249, 115, 22, 0.8)',
+              backgroundColor: 'rgba(249, 115, 22, 0.2)',
+              fill: true,
+              tension: 0.4,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { 
+              position: 'top',
+              labels: { color: '#d1d5db' }
+            },
+            tooltip: {
+              callbacks: {
+                label: (context: any) => `${context.dataset.label}: ${formatNumber(context.parsed.y)}`
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+            y: { ticks: { color: '#9ca3af', callback: (v: any) => abbreviateNumber(v) }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+          }
+        }
+      });
+    }
+
+    // Dead Troops Chart
+    if (deadChartRef.current) {
+      if (deadChartInstance.current) {
+        deadChartInstance.current.destroy();
+      }
+      const ctx = deadChartRef.current.getContext('2d');
+      deadChartInstance.current = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Dead Troops',
+            data: history.map(h => h.deadTroops),
+            borderColor: 'rgba(239, 68, 68, 0.8)',
+            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+            fill: true,
+            tension: 0.4,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context: any) => `Dead Troops: ${formatNumber(context.parsed.y)}`
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+            y: { ticks: { color: '#9ca3af', callback: (v: any) => abbreviateNumber(v) }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+          }
+        }
+      });
+    }
+  }, [selectedPlayerHistory]);
+
   // Suche
   const handleSearch = () => {
     if (!searchQuery) return;
     const lowerCaseQuery = searchQuery.toLowerCase();
 
-    const exactIdMatch = allPlayersLatest.find((p) => p.id === searchQuery);
+    const exactIdMatch = playerAnalyticsHistories.find((p) => p.id === searchQuery);
     if (exactIdMatch) {
-      setSelectedPlayer(exactIdMatch);
+      setSelectedPlayerHistory(exactIdMatch);
       setSearchResults(null);
       return;
     }
@@ -92,26 +370,35 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
     );
 
     if (nameMatches.length === 1) {
-      setSelectedPlayer(nameMatches[0]);
-      setSearchResults(null);
+      const history = playerAnalyticsHistories.find((p) => p.id === nameMatches[0].id);
+      if (history) {
+        setSelectedPlayerHistory(history);
+        setSearchResults(null);
+      } else {
+        setSearchResults('not_found');
+        setSelectedPlayerHistory(null);
+      }
     } else if (nameMatches.length > 1) {
       setSearchResults(nameMatches);
-      setSelectedPlayer(null);
+      setSelectedPlayerHistory(null);
     } else {
       setSearchResults('not_found');
-      setSelectedPlayer(null);
+      setSelectedPlayerHistory(null);
     }
   };
 
-  const handleSelectPlayer = (player: PlayerInfo) => {
-    setSelectedPlayer(player);
-    setSearchResults(null);
+  const handleSelectPlayer = (player: any) => {
+    const history = playerAnalyticsHistories.find((p) => p.id === player.id);
+    if (history) {
+      setSelectedPlayerHistory(history);
+      setSearchResults(null);
+    }
   };
 
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchResults(null);
-    setSelectedPlayer(null);
+    setSelectedPlayerHistory(null);
   };
 
   if (isLoading) {
@@ -133,17 +420,6 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
 
   return (
     <div className="space-y-8">
-      {/* Debug Info */}
-      <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
-        <h2 className="text-2xl font-bold text-white mb-4">Power Analytics Dashboard</h2>
-        <div className="mt-4 p-4 bg-gray-700 rounded-lg">
-          <h3 className="text-lg font-semibold text-gray-200 mb-2">System Info:</h3>
-          <p className="text-gray-400">Files loaded: {uploadedFiles.length}</p>
-          <p className="text-gray-400">Players available: {allPlayersLatest.length}</p>
-          <p className="text-gray-400">Selected Player: {selectedPlayer ? selectedPlayer.name : 'None'}</p>
-        </div>
-      </div>
-
       {/* Spieler Suche */}
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
         <h3 className="text-lg font-semibold text-gray-200 mb-4">Player Analytics Search</h3>
@@ -164,7 +440,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
           >
             Search
           </button>
-          {(searchResults || selectedPlayer) && (
+          {(searchResults || selectedPlayerHistory) && (
             <button
               onClick={handleClearSearch}
               className="px-6 py-2.5 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-500 transition-colors"
@@ -193,7 +469,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
                       className="w-full text-left p-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <p className="font-semibold text-white">{player.name}</p>
-                      <p className="text-sm text-gray-400">ID: {player.id} | Alliance: {player.alliance || 'N/A'} | Power: {player.power.toLocaleString()}</p>
+                      <p className="text-sm text-gray-400">ID: {player.id} | Alliance: {player.alliance || 'N/A'} | Power: {formatNumber(player.power)}</p>
                     </button>
                   </li>
                 ))}
@@ -203,22 +479,90 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
         </div>
       </div>
 
-      {/* Spieler Info */}
-      {selectedPlayer && (
-        <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-baseline">
-            <h4 className="text-xl font-bold text-white">{selectedPlayer.name}</h4>
-            <div className="flex gap-4 text-sm text-gray-400">
-              <span>ID: {selectedPlayer.id}</span>
-              <span>Alliance: {selectedPlayer.alliance || 'N/A'}</span>
-              <span>Power: {selectedPlayer.power.toLocaleString()}</span>
+      {/* Analytics Charts */}
+      {selectedPlayerHistory && (
+        <div className="space-y-6">
+          {/* Spieler Info */}
+          <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-baseline">
+              <h4 className="text-xl font-bold text-white">{selectedPlayerHistory.name}</h4>
+              <div className="flex gap-4 text-sm text-gray-400">
+                <span>ID: {selectedPlayerHistory.id}</span>
+                <span>Alliance: {selectedPlayerHistory.alliance || 'N/A'}</span>
+                <span>Records: {selectedPlayerHistory.history.length}</span>
+              </div>
             </div>
           </div>
-          <p className="text-gray-300 mt-4">Player analytics charts will be displayed here in the next update.</p>
+
+          {/* Charts Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Power Chart */}
+            <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+              <h5 className="text-lg font-semibold text-gray-200 mb-4">Power Progression</h5>
+              <div className="relative h-64">
+                <canvas ref={powerChartRef}></canvas>
+              </div>
+            </div>
+
+            {/* Troops Power Chart */}
+            <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+              <h5 className="text-lg font-semibold text-gray-200 mb-4">Troops Power Progression</h5>
+              <div className="relative h-64">
+                <canvas ref={troopsChartRef}></canvas>
+              </div>
+            </div>
+
+            {/* Kills Chart */}
+            <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+              <h5 className="text-lg font-semibold text-gray-200 mb-4">Kills & Kill Points</h5>
+              <div className="relative h-64">
+                <canvas ref={killsChartRef}></canvas>
+              </div>
+            </div>
+
+            {/* Dead Troops Chart */}
+            <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+              <h5 className="text-lg font-semibold text-gray-200 mb-4">Dead Troops</h5>
+              <div className="relative h-64">
+                <canvas ref={deadChartRef}></canvas>
+              </div>
+            </div>
+          </div>
+
+          {/* Daten Tabelle */}
+          <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <h5 className="text-lg font-semibold text-gray-200 mb-4">Historical Data</h5>
+            <div className="overflow-x-auto relative border border-gray-700 rounded-lg max-h-96">
+              <table className="w-full text-sm text-left text-gray-400">
+                <thead className="text-xs text-gray-400 uppercase bg-gray-700 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3 text-right">Power</th>
+                    <th className="px-4 py-3 text-right">Troops Power</th>
+                    <th className="px-4 py-3 text-right">Kill Points</th>
+                    <th className="px-4 py-3 text-right">Total Kills</th>
+                    <th className="px-4 py-3 text-right">Dead Troops</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedPlayerHistory.history.map((record, index) => (
+                    <tr key={index} className="border-b bg-gray-800 border-gray-700 hover:bg-gray-600">
+                      <td className="px-4 py-2 font-medium text-white">{record.fileName}</td>
+                      <td className="px-4 py-2 text-right">{formatNumber(record.power)}</td>
+                      <td className="px-4 py-2 text-right">{formatNumber(record.troopsPower)}</td>
+                      <td className="px-4 py-2 text-right">{formatNumber(record.totalKillPoints)}</td>
+                      <td className="px-4 py-2 text-right">{formatNumber(record.totalKills)}</td>
+                      <td className="px-4 py-2 text-right">{formatNumber(record.deadTroops)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
-      {!selectedPlayer && isDataLoaded && (
+      {!selectedPlayerHistory && isDataLoaded && (
         <div className="text-center p-12 text-gray-400 bg-gray-800 rounded-xl border border-gray-700">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
