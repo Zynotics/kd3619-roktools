@@ -100,3 +100,25 @@ export type PlayerHonorHistory = {
     honorPoint: number;
   }[];
 };
+// Zu den existing types hinzufügen:
+
+export interface PlayerAnalyticsHistory {
+  id: string;
+  name: string;
+  alliance: string;
+  history: PlayerAnalyticsRecord[];
+}
+
+export interface PlayerAnalyticsRecord {
+  fileName: string;
+  power: number;
+  troopsPower: number;
+  totalKillPoints: number;
+  deadTroops: number;
+  t1Kills: number;
+  t2Kills: number;
+  t3Kills: number;
+  t4Kills: number;
+  t5Kills: number;
+  totalKills: number;
+}

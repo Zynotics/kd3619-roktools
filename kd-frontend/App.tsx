@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import OverviewDashboard from './components/OverviewDashboard';
 import HonorDashboard from './components/HonorDashboard';
+import PowerAnalyticsDashboard from './components/PowerAnalyticsDashboard';
 
 // zentrale Backend-URL
 const BACKEND_URL = process.env.NODE_ENV === 'production' 
@@ -11,7 +12,7 @@ const BACKEND_URL = process.env.NODE_ENV === 'production'
 const ADMIN_USERNAME = 'Stadmin';
 const ADMIN_PASSWORD = '*3619rocks!';
 
-type ActiveView = 'overview' | 'honor';
+type ActiveView = 'overview' | 'honor' | 'analytics';
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('overview');
@@ -125,7 +126,7 @@ const App: React.FC = () => {
         {/* Header mit Tabs + Admin-Login */}
         <header className="flex flex-col sm:flex-row justify-between sm:items-center mb-12 gap-6">
           {/* Navigation (Tabs) */}
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <button
               onClick={() => setActiveView('overview')}
               className={`flex items-center gap-3 px-6 py-3 rounded-xl text-lg font-bold transition-all duration-300 ${
@@ -152,6 +153,20 @@ const App: React.FC = () => {
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
               Honor Ranking
+            </button>
+
+            <button
+              onClick={() => setActiveView('analytics')}
+              className={`flex items-center gap-3 px-6 py-3 rounded-xl text-lg font-bold transition-all duration-300 ${
+                activeView === 'analytics'
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/25'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+              </svg>
+              Power Analytics
             </button>
           </div>
 
@@ -197,6 +212,12 @@ const App: React.FC = () => {
           )}
           {activeView === 'honor' && (
             <HonorDashboard
+              isAdmin={isAdmin}
+              backendUrl={BACKEND_URL}
+            />
+          )}
+          {activeView === 'analytics' && (
+            <PowerAnalyticsDashboard
               isAdmin={isAdmin}
               backendUrl={BACKEND_URL}
             />
