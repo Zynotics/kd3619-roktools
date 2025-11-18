@@ -1,4 +1,4 @@
-// ComparisonSection.tsx - AKTUALISIERT
+// ComparisonSection.tsx - KORRIGIERT
 import React, { useState, useMemo } from 'react';
 import type { ComparisonStats, PlayerInfo, PlayerStatChange } from '../types';
 import StatCard from './StatCard';
@@ -495,7 +495,7 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
               variant="gradient"
             />
           </div>
-      </div>
+      </Card>
 
       <PlayerStatChangesTable
           changes={sortedPlayerStatChanges}
@@ -525,6 +525,7 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
           selectedAlliance={newPlayerAlliance}
           onAllianceChange={setNewPlayerAlliance}
       />
+      
       <PlayerTable
           title="Disappeared CH25 Players"
           players={sortedDisappearedPlayers}
