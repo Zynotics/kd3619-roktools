@@ -1,7 +1,8 @@
-
+// HonorHistoryChart.tsx - AKTUALISIERT
 import React, { useEffect, useRef, useMemo } from 'react';
 import type { UploadedFile } from '../types';
 import { parseGermanNumber, cleanFileName, abbreviateNumber, formatNumber, findColumnIndex } from '../utils';
+import { Card } from './Card';
 
 declare var Chart: any;
 
@@ -91,20 +92,20 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
 
     if (files.length < 1) {
         return (
-            <div className="bg-gray-800 p-6 rounded-xl shadow-lg text-center text-gray-400">
+            <Card gradient className="p-6 text-center text-gray-400">
                 <h3 className="text-lg font-semibold text-gray-200 mb-2">KD 3619 Honor History</h3>
                 <p>Upload at least one file to see the honor progression.</p>
-            </div>
+            </Card>
         );
     }
     
     return (
-        <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+        <Card gradient className="p-6">
             <h3 className="text-lg font-semibold text-gray-200 mb-4">KD 3619 Honor History</h3>
             <div className="relative h-72">
                 <canvas ref={chartRef}></canvas>
             </div>
-        </div>
+        </Card>
     );
 };
 

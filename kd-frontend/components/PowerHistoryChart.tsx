@@ -1,6 +1,8 @@
+// PowerHistoryChart.tsx - AKTUALISIERT
 import React, { useEffect, useRef, useMemo } from 'react';
 import type { UploadedFile } from '../types';
 import { parseGermanNumber, cleanFileName, abbreviateNumber, formatNumber } from '../utils';
+import { Card } from './Card';
 
 declare var Chart: any;
 
@@ -335,50 +337,50 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
   
   if (files.length < 2) {
     return (
-      <div className="bg-gray-800 p-6 rounded-xl shadow-lg text-center text-gray-400 border border-gray-700">
+      <Card gradient className="p-6 text-center text-gray-400">
         <h3 className="text-lg font-semibold text-gray-200 mb-2">CH 25 Kingdom Analytics</h3>
         <p>Upload at least two files to see the power progression over time.</p>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+    <Card gradient className="p-6">
       <h3 className="text-lg font-semibold text-gray-200 mb-4">CH25 Kingdom Analytics</h3>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Total Power Chart */}
-        <div className="bg-gray-700/50 p-4 rounded-lg border border-gray-600">
+        <Card hover className="p-4">
           <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">Total Power</h4>
           <div className="relative h-64">
             <canvas ref={totalPowerChartRef}></canvas>
           </div>
-        </div>
+        </Card>
 
         {/* Troops Power Chart */}
-        <div className="bg-gray-700/50 p-4 rounded-lg border border-gray-600">
+        <Card hover className="p-4">
           <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">Troops Power</h4>
           <div className="relative h-64">
             <canvas ref={troopsPowerChartRef}></canvas>
           </div>
-        </div>
+        </Card>
 
         {/* Kill Points Chart */}
-        <div className="bg-gray-700/50 p-4 rounded-lg border border-gray-600">
+        <Card hover className="p-4">
           <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">Kill Points</h4>
           <div className="relative h-64">
             <canvas ref={killPointsChartRef}></canvas>
           </div>
-        </div>
+        </Card>
 
         {/* Dead Troops Chart */}
-        <div className="bg-gray-700/50 p-4 rounded-lg border border-gray-600">
+        <Card hover className="p-4">
           <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">Dead Troops</h4>
           <div className="relative h-64">
             <canvas ref={deadTroopsChartRef}></canvas>
           </div>
-        </div>
+        </Card>
       </div>
-    </div>
+    </Card>
   );
 };
 
