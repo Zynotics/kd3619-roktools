@@ -37,30 +37,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     }
   }, []);
-
-  const validateToken = async (token: string) => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/auth/validate`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
-      } else {
-        // Token ungültig
-        localStorage.removeItem('authToken');
+// In der validateToken Funktion - Stelle sicher dass das Token korrekt validiert wird
+const validateToken = async (token: string) => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/auth/validate`, {
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
       }
-    } catch (error) {
-      console.error('Token validation error:', error);
+    });
+    
+    if (response.ok) {
+      const userData = await response.json();
+      setUser(userData);
+    } else {
+      // Token ungültig - Admin Status zurücksetzen
       localStorage.removeItem('authToken');
-    } finally {
-      setIsLoading(false);
+      localStorage.setItem('isAdmin', 'false'); // Admin Status zurücksetzen
     }
-  };
+  } catch (error) {
+    console.error('Token validation error:', error);
+    localStorage.removeItem('authToken');
+    localStorage.setItem('isAdmin', 'false'); // Admin Status zurücksetzen
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const login = async (username: string, password: string) => {
     setIsLoading(true);

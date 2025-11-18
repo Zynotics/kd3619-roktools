@@ -8,6 +8,10 @@ import HonorDashboard from './components/HonorDashboard';
 import PowerAnalyticsDashboard from './components/PowerAnalyticsDashboard';
 import PowerHistoryChart from './components/PowerHistoryChart';
 
+console.log('Admin Status:', isAdmin);
+console.log('User from Auth:', user);
+console.log('Token:', localStorage.getItem('authToken'));
+
 // zentrale Backend-URL
 const BACKEND_URL = process.env.NODE_ENV === 'production' 
   ? 'https://kd3619-backend.onrender.com'

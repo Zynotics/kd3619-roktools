@@ -28,28 +28,35 @@ const AdminUserManagement: React.FC = () => {
   }, []);
 
   const fetchUsers = async () => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${BACKEND_URL}/api/admin/users`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        setUsers(userData);
-      } else {
-        throw new Error('Fehler beim Laden der Benutzer');
-      }
-    } catch (error) {
-      console.error('Fehler beim Laden der Benutzer:', error);
-      setError('Konnte Benutzer nicht laden');
-    } finally {
-      setIsLoading(false);
+  try {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setError('Nicht angemeldet');
+      return;
     }
-  };
+
+    const response = await fetch(`${BACKEND_URL}/api/admin/users`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.ok) {
+      const userData = await response.json();
+      setUsers(userData);
+    } else if (response.status === 403) {
+      setError('Keine Admin-Berechtigung');
+    } else {
+      throw new Error('Fehler beim Laden der Benutzer');
+    }
+  } catch (error) {
+    console.error('Fehler beim Laden der Benutzer:', error);
+    setError('Konnte Benutzer nicht laden');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const toggleApproval = async (userId: string, approved: boolean) => {
     try {
