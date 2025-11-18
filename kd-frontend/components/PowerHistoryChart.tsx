@@ -1,4 +1,4 @@
-// PowerHistoryChart.tsx - AKTUALISIERT
+// PowerHistoryChart.tsx - KORRIGIERT
 import React, { useEffect, useRef, useMemo } from 'react';
 import type { UploadedFile } from '../types';
 import { parseGermanNumber, cleanFileName, abbreviateNumber, formatNumber } from '../utils';
@@ -22,7 +22,9 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
   const deadTroopsChartInstance = useRef<any>(null);
 
   const chartData = useMemo(() => {
-    if (!files || files.length < 2) {return null;
+    // NULL/UNDEFINED CHECK HINZUGEFÜGT
+    if (!files || !Array.isArray(files) || files.length < 2) {
+      return null;
     }
 
     const filesToRender = files;
@@ -334,7 +336,8 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
     };
   }, [chartData]);
   
-  if (files.length < 2) {
+  // NULL/UNDEFINED CHECK HINZUGEFÜGT
+  if (!files || !Array.isArray(files) || files.length < 2) {
     return (
       <Card gradient className="p-6 text-center text-gray-400">
         <h3 className="text-lg font-semibold text-gray-200 mb-2">CH 25 Kingdom Analytics</h3>
