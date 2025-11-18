@@ -1,9 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-
-// Wenn du später globales CSS haben willst, kannst du hier eine index.css importieren.
-// Beispiel: import './index.css';
+import './index.css'; // CSS Import hinzufügen
 
 const container = document.getElementById('root');
 

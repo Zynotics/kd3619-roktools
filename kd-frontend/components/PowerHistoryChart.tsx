@@ -22,8 +22,7 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
   const deadTroopsChartInstance = useRef<any>(null);
 
   const chartData = useMemo(() => {
-    if (files.length < 2) {
-      return null;
+    if (!files || files.length < 2) {return null;
     }
 
     const filesToRender = files;
