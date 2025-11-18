@@ -336,7 +336,7 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
   if (files.length < 2) {
     return (
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg text-center text-gray-400 border border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-200 mb-2">Power History</h3>
+        <h3 className="text-lg font-semibold text-gray-200 mb-2">CH 25 Kingdom Analytics</h3>
         <p>Upload at least two files to see the power progression over time.</p>
       </div>
     );
