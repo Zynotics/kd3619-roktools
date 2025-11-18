@@ -37,6 +37,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[] | 'not_found' | null>(null);
   const [selectedPlayerHistory, setSelectedPlayerHistory] = useState<PlayerAnalyticsHistory | null>(null);
+  const [showDetailedKills, setShowDetailedKills] = useState<boolean>(false);
 
   const powerChartRef = useRef<HTMLCanvasElement>(null);
   const troopsChartRef = useRef<HTMLCanvasElement>(null);
@@ -254,7 +255,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       });
     }
 
-    // Kill Points Chart (neu mit allen Kill-Typen)
+    // Kill Points Chart (nur Kill Points)
     if (killsChartRef.current) {
       if (killsChartInstance.current) {
         killsChartInstance.current.destroy();
@@ -264,70 +265,23 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
         type: 'line',
         data: {
           labels,
-          datasets: [
-            {
-              label: 'Kill Points',
-              data: history.map(h => h.totalKillPoints),
-              borderColor: 'rgba(245, 158, 11, 0.8)',
-              backgroundColor: 'rgba(245, 158, 11, 0.2)',
-              fill: true,
-              tension: 0.4,
-            },
-            {
-              label: 'T1 Kills',
-              data: history.map(h => h.t1Kills),
-              borderColor: 'rgba(156, 163, 175, 0.8)',
-              backgroundColor: 'rgba(156, 163, 175, 0.2)',
-              fill: true,
-              tension: 0.4,
-              borderDash: [5, 5],
-            },
-            {
-              label: 'T2 Kills',
-              data: history.map(h => h.t2Kills),
-              borderColor: 'rgba(107, 114, 128, 0.8)',
-              backgroundColor: 'rgba(107, 114, 128, 0.2)',
-              fill: true,
-              tension: 0.4,
-              borderDash: [5, 5],
-            },
-            {
-              label: 'T3 Kills',
-              data: history.map(h => h.t3Kills),
-              borderColor: 'rgba(55, 65, 81, 0.8)',
-              backgroundColor: 'rgba(55, 65, 81, 0.2)',
-              fill: true,
-              tension: 0.4,
-            },
-            {
-              label: 'T4 Kills',
-              data: history.map(h => h.t4Kills),
-              borderColor: 'rgba(249, 115, 22, 0.8)',
-              backgroundColor: 'rgba(249, 115, 22, 0.2)',
-              fill: true,
-              tension: 0.4,
-            },
-            {
-              label: 'T5 Kills',
-              data: history.map(h => h.t5Kills),
-              borderColor: 'rgba(220, 38, 38, 0.8)',
-              backgroundColor: 'rgba(220, 38, 38, 0.2)',
-              fill: true,
-              tension: 0.4,
-            }
-          ]
+          datasets: [{
+            label: 'Kill Points',
+            data: history.map(h => h.totalKillPoints),
+            borderColor: 'rgba(245, 158, 11, 0.8)',
+            backgroundColor: 'rgba(245, 158, 11, 0.2)',
+            fill: true,
+            tension: 0.4,
+          }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { 
-              position: 'top',
-              labels: { color: '#d1d5db' }
-            },
+            legend: { display: false },
             tooltip: {
               callbacks: {
-                label: (context: any) => `${context.dataset.label}: ${formatNumber(context.parsed.y)}`
+                label: (context: any) => `Kill Points: ${formatNumber(context.parsed.y)}`
               }
             }
           },
@@ -424,6 +378,11 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
     setSearchQuery('');
     setSearchResults(null);
     setSelectedPlayerHistory(null);
+    setShowDetailedKills(false);
+  };
+
+  const toggleDetailedKills = () => {
+    setShowDetailedKills(!showDetailedKills);
   };
 
   if (isLoading) {
@@ -537,7 +496,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
               </div>
             </div>
 
-            {/* Kill Points Chart (umbenannt) */}
+            {/* Kill Points Chart */}
             <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
               <h5 className="text-lg font-semibold text-gray-200 mb-4">Kill Points</h5>
               <div className="relative h-64">
@@ -554,9 +513,36 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
             </div>
           </div>
 
-          {/* Daten Tabelle (ohne Total Kills) */}
+          {/* Daten Tabelle */}
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
-            <h5 className="text-lg font-semibold text-gray-200 mb-4">Historical Data</h5>
+            <div className="flex justify-between items-center mb-4">
+              <h5 className="text-lg font-semibold text-gray-200">Historical Data</h5>
+              <button
+                onClick={toggleDetailedKills}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  showDetailedKills 
+                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                    : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                }`}
+              >
+                {showDetailedKills ? (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                    Hide Kill Details
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+                    </svg>
+                    Show Kill Details
+                  </>
+                )}
+              </button>
+            </div>
+            
             <div className="overflow-x-auto relative border border-gray-700 rounded-lg max-h-96">
               <table className="w-full text-sm text-left text-gray-400">
                 <thead className="text-xs text-gray-400 uppercase bg-gray-700 sticky top-0">
@@ -566,6 +552,15 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
                     <th className="px-4 py-3 text-right">Troops Power</th>
                     <th className="px-4 py-3 text-right">Kill Points</th>
                     <th className="px-4 py-3 text-right">Dead Troops</th>
+                    {showDetailedKills && (
+                      <>
+                        <th className="px-4 py-3 text-right">T1 Kills</th>
+                        <th className="px-4 py-3 text-right">T2 Kills</th>
+                        <th className="px-4 py-3 text-right">T3 Kills</th>
+                        <th className="px-4 py-3 text-right">T4 Kills</th>
+                        <th className="px-4 py-3 text-right">T5 Kills</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -576,6 +571,15 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
                       <td className="px-4 py-2 text-right">{formatNumber(record.troopsPower)}</td>
                       <td className="px-4 py-2 text-right">{formatNumber(record.totalKillPoints)}</td>
                       <td className="px-4 py-2 text-right">{formatNumber(record.deadTroops)}</td>
+                      {showDetailedKills && (
+                        <>
+                          <td className="px-4 py-2 text-right">{formatNumber(record.t1Kills)}</td>
+                          <td className="px-4 py-2 text-right">{formatNumber(record.t2Kills)}</td>
+                          <td className="px-4 py-2 text-right">{formatNumber(record.t3Kills)}</td>
+                          <td className="px-4 py-2 text-right">{formatNumber(record.t4Kills)}</td>
+                          <td className="px-4 py-2 text-right">{formatNumber(record.t5Kills)}</td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>
