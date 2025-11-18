@@ -4,7 +4,7 @@
   "main": "server.js",
   "license": "MIT",
   "scripts": {
-    "start": "node server.js",
+    "start": "node init-db.js && node server.js",
     "dev": "node --watch server.js",
     "build": "npm install"
   },

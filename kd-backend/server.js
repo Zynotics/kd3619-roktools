@@ -1,4 +1,4 @@
-// server.js - ERWEITERT mit Authentifizierung
+// server.js - ERWEITERT mit Admin User Fix
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
@@ -35,7 +35,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Handle Preflight Requests - DIESE ZEILE HINZUFÜGEN
+// Handle Preflight Requests
 app.options('*', cors()); // Enable pre-flight for all routes
 
 app.use(express.json());
@@ -106,24 +106,38 @@ db.exec(`
   )
 `);
 
-// Admin-Benutzer erstellen falls nicht vorhanden
-const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
+// Admin-Benutzer erstellen falls nicht vorhanden - KORRIGIERTE VERSION
 try {
-  const insertAdmin = db.prepare(`
-    INSERT OR IGNORE INTO users (id, email, username, password_hash, is_approved, role) 
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  insertAdmin.run(
-    'admin-001',
-    'admin@kd3619.com',
-    'Stadmin',
-    adminPasswordHash,
-    true,
-    'admin'
-  );
-  console.log('✅ Admin user created/verified');
+  // Prüfen ob Admin bereits existiert
+  const existingAdmin = db.prepare("SELECT * FROM users WHERE username = ?").get('Stadmin');
+  
+  if (!existingAdmin) {
+    const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
+    const insertAdmin = db.prepare(`
+      INSERT INTO users (id, email, username, password_hash, is_approved, role) 
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    insertAdmin.run(
+      'admin-001',
+      'admin@kd3619.com',
+      'Stadmin',
+      adminPasswordHash,
+      true,  // Sofort freigegeben
+      'admin'  // Admin Rolle
+    );
+    console.log('✅ Admin user created successfully');
+  } else {
+    console.log('✅ Admin user already exists');
+    
+    // Stelle sicher dass der Admin User korrekte Rechte hat
+    const updateAdmin = db.prepare(`
+      UPDATE users SET is_approved = ?, role = ? WHERE username = ?
+    `);
+    updateAdmin.run(true, 'admin', 'Stadmin');
+    console.log('✅ Admin user permissions verified');
+  }
 } catch (error) {
-  console.log('ℹ️ Admin user already exists');
+  console.error('❌ Error creating/verifying admin user:', error);
 }
 
 // JWT Middleware
@@ -150,6 +164,41 @@ const requireAdmin = (req, res, next) => {
   }
   next();
 };
+
+// Debug Endpoint zum Überprüfen aller Benutzer
+app.get('/api/debug/users', (req, res) => {
+  try {
+    const stmt = db.prepare("SELECT id, username, email, is_approved, role FROM users");
+    const users = stmt.all();
+    res.json(users);
+  } catch (error) {
+    console.error('Debug users error:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Manuellen Admin Creation Endpoint hinzufügen
+app.post('/api/admin/create-admin', (req, res) => {
+  try {
+    const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
+    const insertAdmin = db.prepare(`
+      INSERT OR REPLACE INTO users (id, email, username, password_hash, is_approved, role) 
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    insertAdmin.run(
+      'admin-001',
+      'admin@kd3619.com',
+      'Stadmin',
+      adminPasswordHash,
+      true,
+      'admin'
+    );
+    res.json({ message: 'Admin user created successfully' });
+  } catch (error) {
+    console.error('Manual admin creation error:', error);
+    res.status(500).json({ error: 'Failed to create admin user' });
+  }
+});
 
 // Hilfsfunktion zum Parsen von Zahlen mit deutschen Format (1.000,00)
 function parseGermanNumber(value) {
@@ -682,7 +731,8 @@ app.get('/', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
       auth: ['POST /api/auth/register', 'POST /api/auth/login', 'GET /api/auth/validate'],
-      admin: ['GET /api/admin/users', 'POST /api/admin/users/approve'],
+      admin: ['GET /api/admin/users', 'POST /api/admin/users/approve', 'POST /api/admin/create-admin'],
+      debug: ['GET /api/debug/users'],
       overview: ['GET /overview/files-data', 'POST /overview/upload', 'DELETE /overview/files/:id', 'POST /overview/files/reorder'],
       honor: ['GET /honor/files-data', 'POST /honor/upload', 'DELETE /honor/files/:id', 'POST /honor/files/reorder'],
       health: 'GET /health'
