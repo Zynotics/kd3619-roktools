@@ -1,4 +1,4 @@
-// App.tsx - KORRIGIERT
+// App.tsx - EINHEITLICHES LOGIN SYSTEM
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -7,7 +7,6 @@ import OverviewDashboard from './components/OverviewDashboard';
 import HonorDashboard from './components/HonorDashboard';
 import PowerAnalyticsDashboard from './components/PowerAnalyticsDashboard';
 import PowerHistoryChart from './components/PowerHistoryChart';
-
 
 // zentrale Backend-URL
 const BACKEND_URL = process.env.NODE_ENV === 'production' 
@@ -18,38 +17,32 @@ type ActiveView = 'overview' | 'honor' | 'analytics';
 
 const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('overview');
-  const { user, logout } = useAuth();
+  const { user, login, logout, isLoading } = useAuth();
 
-  // Admin-Status im localStorage speichern für Persistenz
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    return localStorage.getItem('isAdmin') === 'true';
-  });
   const [showLoginDialog, setShowLoginDialog] = useState<boolean>(false);
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
 
-  // Login-Daten
-  const ADMIN_USERNAME = 'Stadmin';
-  const ADMIN_PASSWORD = '*3619rocks!';
+  const handleLoginSubmit = async () => {
+    if (!username || !password) {
+      setLoginError('Bitte Benutzername und Passwort eingeben');
+      return;
+    }
 
-  const handleAdminLogin = () => {
-    setShowLoginDialog(true);
+    setIsLoggingIn(true);
     setLoginError(null);
-    setUsername('');
-    setPassword('');
-  };
 
-  const handleLoginSubmit = () => {
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      setIsAdmin(true);
-      localStorage.setItem('isAdmin', 'true');
-      setLoginError(null);
+    try {
+      await login(username, password);
       setShowLoginDialog(false);
       setUsername('');
       setPassword('');
-    } else {
-      setLoginError('Invalid username or password');
+    } catch (error: any) {
+      setLoginError(error.message || 'Anmeldung fehlgeschlagen');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -60,13 +53,8 @@ const AppContent: React.FC = () => {
     setPassword('');
   };
 
-  const handleAdminLogout = () => {
-    setIsAdmin(false);
-    localStorage.setItem('isAdmin', 'false');
-    setUsername('');
-    setPassword('');
-    setLoginError(null);
-  };
+  // Admin Status basierend auf User-Rolle
+  const isAdmin = user?.role === 'admin';
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans">
@@ -74,12 +62,12 @@ const AppContent: React.FC = () => {
       {showLoginDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg w-96 border border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-4">Admin Login</h3>
+            <h3 className="text-lg font-semibold text-white mb-4">Anmelden</h3>
             
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">
-                  Username
+                  Benutzername
                 </label>
                 <input
                   type="text"
@@ -87,14 +75,15 @@ const AppContent: React.FC = () => {
                   onChange={(e) => setUsername(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleLoginSubmit()}
                   className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
-                  placeholder="Enter username"
+                  placeholder="Benutzername eingeben"
                   autoFocus
+                  disabled={isLoggingIn}
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">
-                  Password
+                  Passwort
                 </label>
                 <input
                   type="password"
@@ -102,7 +91,8 @@ const AppContent: React.FC = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleLoginSubmit()}
                   className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
-                  placeholder="Enter password"
+                  placeholder="Passwort eingeben"
+                  disabled={isLoggingIn}
                 />
               </div>
             </div>
@@ -114,23 +104,33 @@ const AppContent: React.FC = () => {
             <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={handleCancelLogin}
-                className="px-4 py-2 rounded-lg bg-gray-600 text-white font-semibold hover:bg-gray-500 transition-colors"
+                disabled={isLoggingIn}
+                className="px-4 py-2 rounded-lg bg-gray-600 text-white font-semibold hover:bg-gray-500 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors"
               >
-                Cancel
+                Abbrechen
               </button>
               <button
                 onClick={handleLoginSubmit}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors"
+                disabled={isLoggingIn}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed transition-colors"
               >
-                Login
+                {isLoggingIn ? 'Wird angemeldet...' : 'Anmelden'}
               </button>
+            </div>
+
+            <div className="mt-4 p-3 bg-gray-700 rounded-lg">
+              <p className="text-xs text-gray-400">
+                <strong>Test Accounts:</strong><br/>
+                Admin: Stadmin / *3619rocks!<br/>
+                Oder registriere einen neuen Account
+              </p>
             </div>
           </div>
         </div>
       )}
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header mit Tabs + Admin-Login + User-Info */}
+        {/* Header mit Tabs + Login/Logout */}
         <header className="flex flex-col sm:flex-row justify-between sm:items-center mb-12 gap-6">
           {/* Navigation (Tabs) */}
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
@@ -177,7 +177,7 @@ const AppContent: React.FC = () => {
             </button>
           </div>
 
-          {/* User Info + Admin Login / Logout */}
+          {/* User Info + Login / Logout */}
           <div className="flex items-center gap-4">
             {/* User Info wenn eingeloggt */}
             {user && (
@@ -196,6 +196,11 @@ const AppContent: React.FC = () => {
                   }`}>
                     {user.isApproved ? 'Freigegeben' : 'Ausstehend'}
                   </span>
+                  {user.role === 'admin' && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-purple-500 text-white">
+                      Admin
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={logout}
@@ -206,34 +211,28 @@ const AppContent: React.FC = () => {
               </div>
             )}
 
-            {/* Admin Login / Logout */}
+            {/* Login / Logout Button */}
             <div className="flex-shrink-0">
-              {!isAdmin ? (
+              {!user ? (
                 <button
-                  onClick={handleAdminLogin}
-                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-300 shadow-lg shadow-green-500/25 hover:shadow-green-500/40"
+                  onClick={() => setShowLoginDialog(true)}
+                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold hover:from-blue-600 hover:to-blue-700 transition-all duration-300 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
                   </svg>
-                  Admin Login
+                  Anmelden
                 </button>
               ) : (
-                <div className="flex items-center gap-4 p-3 rounded-xl bg-gradient-to-r from-gray-800 to-gray-700 border border-gray-600">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                    <p className="text-sm font-semibold text-green-400">Admin Mode</p>
-                  </div>
-                  <button
-                    onClick={handleAdminLogout}
-                    className="flex items-center gap-2 px-3 py-1 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-                    </svg>
-                    Logout
-                  </button>
-                </div>
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold hover:from-red-600 hover:to-red-700 transition-all duration-300 shadow-lg shadow-red-500/25 hover:shadow-red-500/40"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                  </svg>
+                  Abmelden
+                </button>
               )}
             </div>
           </div>
