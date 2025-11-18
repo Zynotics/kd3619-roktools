@@ -41,7 +41,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
         throw new Error(`Server responded with status ${res.status}`);
       }
       const data: UploadedFile[] = await res.json();
-      setUploadedFiles(data);
+      setUploadedFiles(data || []); // NULL CHECK HINZUGEFÜGT
     } catch (err) {
       console.error('Error loading file data:', err);
       setError(
@@ -58,10 +58,10 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
 
   // Beim Laden automatisch die letzten zwei Files wählen
   useEffect(() => {
-    if (uploadedFiles.length >= 2) {
+    if (uploadedFiles && uploadedFiles.length >= 2) {
       setStartFileId(uploadedFiles[uploadedFiles.length - 2].id);
       setEndFileId(uploadedFiles[uploadedFiles.length - 1].id);
-    } else if (uploadedFiles.length === 1) {
+    } else if (uploadedFiles && uploadedFiles.length === 1) {
       setEndFileId(uploadedFiles[0].id);
     }
   }, [uploadedFiles]);
@@ -76,7 +76,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Failed to delete file on server.');
-      setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
+      setUploadedFiles((prev) => (prev || []).filter((f) => f.id !== id));
     } catch (err) {
       console.error('Delete error:', err);
       alert('Could not delete the file.');
@@ -109,6 +109,12 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
 
     if (!startFileId || !endFileId) {
       setComparisonError('Please select both a start and end file.');
+      return;
+    }
+
+    // NULL/UNDEFINED CHECKS HINZUGEFÜGT
+    if (!uploadedFiles || !Array.isArray(uploadedFiles)) {
+      setComparisonError('No files available for comparison.');
       return;
     }
 
@@ -150,8 +156,9 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
       };
     };
 
-    const data1 = file1.data.map((row) => parseRow(row, file1.headers));
-    const data2 = file2.data.map((row) => parseRow(row, file2.headers));
+    // NULL/UNDEFINED CHECKS FÜR DATA HINZUGEFÜGT
+    const data1 = file1.data && Array.isArray(file1.data) ? file1.data.map((row) => parseRow(row, file1.headers)) : [];
+    const data2 = file2.data && Array.isArray(file2.data) ? file2.data.map((row) => parseRow(row, file2.headers)) : [];
 
     const map1 = new Map(data1.map((p) => [p.id, p]));
     const map2 = new Map(data2.map((p) => [p.id, p]));
@@ -220,7 +227,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
 
   // --- Suche ---
   const handleSearch = () => {
-    if (!searchQuery || !comparisonStats) return;
+    if (!searchQuery || !comparisonStats || !comparisonStats.playerStatChanges) return;
     const lowerCaseQuery = searchQuery.toLowerCase();
 
     const exactIdMatch = comparisonStats.playerStatChanges.find((p) => p.id === searchQuery);
@@ -257,6 +264,9 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
     setSearchResults(null);
   };
 
+  // NULL/UNDEFINED CHECK FÜR UPLOADEDFILES
+  const isDataLoaded = uploadedFiles && Array.isArray(uploadedFiles) && uploadedFiles.length > 0;
+
   if (isLoading) {
     return <div className="text-center p-8">Loading files...</div>;
   }
@@ -280,8 +290,9 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
             />
           </div>
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+            {/* NULL/UNDEFINED CHECK FÜR FILES */}
             <FileList
-              files={uploadedFiles}
+              files={uploadedFiles || []}
               onDeleteFile={handleDeleteFile}
               onReorder={handleReorderFiles}
             />
@@ -290,7 +301,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
       )}
 
       {/* Power History Chart */}
-      <PowerHistoryChart files={uploadedFiles} />
+      <PowerHistoryChart files={uploadedFiles || []} />
 
       {/* Comparison Controls */}
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
@@ -310,7 +321,8 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
               className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
             >
               <option value="">Select Start Date</option>
-              {uploadedFiles.map((file) => (
+              {/* NULL/UNDEFINED CHECK FÜR UPLOADEDFILES */}
+              {uploadedFiles && uploadedFiles.map((file) => (
                 <option key={file.id} value={file.id} disabled={file.id === endFileId}>
                   {cleanFileName(file.name)}
                 </option>
@@ -332,7 +344,8 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
               className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
             >
               <option value="">Select End Date</option>
-              {uploadedFiles.map((file) => (
+              {/* NULL/UNDEFINED CHECK FÜR UPLOADEDFILES */}
+              {uploadedFiles && uploadedFiles.map((file) => (
                 <option key={file.id} value={file.id} disabled={file.id === startFileId}>
                   {cleanFileName(file.name)}
                 </option>
@@ -367,10 +380,10 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
         stats={comparisonStats}
         error={comparisonError}
         file1Name={cleanFileName(
-          uploadedFiles.find((f) => f.id === startFileId)?.name ?? ''
+          uploadedFiles?.find((f) => f.id === startFileId)?.name ?? ''
         )}
         file2Name={cleanFileName(
-          uploadedFiles.find((f) => f.id === endFileId)?.name ?? ''
+          uploadedFiles?.find((f) => f.id === endFileId)?.name ?? ''
         )}
       />
     </div>

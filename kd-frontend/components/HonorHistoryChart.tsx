@@ -1,4 +1,4 @@
-// HonorHistoryChart.tsx - AKTUALISIERT
+// HonorHistoryChart.tsx - KORRIGIERT
 import React, { useEffect, useRef, useMemo } from 'react';
 import type { UploadedFile } from '../types';
 import { parseGermanNumber, cleanFileName, abbreviateNumber, formatNumber, findColumnIndex } from '../utils';
@@ -15,7 +15,8 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
     const chartInstanceRef = useRef<any>(null);
 
     const chartData = useMemo(() => {
-        if (files.length < 1) return null;
+        // NULL/UNDEFINED CHECK HINZUGEFÜGT
+        if (!files || !Array.isArray(files) || files.length < 1) return null;
         
         const labels = files.map(file => cleanFileName(file.name));
         const totalHonorData: number[] = [];
@@ -90,7 +91,8 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
         };
     }, [chartData]);
 
-    if (files.length < 1) {
+    // NULL/UNDEFINED CHECK HINZUGEFÜGT
+    if (!files || !Array.isArray(files) || files.length < 1) {
         return (
             <Card gradient className="p-6 text-center text-gray-400">
                 <h3 className="text-lg font-semibold text-gray-200 mb-2">KD 3619 Honor History</h3>
