@@ -1,4 +1,4 @@
-// server.js - mit better-sqlite3
+// server.js - ERWEITERT mit Authentifizierung
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
@@ -6,9 +6,12 @@ const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 const XLSX = require('xlsx');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const JWT_SECRET = process.env.JWT_SECRET || 'kd3619-secret-key-change-in-production';
 
 // CORS für Production und Development
 const allowedOrigins = [
@@ -82,6 +85,64 @@ db.exec(`
     data TEXT
   )
 `);
+
+// NEUE TABELLEN FÜR AUTHENTIFIZIERUNG
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    is_approved BOOLEAN DEFAULT FALSE,
+    role TEXT DEFAULT 'user',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+// Admin-Benutzer erstellen falls nicht vorhanden
+const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
+try {
+  const insertAdmin = db.prepare(`
+    INSERT OR IGNORE INTO users (id, email, username, password_hash, is_approved, role) 
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  insertAdmin.run(
+    'admin-001',
+    'admin@kd3619.com',
+    'Stadmin',
+    adminPasswordHash,
+    true,
+    'admin'
+  );
+  console.log('✅ Admin user created/verified');
+} catch (error) {
+  console.log('ℹ️ Admin user already exists');
+}
+
+// JWT Middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+const requireAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
 
 // Hilfsfunktion zum Parsen von Zahlen mit deutschen Format (1.000,00)
 function parseGermanNumber(value) {
@@ -192,6 +253,167 @@ const honorUpload = multer({
   },
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB
+  }
+});
+
+// ==================== AUTH ENDPOINTS ====================
+
+// Registrierung
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, username, password } = req.body;
+    
+    if (!email || !username || !password) {
+      return res.status(400).json({ error: 'Email, Benutzername und Passwort werden benötigt' });
+    }
+    
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
+    }
+
+    // Prüfen ob Benutzer bereits existiert
+    const existingUser = db.prepare("SELECT * FROM users WHERE email = ? OR username = ?").get(email, username);
+    if (existingUser) {
+      return res.status(400).json({ error: 'Benutzer mit dieser Email oder diesem Benutzernamen existiert bereits' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const userId = 'user-' + Date.now();
+    
+    const stmt = db.prepare(`
+      INSERT INTO users (id, email, username, password_hash, is_approved, role) 
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    
+    stmt.run(userId, email, username, passwordHash, false, 'user');
+    
+    res.json({ 
+      message: 'Registrierung erfolgreich. Bitte warten Sie auf die Freigabe durch einen Administrator.',
+      user: {
+        id: userId,
+        email,
+        username,
+        isApproved: false,
+        role: 'user'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registrierung fehlgeschlagen' });
+  }
+});
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Benutzername und Passwort werden benötigt' });
+    }
+
+    const user = db.prepare("SELECT * FROM users WHERE username = ?").get(username);
+    if (!user) {
+      return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+    }
+
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        username: user.username, 
+        role: user.role,
+        isApproved: user.is_approved 
+      }, 
+      JWT_SECRET, 
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        isApproved: user.is_approved,
+        role: user.role
+      }
+    });
+    
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login fehlgeschlagen' });
+  }
+});
+
+// Token Validierung
+app.get('/api/auth/validate', authenticateToken, (req, res) => {
+  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
+  
+  if (!user) {
+    return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+  }
+
+  res.json({
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    isApproved: user.is_approved,
+    role: user.role
+  });
+});
+
+// ==================== ADMIN ENDPOINTS ====================
+
+// Alle Benutzer abrufen (nur Admin)
+app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const stmt = db.prepare("SELECT id, email, username, is_approved, role, created_at FROM users ORDER BY created_at DESC");
+    const users = stmt.all();
+    
+    res.json(users.map(user => ({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      isApproved: user.is_approved,
+      role: user.role,
+      createdAt: user.created_at
+    })));
+    
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
+  }
+});
+
+// Benutzer freigeben/sperren (nur Admin)
+app.post('/api/admin/users/approve', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { userId, approved } = req.body;
+    
+    if (typeof approved !== 'boolean') {
+      return res.status(400).json({ error: 'Ungültiger approved Wert' });
+    }
+
+    const stmt = db.prepare("UPDATE users SET is_approved = ? WHERE id = ?");
+    const result = stmt.run(approved, userId);
+    
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    }
+
+    res.json({ 
+      message: `Benutzer erfolgreich ${approved ? 'freigegeben' : 'gesperrt'}` 
+    });
+    
+  } catch (error) {
+    console.error('Error updating user approval:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren der Benutzerfreigabe' });
   }
 });
 
@@ -452,6 +674,8 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
+      auth: ['POST /api/auth/register', 'POST /api/auth/login', 'GET /api/auth/validate'],
+      admin: ['GET /api/admin/users', 'POST /api/admin/users/approve'],
       overview: ['GET /overview/files-data', 'POST /overview/upload', 'DELETE /overview/files/:id', 'POST /overview/files/reorder'],
       honor: ['GET /honor/files-data', 'POST /honor/upload', 'DELETE /honor/files/:id', 'POST /honor/files/reorder'],
       health: 'GET /health'
@@ -464,4 +688,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Backend Server läuft auf Port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`💾 Datenbank: ${dbPath}`);
+  console.log(`🔐 JWT Secret: ${JWT_SECRET.substring(0, 10)}...`);
 });
