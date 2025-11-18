@@ -1,21 +1,23 @@
+// App.tsx - VOLLSTÄNDIGE DATEI
 import React, { useState } from 'react';
+import { AuthProvider, useAuth } from './components/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import AdminUserManagement from './components/AdminUserManagement';
 import OverviewDashboard from './components/OverviewDashboard';
 import HonorDashboard from './components/HonorDashboard';
 import PowerAnalyticsDashboard from './components/PowerAnalyticsDashboard';
+import PowerHistoryChart from './components/PowerHistoryChart';
 
 // zentrale Backend-URL
 const BACKEND_URL = process.env.NODE_ENV === 'production' 
   ? 'https://kd3619-backend.onrender.com'
   : 'http://localhost:4000';
 
-// Login-Daten
-const ADMIN_USERNAME = 'Stadmin';
-const ADMIN_PASSWORD = '*3619rocks!';
-
 type ActiveView = 'overview' | 'honor' | 'analytics';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('overview');
+  const { user, logout } = useAuth();
 
   // Admin-Status im localStorage speichern für Persistenz
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
@@ -25,6 +27,10 @@ const App: React.FC = () => {
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Login-Daten
+  const ADMIN_USERNAME = 'Stadmin';
+  const ADMIN_PASSWORD = '*3619rocks!';
 
   const handleAdminLogin = () => {
     setShowLoginDialog(true);
@@ -123,7 +129,7 @@ const App: React.FC = () => {
       )}
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header mit Tabs + Admin-Login */}
+        {/* Header mit Tabs + Admin-Login + User-Info */}
         <header className="flex flex-col sm:flex-row justify-between sm:items-center mb-12 gap-6">
           {/* Navigation (Tabs) */}
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
@@ -170,61 +176,119 @@ const App: React.FC = () => {
             </button>
           </div>
 
-          {/* Admin Login / Logout */}
-          <div className="flex-shrink-0">
-            {!isAdmin ? (
-              <button
-                onClick={handleAdminLogin}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-300 shadow-lg shadow-green-500/25 hover:shadow-green-500/40"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                </svg>
-                Login
-              </button>
-            ) : (
-              <div className="flex items-center gap-4 p-3 rounded-xl bg-gradient-to-r from-gray-800 to-gray-700 border border-gray-600">
+          {/* User Info + Admin Login / Logout */}
+          <div className="flex items-center gap-4">
+            {/* User Info wenn eingeloggt */}
+            {user && (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-800 border border-gray-700">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  <p className="text-sm font-semibold text-green-400">Admin Mode</p>
+                  <div className={`w-2 h-2 rounded-full ${
+                    user.isApproved ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'
+                  }`}></div>
+                  <span className="text-sm font-semibold text-white">
+                    {user.username}
+                  </span>
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    user.isApproved 
+                      ? 'bg-green-500 text-white' 
+                      : 'bg-yellow-500 text-black'
+                  }`}>
+                    {user.isApproved ? 'Freigegeben' : 'Ausstehend'}
+                  </span>
                 </div>
                 <button
-                  onClick={handleAdminLogout}
-                  className="flex items-center gap-2 px-3 py-1 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors"
+                  onClick={logout}
+                  className="text-sm text-gray-400 hover:text-white transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-                  </svg>
-                  Logout
+                  Abmelden
                 </button>
               </div>
             )}
+
+            {/* Admin Login / Logout */}
+            <div className="flex-shrink-0">
+              {!isAdmin ? (
+                <button
+                  onClick={handleAdminLogin}
+                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-300 shadow-lg shadow-green-500/25 hover:shadow-green-500/40"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                  Admin Login
+                </button>
+              ) : (
+                <div className="flex items-center gap-4 p-3 rounded-xl bg-gradient-to-r from-gray-800 to-gray-700 border border-gray-600">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <p className="text-sm font-semibold text-green-400">Admin Mode</p>
+                  </div>
+                  <button
+                    onClick={handleAdminLogout}
+                    className="flex items-center gap-2 px-3 py-1 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                    </svg>
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
         {/* Hauptinhalt */}
         <main>
-          {activeView === 'overview' && (
-            <OverviewDashboard
-              isAdmin={isAdmin}
-              backendUrl={BACKEND_URL}
-            />
+          {/* Admin Bereich - Nur für Admin-User sichtbar */}
+          {isAdmin && (
+            <div className="mb-8">
+              <AdminUserManagement />
+            </div>
           )}
+
+          {/* Tab Content */}
+          {activeView === 'overview' && (
+            <div>
+              {/* Overview Dashboard - Nur für freigegebene User */}
+              <ProtectedRoute>
+                <OverviewDashboard
+                  isAdmin={isAdmin}
+                  backendUrl={BACKEND_URL}
+                />
+              </ProtectedRoute>
+            </div>
+          )}
+          
           {activeView === 'honor' && (
             <HonorDashboard
               isAdmin={isAdmin}
               backendUrl={BACKEND_URL}
             />
           )}
+          
           {activeView === 'analytics' && (
             <PowerAnalyticsDashboard
               isAdmin={isAdmin}
               backendUrl={BACKEND_URL}
             />
           )}
+
+          {/* Kingdom Analytics Charts - Immer sichtbar (auch ohne Login) */}
+          <div className="mt-8">
+            <PowerHistoryChart />
+          </div>
         </main>
       </div>
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 
