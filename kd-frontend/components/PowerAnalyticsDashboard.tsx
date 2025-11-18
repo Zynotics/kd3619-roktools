@@ -64,8 +64,8 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       }
       
       const data = await res.json();
-      setUploadedFiles(data);
-      setIsDataLoaded(data.length > 0);
+      setUploadedFiles(data || []); // NULL CHECK HINZUGEFÜGT
+      setIsDataLoaded(data && Array.isArray(data) && data.length > 0); // NULL CHECK HINZUGEFÜGT
     } catch (err) {
       console.error('Error loading file data:', err);
       setError('Error loading file data. Please ensure the backend server is running and accessible.');
@@ -80,9 +80,17 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
 
   // Player Analytics History berechnen
   const playerAnalyticsHistories = useMemo(() => {
+    // NULL/UNDEFINED CHECK HINZUGEFÜGT
+    if (!uploadedFiles || !Array.isArray(uploadedFiles)) {
+      return [];
+    }
+    
     const histories = new Map<string, PlayerAnalyticsHistory>();
     
     uploadedFiles.forEach((file) => {
+      // NULL/UNDEFINED CHECK FÜR FILE.DATA HINZUGEFÜGT
+      if (!file.data || !Array.isArray(file.data)) return;
+
       const players = file.data.map((row: any[]) => {
         const getVal = (keywords: string[]) => {
           const index = findColumnIndex(file.headers, keywords);
@@ -110,6 +118,8 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       });
 
       players.forEach((player) => {
+        if (!player.id) return; // NULL CHECK FÜR PLAYER.ID
+
         if (!histories.has(player.id)) {
           histories.set(player.id, {
             id: player.id,
@@ -142,9 +152,13 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
 
   // Alle aktuellen Spieler für die Suche
   const allPlayersLatest = useMemo(() => {
-    if (uploadedFiles.length === 0) return [];
+    // NULL/UNDEFINED CHECK HINZUGEFÜGT
+    if (!uploadedFiles || !Array.isArray(uploadedFiles) || uploadedFiles.length === 0) return [];
 
     const latestFile = uploadedFiles[uploadedFiles.length - 1];
+    // NULL/UNDEFINED CHECK FÜR FILE.DATA HINZUGEFÜGT
+    if (!latestFile.data || !Array.isArray(latestFile.data)) return [];
+
     const players = latestFile.data.map((row: any[]) => {
       const getVal = (keywords: string[]) => {
         const index = findColumnIndex(latestFile.headers, keywords);
@@ -179,7 +193,8 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       return;
     }
 
-    const history = selectedPlayerHistory.history;
+    // NULL/UNDEFINED CHECK FÜR HISTORY HINZUGEFÜGT
+    const history = selectedPlayerHistory.history || [];
     const labels = history.map(h => h.fileName);
 
     // Power Chart
@@ -476,7 +491,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
               <div className="flex gap-4 text-sm text-gray-400">
                 <span>ID: {selectedPlayerHistory.id}</span>
                 <span>Alliance: {selectedPlayerHistory.alliance || 'N/A'}</span>
-                <span>Records: {selectedPlayerHistory.history.length}</span>
+                <span>Records: {selectedPlayerHistory.history?.length || 0}</span>
               </div>
             </div>
           </Card>
@@ -566,7 +581,8 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
                 </tr>
               </TableHeader>
               <tbody>
-                {selectedPlayerHistory.history.map((record, index) => (
+                {/* NULL/UNDEFINED CHECK FÜR HISTORY HINZUGEFÜGT */}
+                {selectedPlayerHistory.history && selectedPlayerHistory.history.map((record, index) => (
                   <TableRow key={index}>
                     <TableCell align="left" className="font-medium text-white">{record.fileName}</TableCell>
                     <TableCell align="right">{formatNumber(record.power)}</TableCell>
