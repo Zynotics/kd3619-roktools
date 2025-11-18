@@ -1,4 +1,7 @@
+// PowerAnalyticsDashboard.tsx - AKTUALISIERT
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { Card } from './Card';
+import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { cleanFileName, parseGermanNumber, findColumnIndex, formatNumber, abbreviateNumber } from '../utils';
 
 interface PowerAnalyticsDashboardProps {
@@ -387,25 +390,25 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
 
   if (isLoading) {
     return (
-      <div className="text-center p-8 text-gray-400">
+      <Card gradient className="text-center p-8 text-gray-400">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
         Loading analytics data...
-      </div>
+      </Card>
     );
   }
 
   if (error) {
     return (
-      <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">
+      <Card className="text-center p-4 text-red-400 bg-red-900/50">
         {error}
-      </div>
+      </Card>
     );
   }
 
   return (
     <div className="space-y-8">
       {/* Spieler Suche */}
-      <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+      <Card className="p-6">
         <h3 className="text-lg font-semibold text-gray-200 mb-4">Player Analytics Search</h3>
         <div className="flex flex-col sm:flex-row gap-4">
           <input
@@ -438,9 +441,9 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
         {/* Suchergebnisse */}
         <div className="mt-6">
           {searchResults === 'not_found' && (
-            <div className="p-4 text-center text-amber-400 bg-amber-900/50 rounded-lg">
+            <Card className="p-4 text-center text-amber-400 bg-amber-900/50">
               Player not found in analytics data.
-            </div>
+            </Card>
           )}
           {Array.isArray(searchResults) && (
             <div>
@@ -461,13 +464,13 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* Analytics Charts */}
       {selectedPlayerHistory && (
         <div className="space-y-6">
           {/* Spieler Info */}
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+          <Card gradient className="p-6">
             <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-baseline">
               <h4 className="text-xl font-bold text-white">{selectedPlayerHistory.name}</h4>
               <div className="flex gap-4 text-sm text-gray-400">
@@ -476,45 +479,45 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
                 <span>Records: {selectedPlayerHistory.history.length}</span>
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* Charts Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Power Chart */}
-            <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <Card hover className="p-6">
               <h5 className="text-lg font-semibold text-gray-200 mb-4">Power Progression</h5>
               <div className="relative h-64">
                 <canvas ref={powerChartRef}></canvas>
               </div>
-            </div>
+            </Card>
 
             {/* Troops Power Chart */}
-            <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <Card hover className="p-6">
               <h5 className="text-lg font-semibold text-gray-200 mb-4">Troops Power Progression</h5>
               <div className="relative h-64">
                 <canvas ref={troopsChartRef}></canvas>
               </div>
-            </div>
+            </Card>
 
             {/* Kill Points Chart */}
-            <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <Card hover className="p-6">
               <h5 className="text-lg font-semibold text-gray-200 mb-4">Kill Points</h5>
               <div className="relative h-64">
                 <canvas ref={killsChartRef}></canvas>
               </div>
-            </div>
+            </Card>
 
             {/* Dead Troops Chart */}
-            <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <Card hover className="p-6">
               <h5 className="text-lg font-semibold text-gray-200 mb-4">Dead Troops</h5>
               <div className="relative h-64">
                 <canvas ref={deadChartRef}></canvas>
               </div>
-            </div>
+            </Card>
           </div>
 
           {/* Daten Tabelle */}
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+          <Card className="p-6">
             <div className="flex justify-between items-center mb-4">
               <h5 className="text-lg font-semibold text-gray-200">Historical Data</h5>
               <button
@@ -543,60 +546,58 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
               </button>
             </div>
             
-            <div className="overflow-x-auto relative border border-gray-700 rounded-lg max-h-96">
-              <table className="w-full text-sm text-left text-gray-400">
-                <thead className="text-xs text-gray-400 uppercase bg-gray-700 sticky top-0">
-                  <tr>
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3 text-right">Power</th>
-                    <th className="px-4 py-3 text-right">Troops Power</th>
-                    <th className="px-4 py-3 text-right">Kill Points</th>
-                    <th className="px-4 py-3 text-right">Dead Troops</th>
+            <Table maxHeight="96">
+              <TableHeader>
+                <tr>
+                  <TableCell align="left" header>Date</TableCell>
+                  <TableCell align="right" header>Power</TableCell>
+                  <TableCell align="right" header>Troops Power</TableCell>
+                  <TableCell align="right" header>Kill Points</TableCell>
+                  <TableCell align="right" header>Dead Troops</TableCell>
+                  {showDetailedKills && (
+                    <>
+                      <TableCell align="right" header>T1 Kills</TableCell>
+                      <TableCell align="right" header>T2 Kills</TableCell>
+                      <TableCell align="right" header>T3 Kills</TableCell>
+                      <TableCell align="right" header>T4 Kills</TableCell>
+                      <TableCell align="right" header>T5 Kills</TableCell>
+                    </>
+                  )}
+                </tr>
+              </TableHeader>
+              <tbody>
+                {selectedPlayerHistory.history.map((record, index) => (
+                  <TableRow key={index}>
+                    <TableCell align="left" className="font-medium text-white">{record.fileName}</TableCell>
+                    <TableCell align="right">{formatNumber(record.power)}</TableCell>
+                    <TableCell align="right">{formatNumber(record.troopsPower)}</TableCell>
+                    <TableCell align="right">{formatNumber(record.totalKillPoints)}</TableCell>
+                    <TableCell align="right">{formatNumber(record.deadTroops)}</TableCell>
                     {showDetailedKills && (
                       <>
-                        <th className="px-4 py-3 text-right">T1 Kills</th>
-                        <th className="px-4 py-3 text-right">T2 Kills</th>
-                        <th className="px-4 py-3 text-right">T3 Kills</th>
-                        <th className="px-4 py-3 text-right">T4 Kills</th>
-                        <th className="px-4 py-3 text-right">T5 Kills</th>
+                        <TableCell align="right">{formatNumber(record.t1Kills)}</TableCell>
+                        <TableCell align="right">{formatNumber(record.t2Kills)}</TableCell>
+                        <TableCell align="right">{formatNumber(record.t3Kills)}</TableCell>
+                        <TableCell align="right">{formatNumber(record.t4Kills)}</TableCell>
+                        <TableCell align="right">{formatNumber(record.t5Kills)}</TableCell>
                       </>
                     )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedPlayerHistory.history.map((record, index) => (
-                    <tr key={index} className="border-b bg-gray-800 border-gray-700 hover:bg-gray-600">
-                      <td className="px-4 py-2 font-medium text-white">{record.fileName}</td>
-                      <td className="px-4 py-2 text-right">{formatNumber(record.power)}</td>
-                      <td className="px-4 py-2 text-right">{formatNumber(record.troopsPower)}</td>
-                      <td className="px-4 py-2 text-right">{formatNumber(record.totalKillPoints)}</td>
-                      <td className="px-4 py-2 text-right">{formatNumber(record.deadTroops)}</td>
-                      {showDetailedKills && (
-                        <>
-                          <td className="px-4 py-2 text-right">{formatNumber(record.t1Kills)}</td>
-                          <td className="px-4 py-2 text-right">{formatNumber(record.t2Kills)}</td>
-                          <td className="px-4 py-2 text-right">{formatNumber(record.t3Kills)}</td>
-                          <td className="px-4 py-2 text-right">{formatNumber(record.t4Kills)}</td>
-                          <td className="px-4 py-2 text-right">{formatNumber(record.t5Kills)}</td>
-                        </>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                  </TableRow>
+                ))}
+              </tbody>
+            </Table>
+          </Card>
         </div>
       )}
 
       {!selectedPlayerHistory && isDataLoaded && (
-        <div className="text-center p-12 text-gray-400 bg-gray-800 rounded-xl border border-gray-700">
+        <Card gradient className="text-center p-12 text-gray-400">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
           <h3 className="text-xl font-semibold text-gray-300 mb-2">Player Analytics</h3>
           <p>Search for a player to view their power progression and statistics over time.</p>
-        </div>
+        </Card>
       )}
     </div>
   );
