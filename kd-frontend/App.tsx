@@ -1,4 +1,4 @@
-// App.tsx - VOLLSTÄNDIGE DATEI
+// App.tsx - KORRIGIERT
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
