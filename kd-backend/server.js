@@ -13,7 +13,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'kd3619-secret-key-change-in-production';
 
-// CORS für Production und Development
+// CORS für Production und Development - KORRIGIERTE VERSION
 const allowedOrigins = [
   'http://localhost:3000',
   'https://kd3619-frontend.onrender.com'
@@ -21,15 +21,22 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
+    
     if (allowedOrigins.indexOf(origin) === -1) {
       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
       return callback(new Error(msg), false);
     }
     return callback(null, true);
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// Handle Preflight Requests - DIESE ZEILE HINZUFÜGEN
+app.options('*', cors()); // Enable pre-flight for all routes
 
 app.use(express.json());
 
