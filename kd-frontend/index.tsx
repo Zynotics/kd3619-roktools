@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './index.css'; // CSS Import hinzufügen
+// import './index.css'; // DIESE ZEILE ENTFERNEN
 
 const container = document.getElementById('root');
 
