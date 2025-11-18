@@ -1,7 +1,7 @@
 import React from 'react';
-import { useAuth } from './AuthContext';
-import LoginPrompt from './LoginPrompt';
-import ApprovalPending from './ApprovalPending';
+import { useAuth } from './AuthContext.tsx';
+import LoginPrompt from './LoginPrompt.tsx';
+import ApprovalPending from './ApprovalPending.tsx';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
