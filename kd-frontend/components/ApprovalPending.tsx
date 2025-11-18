@@ -17,8 +17,18 @@ const ApprovalPending: React.FC = () => {
       </p>
       
       <p className="text-gray-400 text-sm">
-        Du wirst per E-Mail benachrichtigt, sobald dein Account freigeschaltet wurde.
+        Du wirst automatisch freigeschaltet, sobald ein Administrator deinen Account überprüft hat.
+        Bitte versuche es später erneut.
       </p>
+
+      <div className="mt-6 p-4 bg-gray-700 rounded-lg">
+        <h4 className="text-sm font-semibold text-gray-300 mb-2">Aktueller Zugriff:</h4>
+        <ul className="text-xs text-gray-400 space-y-1">
+          <li>✅ <strong>Honor Dashboard</strong> - Ehrenranglisten und Verläufe</li>
+          <li>✅ <strong>Player Analytics</strong> - Detaillierte Spieleranalysen</li>
+          <li>⏳ <strong>Overview Dashboard</strong> - Wartet auf Freigabe</li>
+        </ul>
+      </div>
     </Card>
   );
 };
