@@ -344,7 +344,7 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
 
   return (
     <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
-      <h3 className="text-lg font-semibold text-gray-200 mb-4">Power History</h3>
+      <h3 className="text-lg font-semibold text-gray-200 mb-4">CH25 Kingdom Analytics</h3>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Total Power Chart */}
         <div className="bg-gray-700/50 p-4 rounded-lg border border-gray-600">
