@@ -1,5 +1,7 @@
-
+// HonorPlayerSearchResult.tsx - AKTUALISIERT
 import React, { useEffect, useRef } from 'react';
+import { Card } from './Card';
+import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { PlayerHonorHistory } from '../types';
 import { formatNumber, abbreviateNumber } from '../utils';
 
@@ -66,7 +68,7 @@ const HonorPlayerSearchResult: React.FC<HonorPlayerSearchResultProps> = ({ resul
     }, [result]);
 
     return (
-        <div>
+        <Card className="p-6">
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 items-baseline mb-4">
                 <h4 className="text-xl font-bold text-white">{result.name}</h4>
                 <div className="flex gap-4 text-sm text-gray-400">
@@ -75,29 +77,33 @@ const HonorPlayerSearchResult: React.FC<HonorPlayerSearchResultProps> = ({ resul
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="relative h-64">
-                    <canvas ref={chartRef}></canvas>
-                </div>
+                <Card hover className="p-4">
+                    <h5 className="text-md font-semibold text-gray-300 mb-3 text-center">Honor Progression</h5>
+                    <div className="relative h-64">
+                        <canvas ref={chartRef}></canvas>
+                    </div>
+                </Card>
+                
                 <div className="overflow-x-auto relative border border-gray-700 rounded-lg max-h-64">
-                    <table className="w-full text-sm text-left text-gray-400">
-                        <thead className="text-xs text-gray-400 uppercase bg-gray-700 sticky top-0">
+                    <Table>
+                        <TableHeader>
                             <tr>
-                                <th className="px-4 py-3">Date</th>
-                                <th className="px-4 py-3 text-right">Honor Points</th>
+                                <TableCell align="left" header>Date</TableCell>
+                                <TableCell align="right" header>Honor Points</TableCell>
                             </tr>
-                        </thead>
+                        </TableHeader>
                         <tbody>
                             {result.history.map((record, index) => (
-                                <tr key={index} className="border-b bg-gray-800 border-gray-700 hover:bg-gray-600">
-                                    <td className="px-4 py-2 font-medium text-white">{record.fileName}</td>
-                                    <td className="px-4 py-2 text-right">{formatNumber(record.honorPoint)}</td>
-                                </tr>
+                                <TableRow key={index}>
+                                    <TableCell align="left" className="font-medium text-white">{record.fileName}</TableCell>
+                                    <TableCell align="right">{formatNumber(record.honorPoint)}</TableCell>
+                                </TableRow>
                             ))}
                         </tbody>
-                    </table>
+                    </Table>
                 </div>
             </div>
-        </div>
+        </Card>
     );
 };
 
