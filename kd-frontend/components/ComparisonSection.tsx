@@ -1,9 +1,10 @@
-
-
+// ComparisonSection.tsx - AKTUALISIERT
 import React, { useState, useMemo } from 'react';
 import type { ComparisonStats, PlayerInfo, PlayerStatChange } from '../types';
 import StatCard from './StatCard';
 import ColumnFilter from './ColumnFilter';
+import { Card } from './Card';
+import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { formatNumber } from '../utils';
 
 // --- Column Definitions ---
@@ -183,8 +184,8 @@ interface PlayerTableProps extends SortableTableProps<PlayerInfo> {
 }
 
 const PlayerTable: React.FC<PlayerTableProps> = ({ title, players, count, requestSort, sortConfig, isExpanded, onToggleExpand, visibleColumns, setVisibleColumns, alliances, selectedAlliance, onAllianceChange }) => (
-    <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-        <div className="flex justify-between items-center mb-3">
+    <Card className="p-6">
+        <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-gray-200">
                 {title} ({count})
             </h3>
@@ -216,43 +217,38 @@ const PlayerTable: React.FC<PlayerTableProps> = ({ title, players, count, reques
                 </button>
             </div>
         </div>
-        <div className={`overflow-x-auto relative border border-gray-700 rounded-lg transition-all duration-500 ease-in-out ${isExpanded ? 'max-h-[75vh]' : 'max-h-72'}`}>
-            <table className="w-full text-sm text-left text-gray-400">
-                <thead className="text-xs text-gray-400 uppercase bg-gray-700 sticky top-0">
-                    <tr>
+        <Table maxHeight={isExpanded ? '75vh' : '72'}>
+            <TableHeader>
+                <tr>
+                    {visibleColumns.map(key => {
+                        const col = PLAYER_INFO_COLUMNS.find(c => c.key === key);
+                        if (!col) return null;
+                        return (
+                            <TableCell key={key} align={col.align as 'left' | 'center' | 'right'} header className="cursor-pointer select-none whitespace-nowrap" onClick={() => requestSort(key)}>
+                                {col.title}
+                                {sortConfig?.key === key && <SortIndicator direction={sortConfig.direction} />}
+                            </TableCell>
+                        )
+                    })}
+                </tr>
+            </TableHeader>
+            <tbody>
+                {players.map(p => (
+                    <TableRow key={p.id}>
                         {visibleColumns.map(key => {
                             const col = PLAYER_INFO_COLUMNS.find(c => c.key === key);
                             if (!col) return null;
                             return (
-                                <th key={key} className={`px-4 py-2 text-${col.align} cursor-pointer select-none whitespace-nowrap`} onClick={() => requestSort(key)}>
-                                    {col.title}
-                                    {sortConfig?.key === key && <SortIndicator direction={sortConfig.direction} />}
-                                </th>
+                                <TableCell key={key} align={col.align as 'left' | 'center' | 'right'} className={key === 'name' ? 'font-medium text-white' : ''}>
+                                    {renderPlayerInfoCell(p, key)}
+                                </TableCell>
                             )
                         })}
-                    </tr>
-                </thead>
-                <tbody>
-                    {players.map(p => (
-                        <tr
-                            key={p.id}
-                            className="border-b bg-gray-800 border-gray-700 hover:bg-gray-600"
-                        >
-                            {visibleColumns.map(key => {
-                                const col = PLAYER_INFO_COLUMNS.find(c => c.key === key);
-                                if (!col) return null;
-                                return (
-                                    <td key={key} className={`px-4 py-2 text-${col.align} whitespace-nowrap ${key === 'name' ? 'font-medium text-white' : ''}`}>
-                                        {renderPlayerInfoCell(p, key)}
-                                    </td>
-                                )
-                            })}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    </div>
+                    </TableRow>
+                ))}
+            </tbody>
+        </Table>
+    </Card>
 );
 
 interface PlayerStatChangesTableProps extends SortableTableProps<PlayerStatChange> {
@@ -270,8 +266,8 @@ interface PlayerStatChangesTableProps extends SortableTableProps<PlayerStatChang
 const PlayerStatChangesTable: React.FC<PlayerStatChangesTableProps> = ({ changes, count, requestSort, sortConfig, isExpanded, onToggleExpand, visibleColumns, setVisibleColumns, alliances, selectedAlliance, onAllianceChange }) => {
 
     return (
-        <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-            <div className="flex justify-between items-center mb-3">
+        <Card className="p-6">
+            <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-gray-200">
                     CH25 Player Stat Changes ({count})
                 </h3>
@@ -303,40 +299,38 @@ const PlayerStatChangesTable: React.FC<PlayerStatChangesTableProps> = ({ changes
                     </button>
                 </div>
             </div>
-            <div className={`overflow-x-auto relative border border-gray-700 rounded-lg transition-all duration-500 ease-in-out ${isExpanded ? 'max-h-[75vh]' : 'max-h-96'}`}>
-                <table className="w-full text-sm text-left text-gray-400">
-                    <thead className="text-xs text-gray-400 uppercase bg-gray-700 sticky top-0 z-10">
-                        <tr>
+            <Table maxHeight={isExpanded ? '75vh' : '96'}>
+                <TableHeader>
+                    <tr>
+                        {visibleColumns.map(key => {
+                            const col = PLAYER_STAT_CHANGE_COLUMNS.find(c => c.key === key);
+                            if (!col) return null;
+                            return (
+                                 <TableCell key={key} align={col.align as 'left' | 'center' | 'right'} header className="cursor-pointer select-none whitespace-nowrap" onClick={() => requestSort(key)}>
+                                    {col.title}
+                                    {sortConfig?.key === key && <SortIndicator direction={sortConfig.direction} />}
+                                </TableCell>
+                            );
+                        })}
+                    </tr>
+                </TableHeader>
+                <tbody>
+                    {changes.map(c => (
+                        <TableRow key={c.id}>
                             {visibleColumns.map(key => {
                                 const col = PLAYER_STAT_CHANGE_COLUMNS.find(c => c.key === key);
                                 if (!col) return null;
                                 return (
-                                     <th key={key} className={`px-4 py-3 text-${col.align} cursor-pointer select-none whitespace-nowrap`} onClick={() => requestSort(key)}>
-                                        {col.title}
-                                        {sortConfig?.key === key && <SortIndicator direction={sortConfig.direction} />}
-                                    </th>
+                                    <TableCell key={key} align={col.align as 'left' | 'center' | 'right'} className={key === 'name' ? 'font-medium text-white' : ''}>
+                                        {renderPlayerStatChangeCell(c, key)}
+                                    </TableCell>
                                 );
                             })}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {changes.map(c => (
-                            <tr key={c.id} className="border-b bg-gray-800 border-gray-700 hover:bg-gray-600">
-                                {visibleColumns.map(key => {
-                                    const col = PLAYER_STAT_CHANGE_COLUMNS.find(c => c.key === key);
-                                    if (!col) return null;
-                                    return (
-                                        <td key={key} className={`px-4 py-2 text-${col.align} whitespace-nowrap ${key === 'name' ? 'font-medium text-white' : ''}`}>
-                                            {renderPlayerStatChangeCell(c, key)}
-                                        </td>
-                                    );
-                                })}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                        </TableRow>
+                    ))}
+                </tbody>
+            </Table>
+        </Card>
     );
 };
 
@@ -437,22 +431,6 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
     setExpandedTables(prev => ({ ...prev, [table]: !prev[table] }));
   };
 
-  if (error) {
-     return <div className="p-4 text-center text-red-400 bg-red-900/50 rounded-lg">{error}</div>;
-  }
-
-  if (!stats) {
-    return (
-        <div className="flex flex-col items-center justify-center h-full text-center text-gray-400 py-20">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <h2 className="text-2xl font-semibold text-white">Ready for Analysis</h2>
-            <p className="mt-2">Please select a start and end date from the controls above, then click "Compare" to view the statistics.</p>
-        </div>
-    );
-  }
-
   const getChangePercent = (diff: number, total1: number) => {
       if (total1 === 0) {
           return diff > 0 ? 100 : 0;
@@ -460,13 +438,31 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
       return (diff / total1) * 100;
   }
 
-  // Nur der return-Teil der ComparisonSection.tsx - um die Tabellen besser zu trennen:
+  if (error) {
+     return (
+        <Card className="p-4 text-center text-red-400 bg-red-900/50">
+            {error}
+        </Card>
+     );
+  }
 
-return (
-  <div className="space-y-8">
-      <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+  if (!stats) {
+    return (
+        <Card gradient className="flex flex-col items-center justify-center text-center text-gray-400 py-20">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h2 className="text-2xl font-semibold text-white">Ready for Analysis</h2>
+            <p className="mt-2">Please select a start and end date from the controls above, then click "Compare" to view the statistics.</p>
+        </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <Card gradient className="p-6">
           <h3 className="text-lg font-semibold text-gray-200 mb-3">Summary</h3>
-          <p className="mb-2 text-sm text-gray-400">
+          <p className="mb-4 text-sm text-gray-400">
             Start: {file1Name ?? '–'} | End: {file2Name ?? '–'}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -475,33 +471,31 @@ return (
               value={formatNumber(stats.totalPowerFile2)}
               change={stats.powerDifference}
               changePercent={getChangePercent(stats.powerDifference, stats.totalPowerFile1)}
-              changeColor={stats.powerDifference >= 0 ? 'text-green-400' : 'text-red-400'}
+              variant="gradient"
             />
             <StatCard
               title="Total Troops Power"
               value={formatNumber(stats.totalTroopsPowerFile2)}
               change={stats.troopsPowerDifference}
               changePercent={getChangePercent(stats.troopsPowerDifference, stats.totalTroopsPowerFile1)}
-              changeColor={stats.troopsPowerDifference >= 0 ? 'text-green-400' : 'text-red-400'}
+              variant="gradient"
             />
             <StatCard
               title="Total Kill Points"
               value={formatNumber(stats.totalKillPointsFile2)}
               change={stats.killPointsDifference}
               changePercent={getChangePercent(stats.killPointsDifference, stats.totalKillPointsFile1)}
-              changeColor={stats.killPointsDifference >= 0 ? 'text-green-400' : 'text-red-400'}
+              variant="gradient"
             />
             <StatCard
               title="Total Dead Troops"
               value={formatNumber(stats.totalDeadTroopsFile2)}
               change={stats.deadTroopsDifference}
               changePercent={getChangePercent(stats.deadTroopsDifference, stats.totalDeadTroopsFile1)}
-              changeColor={stats.deadTroopsDifference >= 0 ? 'text-green-400' : 'text-red-400'}
+              variant="gradient"
             />
           </div>
       </div>
-
-      {/* Hier kommt jetzt die PlayerSearch Komponente dazwischen */}
 
       <PlayerStatChangesTable
           changes={sortedPlayerStatChanges}
@@ -545,8 +539,8 @@ return (
           selectedAlliance={disappearedPlayerAlliance}
           onAllianceChange={setDisappearedPlayerAlliance}
       />
-  </div>
-);
+    </div>
+  );
 };
 
 export default ComparisonSection;
