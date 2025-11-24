@@ -37,51 +37,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     }
   }, []);
-// In der validateToken Funktion - Stelle sicher dass das Token korrekt validiert wird
-const validateToken = async (token: string) => {
-  try {
-    const response = await fetch(`${BACKEND_URL}/api/auth/validate`, {
-      headers: { 
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+
+  // REPARIERTE validateToken Funktion
+  const validateToken = async (token: string) => {
+    try {
+      console.log('🔄 Validating token...');
+      const response = await fetch(`${BACKEND_URL}/api/auth/validate`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const userData = await response.json();
+        console.log('✅ Token valid, user:', userData);
+        setUser(userData);
+      } else {
+        // Token ungültig
+        console.log('❌ Token invalid, clearing storage');
+        localStorage.removeItem('authToken');
+        setUser(null);
       }
-    });
-    
-    if (response.ok) {
-      const userData = await response.json();
-      setUser(userData);
-    } else {
-      // Token ungültig - Admin Status zurücksetzen
+    } catch (error) {
+      console.error('Token validation error:', error);
       localStorage.removeItem('authToken');
-      localStorage.setItem('isAdmin', 'false'); // Admin Status zurücksetzen
+      setUser(null);
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error('Token validation error:', error);
-    localStorage.removeItem('authToken');
-    localStorage.setItem('isAdmin', 'false'); // Admin Status zurücksetzen
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   const login = async (username: string, password: string) => {
     setIsLoading(true);
     try {
+      console.log('🔄 Login attempt:', { username, backendUrl: BACKEND_URL });
+      
       const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
 
+      console.log('📡 Login response status:', response.status);
+      
       if (response.ok) {
         const { user: userData, token } = await response.json();
+        console.log('✅ Login successful:', userData);
         setUser(userData);
         localStorage.setItem('authToken', token);
       } else {
         const errorData = await response.json();
+        console.log('❌ Login failed:', errorData);
         throw new Error(errorData.error || 'Login fehlgeschlagen');
       }
     } catch (error) {
+      console.error('💥 Login error:', error);
       throw error;
     } finally {
       setIsLoading(false);
@@ -112,11 +123,19 @@ const validateToken = async (token: string) => {
   };
 
   const logout = () => {
+    console.log('🚪 Logging out...');
     setUser(null);
     localStorage.removeItem('authToken');
   };
 
-  const hasOverviewAccess = user?.isApproved === true;
+  // REPARIERTE hasOverviewAccess Logik
+  const hasOverviewAccess = user?.isApproved === true || user?.role === 'admin';
+  console.log('🔐 Auth Debug:', { 
+    user, 
+    hasOverviewAccess,
+    isApproved: user?.isApproved,
+    role: user?.role
+  });
 
   return (
     <AuthContext.Provider value={{ 
