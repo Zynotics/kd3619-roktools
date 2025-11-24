@@ -15,6 +15,7 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   hasOverviewAccess: boolean;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,20 +29,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ? 'https://kd3619-backend.onrender.com'
     : 'http://localhost:4000';
 
-  useEffect(() => {
-    // Session beim Start prüfen
+  // User-Daten vom Backend abrufen
+  const refreshUser = async () => {
     const token = localStorage.getItem('authToken');
-    if (token) {
-      validateToken(token);
-    } else {
-      setIsLoading(false);
+    if (!token) {
+      setUser(null);
+      return;
     }
-  }, []);
 
-  // REPARIERTE validateToken Funktion
-  const validateToken = async (token: string) => {
     try {
-      console.log('🔄 Validating token...');
+      console.log('🔄 Refreshing user data...');
       const response = await fetch(`${BACKEND_URL}/api/auth/validate`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -51,27 +48,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (response.ok) {
         const userData = await response.json();
-        console.log('✅ Token valid, user:', userData);
+        console.log('✅ User data refreshed:', userData);
         setUser(userData);
       } else {
-        // Token ungültig
-        console.log('❌ Token invalid, clearing storage');
+        console.log('❌ Token invalid during refresh');
         localStorage.removeItem('authToken');
         setUser(null);
       }
     } catch (error) {
-      console.error('Token validation error:', error);
+      console.error('💥 Error refreshing user:', error);
       localStorage.removeItem('authToken');
       setUser(null);
-    } finally {
-      setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // Session beim Start prüfen
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      refreshUser().finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
+    }
+  }, []);
 
   const login = async (username: string, password: string) => {
     setIsLoading(true);
     try {
-      console.log('🔄 Login attempt:', { username, backendUrl: BACKEND_URL });
+      console.log('🔄 Login attempt:', { username });
       
       const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
         method: 'POST',
@@ -128,13 +132,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('authToken');
   };
 
-  // REPARIERTE hasOverviewAccess Logik
+  // REPARIERTE Zugriffslogik
   const hasOverviewAccess = user?.isApproved === true || user?.role === 'admin';
-  console.log('🔐 Auth Debug:', { 
-    user, 
-    hasOverviewAccess,
+  
+  console.log('🔐 Auth Status:', { 
+    user: user?.username,
     isApproved: user?.isApproved,
-    role: user?.role
+    role: user?.role,
+    hasOverviewAccess 
   });
 
   return (
@@ -144,7 +149,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       register, 
       logout, 
       isLoading, 
-      hasOverviewAccess 
+      hasOverviewAccess,
+      refreshUser
     }}>
       {children}
     </AuthContext.Provider>
