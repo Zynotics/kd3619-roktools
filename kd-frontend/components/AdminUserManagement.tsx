@@ -28,59 +28,85 @@ const AdminUserManagement: React.FC = () => {
   }, []);
 
   const fetchUsers = async () => {
-  try {
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-      setError('Nicht angemeldet');
-      return;
-    }
-
-    const response = await fetch(`${BACKEND_URL}/api/admin/users`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+    try {
+      console.log('🔄 Fetching users...');
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setError('Nicht angemeldet');
+        return;
       }
-    });
-    
-    if (response.ok) {
-      const userData = await response.json();
-      setUsers(userData);
-    } else if (response.status === 403) {
-      setError('Keine Admin-Berechtigung');
-    } else {
-      throw new Error('Fehler beim Laden der Benutzer');
-    }
-  } catch (error) {
-    console.error('Fehler beim Laden der Benutzer:', error);
-    setError('Konnte Benutzer nicht laden');
-  } finally {
-    setIsLoading(false);
-  }
-};
 
+      const response = await fetch(`${BACKEND_URL}/api/admin/users`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('📡 Users response status:', response.status);
+      
+      if (response.ok) {
+        const userData = await response.json();
+        console.log('✅ Users fetched successfully:', userData);
+        setUsers(userData);
+      } else if (response.status === 403) {
+        setError('Keine Admin-Berechtigung');
+      } else {
+        const errorText = await response.text();
+        console.log('❌ Users fetch failed:', errorText);
+        throw new Error('Fehler beim Laden der Benutzer');
+      }
+    } catch (error) {
+      console.error('💥 Error loading users:', error);
+      setError('Konnte Benutzer nicht laden');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // VOLLSTÄNDIG REPARIERTE toggleApproval Funktion
   const toggleApproval = async (userId: string, approved: boolean) => {
+    console.log('🔄 Frontend: Toggle approval', { userId, approved });
+    
     try {
       const token = localStorage.getItem('authToken');
+      console.log('🔐 Token:', token ? 'Present' : 'Missing');
+      
+      if (!token) {
+        throw new Error('Nicht angemeldet');
+      }
+
       const response = await fetch(`${BACKEND_URL}/api/admin/users/approve`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ userId, approved })
+        body: JSON.stringify({ 
+          userId, 
+          approved 
+        })
       });
 
-      if (response.ok) {
-        // UI aktualisieren
-        setUsers(users.map(user => 
-          user.id === userId ? { ...user, isApproved: approved } : user
-        ));
-      } else {
-        throw new Error('Aktion fehlgeschlagen');
+      console.log('📡 Approve response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('❌ Server Error:', errorText);
+        throw new Error(`Server responded with ${response.status}: ${errorText}`);
       }
+
+      const result = await response.json();
+      console.log('✅ Server Response:', result);
+      
+      // UI aktualisieren
+      setUsers(users.map(user => 
+        user.id === userId ? { ...user, isApproved: approved } : user
+      ));
+      
     } catch (error) {
-      console.error('Fehler beim Aktualisieren der Freigabe:', error);
-      alert('Aktion konnte nicht durchgeführt werden');
+      console.error('💥 Frontend Error in toggleApproval:', error);
+      alert('Aktion konnte nicht durchgeführt werden: ' + error.message);
     }
   };
 
