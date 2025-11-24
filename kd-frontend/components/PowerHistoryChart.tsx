@@ -1,147 +1,84 @@
-// PowerHistoryChart.tsx - KORRIGIERT
-import React, { useEffect, useRef, useMemo } from 'react';
-import type { UploadedFile } from '../types';
-import { parseGermanNumber, cleanFileName, abbreviateNumber, formatNumber } from '../utils';
-import { Card } from './Card';
+import React, { useEffect, useRef } from 'react';
+import Card from './Card';
+import {
+  abbreviateNumber,
+  formatNumber
+} from '../utils';
 
-declare var Chart: any;
+const PowerHistoryChart = ({ files }) => {
+  const totalPowerChartRef = useRef(null);
+  const troopsPowerChartRef = useRef(null);
+  const killPointsChartRef = useRef(null);
+  const deadTroopsChartRef = useRef(null);
 
-interface PowerHistoryChartProps {
-  files: UploadedFile[];
-}
+  const totalPowerChartInstance = useRef(null);
+  const troopsPowerChartInstance = useRef(null);
+  const killPointsChartInstance = useRef(null);
+  const deadTroopsChartInstance = useRef(null);
 
-const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
-  const totalPowerChartRef = useRef<HTMLCanvasElement>(null);
-  const troopsPowerChartRef = useRef<HTMLCanvasElement>(null);
-  const killPointsChartRef = useRef<HTMLCanvasElement>(null);
-  const deadTroopsChartRef = useRef<HTMLCanvasElement>(null);
-
-  const totalPowerChartInstance = useRef<any>(null);
-  const troopsPowerChartInstance = useRef<any>(null);
-  const killPointsChartInstance = useRef<any>(null);
-  const deadTroopsChartInstance = useRef<any>(null);
-
-  const chartData = useMemo(() => {
-    // NULL/UNDEFINED CHECK HINZUGEFÜGT
-    if (!files || !Array.isArray(files) || files.length < 2) {
-      return null;
-    }
-
-    const filesToRender = files;
-    const labels = filesToRender.map(file => cleanFileName(file.name));
-    
-    const totalPowerData: number[] = [];
-    const troopsPowerData: number[] = [];
-    const totalKillPointsData: number[] = [];
-    const totalDeadTroopsData: number[] = [];
-
-    filesToRender.forEach(file => {
-      const headerMap = new Map<string, number>();
-      file.headers.forEach((h, i) => {
-        if (h) {
-          headerMap.set(h.trim(), i);
-        }
-      });
-
-      const pIdx = headerMap.get('Power');
-      const tpIdx = headerMap.get('Troops Power');
-      const kpIdx = headerMap.get('Total Kill Points');
-      const dtIdx = headerMap.get('Dead Troops');
-
-      let totalPower = 0;
-      let troopsPower = 0;
-      let totalKillPoints = 0;
-      let totalDeadTroops = 0;
-
-      file.data.forEach(row => {
-        if (pIdx !== undefined) totalPower += parseGermanNumber(row[pIdx]);
-        if (tpIdx !== undefined) troopsPower += parseGermanNumber(row[tpIdx]);
-        if (kpIdx !== undefined) totalKillPoints += parseGermanNumber(row[kpIdx]);
-        if (dtIdx !== undefined) totalDeadTroops += parseGermanNumber(row[dtIdx]);
-      });
-
-      totalPowerData.push(totalPower);
-      troopsPowerData.push(troopsPower);
-      totalKillPointsData.push(totalKillPoints);
-      totalDeadTroopsData.push(totalDeadTroops);
-    });
-
-    return {
-      labels,
-      totalPowerData,
-      troopsPowerData,
-      totalKillPointsData,
-      totalDeadTroopsData,
-    };
-  }, [files]);
-  
+  // Chart rendering
   useEffect(() => {
-    if (!chartData) {
-      // Alle Charts zerstören wenn keine Daten
-      [totalPowerChartInstance, troopsPowerChartInstance, killPointsChartInstance, deadTroopsChartInstance].forEach(chartRef => {
-        if (chartRef.current) {
-          chartRef.current.destroy();
-          chartRef.current = null;
-        }
-      });
+    if (!files || !Array.isArray(files) || files.length < 2) {
+      // Nichts anzeigen, kein Card, kein Text → sauberer Screen
       return;
     }
 
-    const { labels, totalPowerData, troopsPowerData, totalKillPointsData, totalDeadTroopsData } = chartData;
+    const labels = files.map((f) => f.name);
+
+    const totalPowerData = files.map((f) => f.totals.totalPower);
+    const troopsPowerData = files.map((f) => f.totals.totalTroopsPower);
+    const totalKillPointsData = files.map((f) => f.totals.totalKillPoints);
+    const totalDeadTroopsData = files.map((f) => f.totals.totalDeadTroops);
+
+    const cleanup = (ref) => {
+      if (ref.current) {
+        ref.current.destroy();
+        ref.current = null;
+      }
+    };
 
     // Total Power Chart
     if (totalPowerChartRef.current) {
-      if (totalPowerChartInstance.current) {
-        totalPowerChartInstance.current.destroy();
-      }
+      cleanup(totalPowerChartInstance);
       const ctx = totalPowerChartRef.current.getContext('2d');
       totalPowerChartInstance.current = new Chart(ctx, {
         type: 'line',
         data: {
           labels,
-          datasets: [{
-            label: 'Total Power',
-            data: totalPowerData,
-            borderColor: 'rgba(59, 130, 246, 0.8)',
-            backgroundColor: 'rgba(59, 130, 246, 0.2)',
-            fill: true,
-            tension: 0.1,
-          }]
+          datasets: [
+            {
+              label: 'Total Power',
+              data: totalPowerData,
+              borderColor: 'rgba(59, 130, 246, 0.8)',
+              backgroundColor: 'rgba(59, 130, 246, 0.2)',
+              fill: true,
+              tension: 0.1
+            }
+          ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: {
-              display: false
-            },
+            legend: { display: false },
             tooltip: {
               callbacks: {
-                label: function(context: any) {
-                  return `Total Power: ${formatNumber(context.parsed.y)}`;
-                }
+                label: (context) =>
+                  `Power: ${formatNumber(context.parsed.y)}`
               }
             }
           },
           scales: {
             x: {
-              ticks: {
-                color: '#9ca3af',
-              },
-              grid: {
-                color: 'rgba(255, 255, 255, 0.1)',
-              }
+              ticks: { color: '#9ca3af' },
+              grid: { color: 'rgba(255, 255, 255, 0.1)' }
             },
             y: {
               ticks: {
                 color: '#9ca3af',
-                callback: function(value: any, index: any, values: any) {
-                  return abbreviateNumber(value);
-                }
+                callback: (v) => abbreviateNumber(v)
               },
-              grid: {
-                color: 'rgba(255, 255, 255, 0.1)',
-              }
+              grid: { color: 'rgba(255, 255, 255, 0.1)' }
             }
           }
         }
@@ -150,57 +87,46 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
 
     // Troops Power Chart
     if (troopsPowerChartRef.current) {
-      if (troopsPowerChartInstance.current) {
-        troopsPowerChartInstance.current.destroy();
-      }
+      cleanup(troopsPowerChartInstance);
       const ctx = troopsPowerChartRef.current.getContext('2d');
       troopsPowerChartInstance.current = new Chart(ctx, {
         type: 'line',
         data: {
           labels,
-          datasets: [{
-            label: 'Troops Power',
-            data: troopsPowerData,
-            borderColor: 'rgba(16, 185, 129, 0.8)',
-            backgroundColor: 'rgba(16, 185, 129, 0.2)',
-            fill: true,
-            tension: 0.1,
-          }]
+          datasets: [
+            {
+              label: 'Troops Power',
+              data: troopsPowerData,
+              borderColor: 'rgba(34, 197, 94, 0.8)',
+              backgroundColor: 'rgba(34, 197, 94, 0.2)',
+              fill: true,
+              tension: 0.1
+            }
+          ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: {
-              display: false
-            },
+            legend: { display: false },
             tooltip: {
               callbacks: {
-                label: function(context: any) {
-                  return `Troops Power: ${formatNumber(context.parsed.y)}`;
-                }
+                label: (context) =>
+                  `Troops Power: ${formatNumber(context.parsed.y)}`
               }
             }
           },
           scales: {
             x: {
-              ticks: {
-                color: '#9ca3af',
-              },
-              grid: {
-                color: 'rgba(255, 255, 255, 0.1)',
-              }
+              ticks: { color: '#9ca3af' },
+              grid: { color: 'rgba(255, 255, 255, 0.1)' }
             },
             y: {
               ticks: {
                 color: '#9ca3af',
-                callback: function(value: any, index: any, values: any) {
-                  return abbreviateNumber(value);
-                }
+                callback: (v) => abbreviateNumber(v)
               },
-              grid: {
-                color: 'rgba(255, 255, 255, 0.1)',
-              }
+              grid: { color: 'rgba(255, 255, 255, 0.1)' }
             }
           }
         }
@@ -209,57 +135,46 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
 
     // Kill Points Chart
     if (killPointsChartRef.current) {
-      if (killPointsChartInstance.current) {
-        killPointsChartInstance.current.destroy();
-      }
+      cleanup(killPointsChartInstance);
       const ctx = killPointsChartRef.current.getContext('2d');
       killPointsChartInstance.current = new Chart(ctx, {
         type: 'line',
         data: {
           labels,
-          datasets: [{
-            label: 'Total Kill Points',
-            data: totalKillPointsData,
-            borderColor: 'rgba(245, 158, 11, 0.8)',
-            backgroundColor: 'rgba(245, 158, 11, 0.2)',
-            fill: true,
-            tension: 0.1,
-          }]
+          datasets: [
+            {
+              label: 'Total Kill Points',
+              data: totalKillPointsData,
+              borderColor: 'rgba(245, 158, 11, 0.8)',
+              backgroundColor: 'rgba(245, 158, 11, 0.2)',
+              fill: true,
+              tension: 0.1
+            }
+          ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: {
-              display: false
-            },
+            legend: { display: false },
             tooltip: {
               callbacks: {
-                label: function(context: any) {
-                  return `Kill Points: ${formatNumber(context.parsed.y)}`;
-                }
+                label: (context) =>
+                  `Kill Points: ${formatNumber(context.parsed.y)}`
               }
             }
           },
           scales: {
             x: {
-              ticks: {
-                color: '#9ca3af',
-              },
-              grid: {
-                color: 'rgba(255, 255, 255, 0.1)',
-              }
+              ticks: { color: '#9ca3af' },
+              grid: { color: 'rgba(255, 255, 255, 0.1)' }
             },
             y: {
               ticks: {
                 color: '#9ca3af',
-                callback: function(value: any, index: any, values: any) {
-                  return abbreviateNumber(value);
-                }
+                callback: (v) => abbreviateNumber(v)
               },
-              grid: {
-                color: 'rgba(255, 255, 255, 0.1)',
-              }
+              grid: { color: 'rgba(255, 255, 255, 0.1)' }
             }
           }
         }
@@ -268,57 +183,46 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
 
     // Dead Troops Chart
     if (deadTroopsChartRef.current) {
-      if (deadTroopsChartInstance.current) {
-        deadTroopsChartInstance.current.destroy();
-      }
+      cleanup(deadTroopsChartInstance);
       const ctx = deadTroopsChartRef.current.getContext('2d');
       deadTroopsChartInstance.current = new Chart(ctx, {
         type: 'line',
         data: {
           labels,
-          datasets: [{
-            label: 'Total Dead Troops',
-            data: totalDeadTroopsData,
-            borderColor: 'rgba(239, 68, 68, 0.8)',
-            backgroundColor: 'rgba(239, 68, 68, 0.2)',
-            fill: true,
-            tension: 0.1,
-          }]
+          datasets: [
+            {
+              label: 'Total Dead Troops',
+              data: totalDeadTroopsData,
+              borderColor: 'rgba(239, 68, 68, 0.8)',
+              backgroundColor: 'rgba(239, 68, 68, 0.2)',
+              fill: true,
+              tension: 0.1
+            }
+          ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: {
-              display: false
-            },
+            legend: { display: false },
             tooltip: {
               callbacks: {
-                label: function(context: any) {
-                  return `Dead Troops: ${formatNumber(context.parsed.y)}`;
-                }
+                label: (context) =>
+                  `Dead Troops: ${formatNumber(context.parsed.y)}`
               }
             }
           },
           scales: {
             x: {
-              ticks: {
-                color: '#9ca3af',
-              },
-              grid: {
-                color: 'rgba(255, 255, 255, 0.1)',
-              }
+              ticks: { color: '#9ca3af' },
+              grid: { color: 'rgba(255, 255, 255, 0.1)' }
             },
             y: {
               ticks: {
                 color: '#9ca3af',
-                callback: function(value: any, index: any, values: any) {
-                  return abbreviateNumber(value);
-                }
+                callback: (v) => abbreviateNumber(v)
               },
-              grid: {
-                color: 'rgba(255, 255, 255, 0.1)',
-              }
+              grid: { color: 'rgba(255, 255, 255, 0.1)' }
             }
           }
         }
@@ -326,57 +230,56 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
     }
 
     return () => {
-      // Cleanup function to destroy chart instances on component unmount
-      [totalPowerChartInstance, troopsPowerChartInstance, killPointsChartInstance, deadTroopsChartInstance].forEach(chartRef => {
-        if (chartRef.current) {
-          chartRef.current.destroy();
-          chartRef.current = null;
-        }
-      });
+      cleanup(totalPowerChartInstance);
+      cleanup(troopsPowerChartInstance);
+      cleanup(killPointsChartInstance);
+      cleanup(deadTroopsChartInstance);
     };
-  }, [chartData]);
-  
-  // NULL/UNDEFINED CHECK HINZUGEFÜGT
+  }, [files]);
+
+  // Wenn keine Charts angezeigt werden → einfach nichts rendern
   if (!files || !Array.isArray(files) || files.length < 2) {
-    return (
-      <Card gradient className="p-6 text-center text-gray-400">
-        <h3 className="text-lg font-semibold text-gray-200 mb-2">CH 25 Kingdom Analytics</h3>
-        <p>Upload at least two files to see the power progression over time.</p>
-      </Card>
-    );
+    return null;
   }
 
   return (
     <Card gradient className="p-6">
-      <h3 className="text-lg font-semibold text-gray-200 mb-4">CH25 Kingdom Analytics</h3>
+      <h3 className="text-lg font-semibold text-gray-200 mb-4">
+        CH25 Kingdom Analytics
+      </h3>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Total Power Chart */}
         <Card hover className="p-4">
-          <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">Total Power</h4>
+          <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">
+            Total Power
+          </h4>
           <div className="relative h-64">
             <canvas ref={totalPowerChartRef}></canvas>
           </div>
         </Card>
 
-        {/* Troops Power Chart */}
         <Card hover className="p-4">
-          <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">Troops Power</h4>
+          <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">
+            Troops Power
+          </h4>
           <div className="relative h-64">
             <canvas ref={troopsPowerChartRef}></canvas>
           </div>
         </Card>
 
-        {/* Kill Points Chart */}
         <Card hover className="p-4">
-          <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">Kill Points</h4>
+          <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">
+            Kill Points
+          </h4>
           <div className="relative h-64">
             <canvas ref={killPointsChartRef}></canvas>
           </div>
         </Card>
 
-        {/* Dead Troops Chart */}
         <Card hover className="p-4">
-          <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">Dead Troops</h4>
+          <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">
+            Dead Troops
+          </h4>
           <div className="relative h-64">
             <canvas ref={deadTroopsChartRef}></canvas>
           </div>
