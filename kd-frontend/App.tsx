@@ -251,7 +251,6 @@ const AppContent: React.FC = () => {
           {activeView === 'overview' && (
             <div>
               {/* Overview Dashboard - Nur für freigegebene User */}
-              <ProtectedRoute>
                 <OverviewDashboard
                   isAdmin={isAdmin}
                   backendUrl={BACKEND_URL}
