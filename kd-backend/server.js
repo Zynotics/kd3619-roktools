@@ -1,4 +1,4 @@
-// server.js - VOLLSTÄNDIG REPARIERT mit Admin Fix
+// server.js - VOLLSTÄNDIG REPARIERT mit Admin Fix und Delete-User
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
@@ -434,7 +434,7 @@ app.get('/api/auth/validate', authenticateToken, (req, res) => {
 // Alle Benutzer abrufen (nur Admin)
 app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
   try {
-    console.log('📋 Admin fetching users...');
+    console.log('📋 Admin fetching users.');
     const stmt = db.prepare("SELECT id, email, username, is_approved, role, created_at FROM users ORDER BY created_at DESC");
     const users = stmt.all();
     
@@ -454,7 +454,7 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-// VOLLSTÄNDIG REPARIERTE VERSION - Benutzer freigeben/sperren
+// Benutzer freigeben/sperren
 app.post('/api/admin/users/approve', authenticateToken, requireAdmin, (req, res) => {
   console.log('🔧 ADMIN APPROVE REQUEST:', {
     body: req.body,
@@ -504,6 +504,45 @@ app.post('/api/admin/users/approve', authenticateToken, requireAdmin, (req, res)
       details: error.message,
       stack: process.env.NODE_ENV === 'production' ? undefined : error.stack
     });
+  }
+});
+
+// 🔥 NEU: Benutzer komplett löschen
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const userId = req.params.id;
+    console.log('🗑️ Admin delete request for user:', userId, 'by', req.user.id);
+
+    // Ziel-User holen
+    const user = db.prepare("SELECT id, username, role FROM users WHERE id = ?").get(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    }
+
+    // Eigener Account darf nicht per API gelöscht werden
+    if (user.id === req.user.id) {
+      return res.status(400).json({ error: 'Admins können ihr eigenes Konto nicht löschen.' });
+    }
+
+    // Admin-Konten schützen
+    if (user.role === 'admin') {
+      return res.status(400).json({ error: 'Admin-Konten können nicht gelöscht werden.' });
+    }
+
+    const deleteStmt = db.prepare("DELETE FROM users WHERE id = ?");
+    const result = deleteStmt.run(userId);
+
+    console.log('✅ User deleted. Changes:', result.changes);
+
+    res.json({
+      success: true,
+      message: `Benutzer "${user.username}" wurde dauerhaft gelöscht.`,
+      changes: result.changes
+    });
+
+  } catch (error) {
+    console.error('💥 Error deleting user:', error);
+    res.status(500).json({ error: 'Benutzer konnte nicht gelöscht werden.' });
   }
 });
 
@@ -765,7 +804,12 @@ app.get('/', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
       auth: ['POST /api/auth/register', 'POST /api/auth/login', 'GET /api/auth/validate'],
-      admin: ['GET /api/admin/users', 'POST /api/admin/users/approve', 'POST /api/admin/create-admin'],
+      admin: [
+        'GET /api/admin/users',
+        'POST /api/admin/users/approve',
+        'DELETE /api/admin/users/:id',
+        'POST /api/admin/create-admin'
+      ],
       debug: ['GET /api/debug/users'],
       overview: ['GET /overview/files-data', 'POST /overview/upload', 'DELETE /overview/files/:id', 'POST /overview/files/reorder'],
       honor: ['GET /honor/files-data', 'POST /honor/upload', 'DELETE /honor/files/:id', 'POST /honor/files/reorder'],
