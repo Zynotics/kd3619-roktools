@@ -1,14 +1,30 @@
-import React from 'react';
-import { useAuth } from './AuthContext.tsx';
-import LoginPrompt from './LoginPrompt.tsx';
-import ApprovalPending from './ApprovalPending.tsx';
+import React, { useEffect } from 'react';
+import { useAuth } from './AuthContext';
+import LoginPrompt from './LoginPrompt';
+import ApprovalPending from './ApprovalPending';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user, isLoading, hasOverviewAccess } = useAuth();
+  const { user, isLoading, hasOverviewAccess, refreshUser } = useAuth();
+
+  // User-Daten aktualisieren wenn Komponente mounted
+  useEffect(() => {
+    if (user) {
+      console.log('🔄 ProtectedRoute: Refreshing user data on mount');
+      refreshUser();
+    }
+  }, []);
+
+  console.log('🔐 ProtectedRoute Check:', {
+    user: user?.username,
+    isLoading,
+    hasOverviewAccess,
+    isApproved: user?.isApproved,
+    role: user?.role
+  });
 
   if (isLoading) {
     return (
@@ -19,13 +35,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!user) {
+    console.log('❌ ProtectedRoute: No user - showing login');
     return <LoginPrompt />;
   }
 
   if (!hasOverviewAccess) {
+    console.log('❌ ProtectedRoute: No access - showing approval pending');
     return <ApprovalPending />;
   }
 
+  console.log('✅ ProtectedRoute: Access granted');
   return <>{children}</>;
 };
 

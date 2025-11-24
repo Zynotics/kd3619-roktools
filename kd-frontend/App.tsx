@@ -1,5 +1,5 @@
-// App.tsx - EINHEITLICHES LOGIN SYSTEM
-import React, { useState } from 'react';
+// App.tsx - EINHEITLICHES LOGIN SYSTEM MIT AUTO-REFRESH
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminUserManagement from './components/AdminUserManagement';
@@ -17,13 +17,43 @@ type ActiveView = 'overview' | 'honor' | 'analytics';
 
 const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('overview');
-  const { user, login, logout, isLoading } = useAuth();
+  const { user, login, logout, isLoading, refreshUser } = useAuth();
 
   const [showLoginDialog, setShowLoginDialog] = useState<boolean>(false);
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+
+  // User-Daten regelmäßig aktualisieren (falls Freigabe geändert wurde)
+  useEffect(() => {
+    if (user) {
+      console.log('🔄 App: Setting up auto-refresh for user:', user.username);
+      
+      // Beim Tab-Wechsel aktualisieren
+      const handleVisibilityChange = () => {
+        if (!document.hidden) {
+          console.log('🔄 Tab activated, refreshing user data...');
+          refreshUser();
+        }
+      };
+
+      // Alle 2 Minuten aktualisieren (falls im Hintergrund geändert)
+      const interval = setInterval(() => {
+        if (!document.hidden) {
+          console.log('🔄 Periodic user data refresh...');
+          refreshUser();
+        }
+      }, 120000); // 2 Minuten
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        clearInterval(interval);
+      };
+    }
+  }, [user, refreshUser]);
 
   const handleLoginSubmit = async () => {
     if (!username || !password) {
@@ -55,6 +85,14 @@ const AppContent: React.FC = () => {
 
   // Admin Status basierend auf User-Rolle
   const isAdmin = user?.role === 'admin';
+
+  // Debug info
+  console.log('🔐 App State:', {
+    user: user?.username,
+    isAdmin,
+    isApproved: user?.isApproved,
+    activeView
+  });
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans">
@@ -189,6 +227,16 @@ const AppContent: React.FC = () => {
                   <span className="text-sm font-semibold text-white">
                     {user.username}
                   </span>
+                  
+                  {/* Refresh Button */}
+                  <button
+                    onClick={() => refreshUser()}
+                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors p-1 rounded hover:bg-gray-700"
+                    title="Benutzerdaten aktualisieren"
+                  >
+                    🔄
+                  </button>
+                  
                   <span className={`text-xs px-2 py-1 rounded-full ${
                     user.isApproved 
                       ? 'bg-green-500 text-white' 
