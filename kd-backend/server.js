@@ -1,4 +1,4 @@
-// server.js - ERWEITERT mit Admin User Fix
+// server.js - VOLLSTÄNDIG REPARIERT mit Admin Fix
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
@@ -13,7 +13,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'kd3619-secret-key-change-in-production';
 
-// CORS für Production und Development - KORRIGIERTE VERSION
+// CORS für Production und Development
 const allowedOrigins = [
   'http://localhost:3000',
   'https://kd3619-frontend.onrender.com'
@@ -21,9 +21,7 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
     if (allowedOrigins.indexOf(origin) === -1) {
       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
       return callback(new Error(msg), false);
@@ -35,9 +33,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Handle Preflight Requests
-app.options('*', cors()); // Enable pre-flight for all routes
-
+app.options('*', cors());
 app.use(express.json());
 
 // 📂 Upload-Ordner erstellen
@@ -66,6 +62,18 @@ try {
 
 // Tabellen erstellen falls nicht vorhanden
 db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    is_approved INTEGER DEFAULT 0,
+    role TEXT DEFAULT 'user',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS overview_files (
     id TEXT PRIMARY KEY,
     name TEXT,
@@ -93,22 +101,8 @@ db.exec(`
   )
 `);
 
-// NEUE TABELLEN FÜR AUTHENTIFIZIERUNG
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    is_approved BOOLEAN DEFAULT FALSE,
-    role TEXT DEFAULT 'user',
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-  )
-`);
-
-// Admin-Benutzer erstellen falls nicht vorhanden - KORRIGIERTE VERSION
+// Admin-Benutzer erstellen falls nicht vorhanden - REPARIERTE VERSION
 try {
-  // Prüfen ob Admin bereits existiert
   const existingAdmin = db.prepare("SELECT * FROM users WHERE username = ?").get('Stadmin');
   
   if (!existingAdmin) {
@@ -117,19 +111,24 @@ try {
       INSERT INTO users (id, email, username, password_hash, is_approved, role) 
       VALUES (?, ?, ?, ?, ?, ?)
     `);
-const adminStmt = db.prepare(`
-  INSERT OR REPLACE INTO users (id, email, username, password_hash, is_approved, role) 
-  VALUES (?, ?, ?, ?, ?, ?)
-`);
-adminStmt.run(
-  'admin-001',
-  'admin@kd3619.com',
-  'Stadmin', 
-  adminPasswordHash,
-  1,    // is_approved = true (als Integer)
-  'admin' // role = 'admin'
-);
-console.log('✅ Admin user created with role: admin');
+    insertAdmin.run(
+      'admin-001',
+      'admin@kd3619.com',
+      'Stadmin',
+      adminPasswordHash,
+      1,  // is_approved als INTEGER
+      'admin'
+    );
+    console.log('✅ Admin user created successfully');
+  } else {
+    console.log('✅ Admin user already exists');
+    
+    // Stelle sicher dass der Admin User korrekte Rechte hat
+    const updateAdmin = db.prepare(`
+      UPDATE users SET is_approved = ?, role = ? WHERE username = ?
+    `);
+    updateAdmin.run(1, 'admin', 'Stadmin');
+    console.log('✅ Admin user permissions verified');
   }
 } catch (error) {
   console.error('❌ Error creating/verifying admin user:', error);
@@ -153,10 +152,21 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// REPARIERTE requireAdmin Middleware
 const requireAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
+  console.log('🔐 Checking admin access for user:', req.user);
+  
+  if (!req.user) {
+    console.log('❌ No user in request');
+    return res.status(401).json({ error: 'Nicht authentifiziert' });
   }
+  
+  if (req.user.role !== 'admin') {
+    console.log('❌ User is not admin:', req.user.role);
+    return res.status(403).json({ error: 'Admin Zugriff erforderlich' });
+  }
+  
+  console.log('✅ User is admin, access granted');
   next();
 };
 
@@ -172,7 +182,7 @@ app.get('/api/debug/users', (req, res) => {
   }
 });
 
-// Manuellen Admin Creation Endpoint hinzufügen
+// Manuellen Admin Creation Endpoint
 app.post('/api/admin/create-admin', (req, res) => {
   try {
     const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
@@ -185,7 +195,7 @@ app.post('/api/admin/create-admin', (req, res) => {
       'admin@kd3619.com',
       'Stadmin',
       adminPasswordHash,
-      true,
+      1,
       'admin'
     );
     res.json({ message: 'Admin user created successfully' });
@@ -419,14 +429,16 @@ app.get('/api/auth/validate', authenticateToken, (req, res) => {
   });
 });
 
-// ==================== ADMIN ENDPOINTS ====================
+// ==================== ADMIN ENDPOINTS - REPARIERT ====================
 
 // Alle Benutzer abrufen (nur Admin)
 app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
   try {
+    console.log('📋 Admin fetching users...');
     const stmt = db.prepare("SELECT id, email, username, is_approved, role, created_at FROM users ORDER BY created_at DESC");
     const users = stmt.all();
     
+    console.log(`✅ Found ${users.length} users`);
     res.json(users.map(user => ({
       id: user.id,
       email: user.email,
@@ -437,34 +449,61 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
     })));
     
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error('❌ Error fetching users:', error);
     res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
   }
 });
 
-// Benutzer freigeben/sperren (nur Admin)
+// VOLLSTÄNDIG REPARIERTE VERSION - Benutzer freigeben/sperren
 app.post('/api/admin/users/approve', authenticateToken, requireAdmin, (req, res) => {
+  console.log('🔧 ADMIN APPROVE REQUEST:', {
+    body: req.body,
+    user: req.user
+  });
+  
   try {
     const { userId, approved } = req.body;
     
-    if (typeof approved !== 'boolean') {
-      return res.status(400).json({ error: 'Ungültiger approved Wert' });
+    // Input Validation
+    if (!userId || typeof approved !== 'boolean') {
+      console.log('❌ Invalid input:', { userId, approved });
+      return res.status(400).json({ 
+        error: 'Ungültige Eingabe: userId und approved (boolean) werden benötigt' 
+      });
     }
 
+    console.log(`🔄 Update user ${userId} to approved=${approved}`);
+    
+    // Boolean zu Integer für SQLite konvertieren
+    const approvedValue = approved ? 1 : 0;
+    
+    // SQL Statement vorbereiten
     const stmt = db.prepare("UPDATE users SET is_approved = ? WHERE id = ?");
-    const result = stmt.run(approved, userId);
+    console.log('📝 SQL Prepared');
+    
+    // Ausführen
+    const result = stmt.run(approvedValue, userId);
+    console.log('✅ SQL Result - Changes:', result.changes);
     
     if (result.changes === 0) {
+      console.log('❌ User nicht gefunden:', userId);
       return res.status(404).json({ error: 'Benutzer nicht gefunden' });
     }
 
+    console.log('🎉 User erfolgreich aktualisiert');
     res.json({ 
-      message: `Benutzer erfolgreich ${approved ? 'freigegeben' : 'gesperrt'}` 
+      success: true,
+      message: `Benutzer erfolgreich ${approved ? 'freigegeben' : 'gesperrt'}`,
+      changes: result.changes
     });
     
   } catch (error) {
-    console.error('Error updating user approval:', error);
-    res.status(500).json({ error: 'Fehler beim Aktualisieren der Benutzerfreigabe' });
+    console.error('💥 CRITICAL ERROR in admin/approve:', error);
+    res.status(500).json({ 
+      error: 'Interner Server Fehler',
+      details: error.message,
+      stack: process.env.NODE_ENV === 'production' ? undefined : error.stack
+    });
   }
 });
 
