@@ -25,11 +25,12 @@ const AdminUserManagement: React.FC = () => {
 
   useEffect(() => {
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchUsers = async () => {
     try {
-      console.log('🔄 Fetching users...');
+      console.log('🔄 Fetching users.');
       const token = localStorage.getItem('authToken');
       if (!token) {
         setError('Nicht angemeldet');
@@ -46,7 +47,7 @@ const AdminUserManagement: React.FC = () => {
       console.log('📡 Users response status:', response.status);
       
       if (response.ok) {
-        const userData = await response.json();
+        const userData: User[] = await response.json();
         console.log('✅ Users fetched successfully:', userData);
         setUsers(userData);
       } else if (response.status === 403) {
@@ -56,15 +57,15 @@ const AdminUserManagement: React.FC = () => {
         console.log('❌ Users fetch failed:', errorText);
         throw new Error('Fehler beim Laden der Benutzer');
       }
-    } catch (error) {
-      console.error('💥 Error loading users:', error);
+    } catch (err) {
+      console.error('💥 Error loading users:', err);
       setError('Konnte Benutzer nicht laden');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // VOLLSTÄNDIG REPARIERTE toggleApproval Funktion
+  // Benutzer freigeben / sperren
   const toggleApproval = async (userId: string, approved: boolean) => {
     console.log('🔄 Frontend: Toggle approval', { userId, approved });
     
@@ -99,14 +100,57 @@ const AdminUserManagement: React.FC = () => {
       const result = await response.json();
       console.log('✅ Server Response:', result);
       
-      // UI aktualisieren
-      setUsers(users.map(user => 
-        user.id === userId ? { ...user, isApproved: approved } : user
-      ));
+      // UI aktualisieren (immer mit prev-Callback!)
+      setUsers(prev =>
+        prev.map(user => 
+          user.id === userId ? { ...user, isApproved: approved } : user
+        )
+      );
       
-    } catch (error) {
-      console.error('💥 Frontend Error in toggleApproval:', error);
-      alert('Aktion konnte nicht durchgeführt werden: ' + error.message);
+    } catch (err: any) {
+      console.error('💥 Frontend Error in toggleApproval:', err);
+      alert('Aktion konnte nicht durchgeführt werden: ' + (err.message || err));
+    }
+  };
+
+  // 🔥 NEU: Benutzer komplett löschen
+  const deleteUser = async (userId: string, username: string) => {
+    const confirmed = window.confirm(
+      `Benutzer "${username}" wirklich dauerhaft löschen?\n` +
+      `Dies kann nicht rückgängig gemacht werden.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('Nicht angemeldet');
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      console.log('📡 Delete response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('❌ Delete Server Error:', errorText);
+        throw new Error(errorText || 'Serverfehler beim Löschen');
+      }
+
+      const result = await response.json();
+      console.log('✅ User deleted:', result);
+
+      // UI: Benutzer aus Liste entfernen
+      setUsers(prev => prev.filter(user => user.id !== userId));
+
+    } catch (err: any) {
+      console.error('💥 Frontend Error in deleteUser:', err);
+      alert('Benutzer konnte nicht gelöscht werden: ' + (err.message || err));
     }
   };
 
@@ -114,7 +158,7 @@ const AdminUserManagement: React.FC = () => {
     return (
       <Card className="p-6 text-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-        <p className="mt-2 text-gray-400">Lade Benutzer...</p>
+        <p className="mt-2 text-gray-400">Lade Benutzer.</p>
       </Card>
     );
   }
@@ -174,8 +218,10 @@ const AdminUserManagement: React.FC = () => {
                 </span>
               </TableCell>
               <TableCell align="center">
+                {/* Aktionen nur für: nicht eigener Account & kein Admin */}
                 {user.id !== currentUser?.id && user.role !== 'admin' && (
                   <div className="flex gap-2 justify-center">
+                    {/* Freigeben/Sperren */}
                     {!user.isApproved ? (
                       <button
                         onClick={() => toggleApproval(user.id, true)}
@@ -186,11 +232,19 @@ const AdminUserManagement: React.FC = () => {
                     ) : (
                       <button
                         onClick={() => toggleApproval(user.id, false)}
-                        className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 transition-colors text-sm"
+                        className="bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700 transition-colors text-sm"
                       >
                         Sperren
                       </button>
                     )}
+
+                    {/* 🔥 Löschen-Button */}
+                    <button
+                      onClick={() => deleteUser(user.id, user.username)}
+                      className="bg-red-700 text-white px-3 py-1 rounded hover:bg-red-800 transition-colors text-sm"
+                    >
+                      Löschen
+                    </button>
                   </div>
                 )}
                 {user.id === currentUser?.id && (
