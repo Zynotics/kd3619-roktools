@@ -117,24 +117,19 @@ try {
       INSERT INTO users (id, email, username, password_hash, is_approved, role) 
       VALUES (?, ?, ?, ?, ?, ?)
     `);
-    insertAdmin.run(
-      'admin-001',
-      'admin@kd3619.com',
-      'Stadmin',
-      adminPasswordHash,
-      1,  // Sofort freigegeben
-      'admin'  // Admin Rolle
-    );
-    console.log('✅ Admin user created successfully');
-  } else {
-    console.log('✅ Admin user already exists');
-    
-    // Stelle sicher dass der Admin User korrekte Rechte hat
-    const updateAdmin = db.prepare(`
-      UPDATE users SET is_approved = ?, role = ? WHERE username = ?
-    `);
-    updateAdmin.run(true, 'admin', 'Stadmin');
-    console.log('✅ Admin user permissions verified');
+const adminStmt = db.prepare(`
+  INSERT OR REPLACE INTO users (id, email, username, password_hash, is_approved, role) 
+  VALUES (?, ?, ?, ?, ?, ?)
+`);
+adminStmt.run(
+  'admin-001',
+  'admin@kd3619.com',
+  'Stadmin', 
+  adminPasswordHash,
+  1,    // is_approved = true (als Integer)
+  'admin' // role = 'admin'
+);
+console.log('✅ Admin user created with role: admin');
   }
 } catch (error) {
   console.error('❌ Error creating/verifying admin user:', error);
