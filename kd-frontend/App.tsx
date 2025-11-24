@@ -250,12 +250,20 @@ const AppContent: React.FC = () => {
           {/* Tab Content */}
           {activeView === 'overview' && (
             <div>
-              {/* Overview Dashboard - Nur für freigegebene User */}
+              {/* Overview Dashboard - OHNE ProtectedRoute für Admin */}
+              {isAdmin ? (
                 <OverviewDashboard
                   isAdmin={isAdmin}
                   backendUrl={BACKEND_URL}
                 />
-              </ProtectedRoute>
+              ) : (
+                <ProtectedRoute>
+                  <OverviewDashboard
+                    isAdmin={isAdmin}
+                    backendUrl={BACKEND_URL}
+                  />
+                </ProtectedRoute>
+              )}
             </div>
           )}
           
