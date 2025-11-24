@@ -122,7 +122,7 @@ try {
       'admin@kd3619.com',
       'Stadmin',
       adminPasswordHash,
-      true,  // Sofort freigegeben
+      1,  // Sofort freigegeben
       'admin'  // Admin Rolle
     );
     console.log('✅ Admin user created successfully');
@@ -341,7 +341,7 @@ app.post('/api/auth/register', async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?)
     `);
     
-    stmt.run(userId, email, username, passwordHash, false, 'user');
+    stmt.run(userId, email, username, passwordHash, 0, 'user');
     
     res.json({ 
       message: 'Registrierung erfolgreich. Bitte warten Sie auf die Freigabe durch einen Administrator.',
