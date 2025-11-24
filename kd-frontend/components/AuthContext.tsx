@@ -4,7 +4,7 @@ interface User {
   id: string;
   email: string;
   username: string;
-  isApproved: boolean;
+  isApproved: boolean; // Jetzt Boolean!
   role: 'user' | 'admin';
 }
 
@@ -29,7 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ? 'https://kd3619-backend.onrender.com'
     : 'http://localhost:4000';
 
-  // User-Daten vom Backend abrufen
+  // REPARIERT: User-Daten vom Backend abrufen mit Boolean Konvertierung
   const refreshUser = async () => {
     const token = localStorage.getItem('authToken');
     if (!token) {
@@ -48,8 +48,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (response.ok) {
         const userData = await response.json();
-        console.log('✅ User data refreshed:', userData);
-        setUser(userData);
+        
+        // REPARIERT: Number zu Boolean konvertieren
+        const processedUserData: User = {
+          ...userData,
+          isApproved: Boolean(userData.isApproved) // 1 -> true, 0 -> false
+        };
+        
+        console.log('✅ User data refreshed:', processedUserData);
+        setUser(processedUserData);
       } else {
         console.log('❌ Token invalid during refresh');
         localStorage.removeItem('authToken');
@@ -87,8 +94,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (response.ok) {
         const { user: userData, token } = await response.json();
-        console.log('✅ Login successful:', userData);
-        setUser(userData);
+        
+        // REPARIERT: Auch hier Number zu Boolean konvertieren
+        const processedUserData: User = {
+          ...userData,
+          isApproved: Boolean(userData.isApproved)
+        };
+        
+        console.log('✅ Login successful:', processedUserData);
+        setUser(processedUserData);
         localStorage.setItem('authToken', token);
       } else {
         const errorData = await response.json();
