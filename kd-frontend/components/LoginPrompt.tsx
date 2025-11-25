@@ -195,7 +195,7 @@ const LoginPrompt: React.FC = () => {
                 }}
                 onBlur={validateGovId}
                 className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
-                placeholder="Gov ID from KD data"
+                placeholder="Gov ID"
                 required={!isLogin}
               />
 
