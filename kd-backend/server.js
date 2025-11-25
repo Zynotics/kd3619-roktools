@@ -1,4 +1,4 @@
-// server.js - Backend mit Admin, Uploads & Gov-ID-Validierung
+// server.js - Backend mit Admin, Uploads, Gov-ID-Validierung & Feature-Rechten
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
@@ -17,7 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'kd3619-secret-key-change-in-produc
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
-  'https://kd3619-frontend.onrender.com'
+  'https://kd3619-frontend.onrender.com',
 ];
 
 app.use(
@@ -25,15 +25,14 @@ app.use(
     origin: function (origin, callback) {
       if (!origin) return callback(null, true);
       if (allowedOrigins.indexOf(origin) === -1) {
-        const msg =
-          'The CORS policy for this site does not allow access from the specified Origin.';
+        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
         return callback(new Error(msg), false);
       }
       return callback(null, true);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   })
 );
 
@@ -74,6 +73,9 @@ db.exec(`
     is_approved INTEGER DEFAULT 0,
     role TEXT DEFAULT 'user',
     governor_id TEXT,
+    can_access_honor INTEGER DEFAULT 0,
+    can_access_analytics INTEGER DEFAULT 0,
+    can_access_overview INTEGER DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   )
 `);
@@ -106,13 +108,20 @@ db.exec(`
   )
 `);
 
-// Falls governor_id-Spalte in älteren DBs fehlt → versuchen hinzuzufügen
-try {
-  db.prepare('ALTER TABLE users ADD COLUMN governor_id TEXT').run();
-  console.log('✅ Column governor_id added to users table');
-} catch (e) {
-  console.log('ℹ️ Column governor_id already exists, skipping ALTER TABLE');
-}
+// ggf. Spalten für ältere DBs nachziehen
+const addColumnIfNotExists = (table, column, def) => {
+  try {
+    db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`).run();
+    console.log(`✅ Column ${column} added to ${table}`);
+  } catch (e) {
+    console.log(`ℹ️ Column ${column} already exists on ${table}, skipping`);
+  }
+};
+
+addColumnIfNotExists('users', 'governor_id', 'TEXT');
+addColumnIfNotExists('users', 'can_access_honor', 'INTEGER DEFAULT 0');
+addColumnIfNotExists('users', 'can_access_analytics', 'INTEGER DEFAULT 0');
+addColumnIfNotExists('users', 'can_access_overview', 'INTEGER DEFAULT 0');
 
 // Admin-Benutzer erstellen/verifizieren
 try {
@@ -121,8 +130,11 @@ try {
   if (!existingAdmin) {
     const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
     const insertAdmin = db.prepare(`
-      INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (
+        id, email, username, password_hash, is_approved, role,
+        governor_id, can_access_honor, can_access_analytics, can_access_overview
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     insertAdmin.run(
       'admin-001',
@@ -131,16 +143,24 @@ try {
       adminPasswordHash,
       1,
       'admin',
-      null
+      null,
+      1,
+      1,
+      1
     );
     console.log('✅ Admin user created successfully');
   } else {
     console.log('✅ Admin user already exists');
-
     const updateAdmin = db.prepare(`
-      UPDATE users SET is_approved = ?, role = ? WHERE username = ?
+      UPDATE users
+      SET is_approved = 1,
+          role = 'admin',
+          can_access_honor = 1,
+          can_access_analytics = 1,
+          can_access_overview = 1
+      WHERE username = ?
     `);
-    updateAdmin.run(1, 'admin', 'Stadmin');
+    updateAdmin.run('Stadmin');
     console.log('✅ Admin user permissions verified');
   }
 } catch (error) {
@@ -167,19 +187,12 @@ const authenticateToken = (req, res, next) => {
 
 // Admin-Middleware
 const requireAdmin = (req, res, next) => {
-  console.log('🔐 Checking admin access for user:', req.user);
-
   if (!req.user) {
-    console.log('❌ No user in request');
     return res.status(401).json({ error: 'Nicht authentifiziert' });
   }
-
   if (req.user.role !== 'admin') {
-    console.log('❌ User is not admin:', req.user.role);
     return res.status(403).json({ error: 'Admin Zugriff erforderlich' });
   }
-
-  console.log('✅ User is admin, access granted');
   next();
 };
 
@@ -279,7 +292,7 @@ const overviewStorage = multer.diskStorage({
     const uniqueName =
       Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname);
     cb(null, uniqueName);
-  }
+  },
 });
 
 // Multer Konfiguration für Honor
@@ -291,7 +304,7 @@ const honorStorage = multer.diskStorage({
     const uniqueName =
       Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname);
     cb(null, uniqueName);
-  }
+  },
 });
 
 const allowedExtensions = ['.xlsx', '.xls', '.csv'];
@@ -300,7 +313,6 @@ const overviewUpload = multer({
   storage: overviewStorage,
   fileFilter: (req, file, cb) => {
     const fileExtension = path.extname(file.originalname).toLowerCase();
-
     if (allowedExtensions.includes(fileExtension)) {
       cb(null, true);
     } else {
@@ -308,15 +320,14 @@ const overviewUpload = multer({
     }
   },
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB
-  }
+    fileSize: 10 * 1024 * 1024,
+  },
 });
 
 const honorUpload = multer({
   storage: honorStorage,
   fileFilter: (req, file, cb) => {
     const fileExtension = path.extname(file.originalname).toLowerCase();
-
     if (allowedExtensions.includes(fileExtension)) {
       cb(null, true);
     } else {
@@ -324,13 +335,13 @@ const honorUpload = multer({
     }
   },
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB
-  }
+    fileSize: 10 * 1024 * 1024,
+  },
 });
 
 // ==================== AUTH ENDPOINTS ====================
 
-// 🔍 Gov ID Check für Live-Validierung im Frontend
+// Gov ID Check für Live-Validierung im Frontend
 app.post('/api/auth/check-gov-id', (req, res) => {
   const { governorId } = req.body;
   if (!governorId || !String(governorId).trim()) {
@@ -347,7 +358,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (!email || !username || !password || !governorId) {
       return res.status(400).json({
-        error: 'Email, Benutzername, Passwort und Gov ID werden benötigt'
+        error: 'Email, Benutzername, Passwort und Gov ID werden benötigt',
       });
     }
 
@@ -369,7 +380,7 @@ app.post('/api/auth/register', async (req, res) => {
     const govOk = governorIdExists(governorId);
     if (!govOk) {
       return res.status(400).json({
-        error: 'Die angegebene Gov ID wurde in den hochgeladenen Daten nicht gefunden.'
+        error: 'Die angegebene Gov ID wurde in den hochgeladenen Daten nicht gefunden.',
       });
     }
 
@@ -377,22 +388,40 @@ app.post('/api/auth/register', async (req, res) => {
     const userId = 'user-' + Date.now();
 
     const stmt = db.prepare(`
-      INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (
+        id, email, username, password_hash, is_approved, role,
+        governor_id, can_access_honor, can_access_analytics, can_access_overview
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(userId, email, username, passwordHash, 0, 'user', String(governorId).trim());
+    stmt.run(
+      userId,
+      email,
+      username,
+      passwordHash,
+      0,
+      'user',
+      String(governorId).trim(),
+      0,
+      0,
+      0
+    );
 
     res.json({
-      message: 'Registrierung erfolgreich. Bitte warten Sie auf die Freigabe durch einen Administrator.',
+      message:
+        'Registrierung erfolgreich. Bitte warten Sie auf die Freigabe durch einen Administrator.',
       user: {
         id: userId,
         email,
         username,
         isApproved: false,
         role: 'user',
-        governorId: String(governorId).trim()
-      }
+        governorId: String(governorId).trim(),
+        canAccessHonor: false,
+        canAccessAnalytics: false,
+        canAccessOverview: false,
+      },
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -419,17 +448,18 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
     }
 
-    const token = jwt.sign(
-      {
-        id: user.id,
-        username: user.username,
-        role: user.role,
-        isApproved: user.is_approved,
-        governorId: user.governor_id || null
-      },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    const tokenPayload = {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      isApproved: !!user.is_approved,
+      governorId: user.governor_id || null,
+      canAccessHonor: !!user.can_access_honor,
+      canAccessAnalytics: !!user.can_access_analytics,
+      canAccessOverview: !!user.can_access_overview,
+    };
+
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
 
     res.json({
       token,
@@ -437,10 +467,13 @@ app.post('/api/auth/login', async (req, res) => {
         id: user.id,
         email: user.email,
         username: user.username,
-        isApproved: user.is_approved,
+        isApproved: !!user.is_approved,
         role: user.role,
-        governorId: user.governor_id || null
-      }
+        governorId: user.governor_id || null,
+        canAccessHonor: !!user.can_access_honor,
+        canAccessAnalytics: !!user.can_access_analytics,
+        canAccessOverview: !!user.can_access_overview,
+      },
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -460,9 +493,12 @@ app.get('/api/auth/validate', authenticateToken, (req, res) => {
     id: user.id,
     email: user.email,
     username: user.username,
-    isApproved: user.is_approved,
+    isApproved: !!user.is_approved,
     role: user.role,
-    governorId: user.governor_id || null
+    governorId: user.governor_id || null,
+    canAccessHonor: !!user.can_access_honor,
+    canAccessAnalytics: !!user.can_access_analytics,
+    canAccessOverview: !!user.can_access_overview,
   });
 });
 
@@ -471,7 +507,9 @@ app.get('/api/auth/validate', authenticateToken, (req, res) => {
 // Debug Endpoint zum Überprüfen aller Benutzer
 app.get('/api/debug/users', (req, res) => {
   try {
-    const stmt = db.prepare('SELECT id, username, email, is_approved, role, governor_id FROM users');
+    const stmt = db.prepare(
+      'SELECT id, username, email, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview FROM users'
+    );
     const users = stmt.all();
     res.json(users);
   } catch (error) {
@@ -485,8 +523,11 @@ app.post('/api/admin/create-admin', (req, res) => {
   try {
     const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
     const insertAdmin = db.prepare(`
-      INSERT OR REPLACE INTO users (id, email, username, password_hash, is_approved, role, governor_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO users (
+        id, email, username, password_hash, is_approved, role,
+        governor_id, can_access_honor, can_access_analytics, can_access_overview
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     insertAdmin.run(
       'admin-001',
@@ -495,7 +536,10 @@ app.post('/api/admin/create-admin', (req, res) => {
       adminPasswordHash,
       1,
       'admin',
-      null
+      null,
+      1,
+      1,
+      1
     );
     res.json({ message: 'Admin user created successfully' });
   } catch (error) {
@@ -507,22 +551,27 @@ app.post('/api/admin/create-admin', (req, res) => {
 // Alle Benutzer abrufen (nur Admin)
 app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
   try {
-    console.log('📋 Admin fetching users.');
-    const stmt = db.prepare(
-      'SELECT id, email, username, is_approved, role, created_at, governor_id FROM users ORDER BY created_at DESC'
-    );
+    const stmt = db.prepare(`
+      SELECT
+        id, email, username, is_approved, role, created_at,
+        governor_id, can_access_honor, can_access_analytics, can_access_overview
+      FROM users
+      ORDER BY created_at DESC
+    `);
     const users = stmt.all();
 
-    console.log(`✅ Found ${users.length} users`);
     res.json(
       users.map((user) => ({
         id: user.id,
         email: user.email,
         username: user.username,
-        isApproved: user.is_approved,
+        isApproved: !!user.is_approved,
         role: user.role,
         createdAt: user.created_at,
-        governorId: user.governor_id || null
+        governorId: user.governor_id || null,
+        canAccessHonor: !!user.can_access_honor,
+        canAccessAnalytics: !!user.can_access_analytics,
+        canAccessOverview: !!user.can_access_overview,
       }))
     );
   } catch (error) {
@@ -531,51 +580,76 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-// Benutzer freigeben/sperren
+// Benutzer freigeben/sperren (Grund-Freigabe)
 app.post('/api/admin/users/approve', authenticateToken, requireAdmin, (req, res) => {
-  console.log('🔧 ADMIN APPROVE REQUEST:', {
-    body: req.body,
-    user: req.user
-  });
-
   try {
     const { userId, approved } = req.body;
 
     if (!userId || typeof approved !== 'boolean') {
-      console.log('❌ Invalid input:', { userId, approved });
       return res.status(400).json({
-        error: 'Ungültige Eingabe: userId und approved (boolean) werden benötigt'
+        error: 'Ungültige Eingabe: userId und approved (boolean) werden benötigt',
       });
     }
 
-    console.log(`🔄 Update user ${userId} to approved=${approved}`);
-
     const approvedValue = approved ? 1 : 0;
-
     const stmt = db.prepare('UPDATE users SET is_approved = ? WHERE id = ?');
-    console.log('📝 SQL Prepared');
-
     const result = stmt.run(approvedValue, userId);
-    console.log('✅ SQL Result - Changes:', result.changes);
 
     if (result.changes === 0) {
-      console.log('❌ User nicht gefunden:', userId);
       return res.status(404).json({ error: 'Benutzer nicht gefunden' });
     }
 
-    console.log('🎉 User erfolgreich aktualisiert');
     res.json({
       success: true,
       message: `Benutzer erfolgreich ${approved ? 'freigegeben' : 'gesperrt'}`,
-      changes: result.changes
+      changes: result.changes,
     });
   } catch (error) {
     console.error('💥 CRITICAL ERROR in admin/approve:', error);
     res.status(500).json({
       error: 'Interner Server Fehler',
       details: error.message,
-      stack: process.env.NODE_ENV === 'production' ? undefined : error.stack
     });
+  }
+});
+
+// Benutzer Zugriffsrechte setzen (Honor / Analytics / Overview)
+app.post('/api/admin/users/access', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { userId, canAccessHonor, canAccessAnalytics, canAccessOverview } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId wird benötigt' });
+    }
+
+    const stmt = db.prepare(`
+      UPDATE users
+      SET
+        can_access_honor = ?,
+        can_access_analytics = ?,
+        can_access_overview = ?
+      WHERE id = ?
+    `);
+
+    const result = stmt.run(
+      canAccessHonor ? 1 : 0,
+      canAccessAnalytics ? 1 : 0,
+      canAccessOverview ? 1 : 0,
+      userId
+    );
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Zugriffsrechte aktualisiert',
+      changes: result.changes,
+    });
+  } catch (error) {
+    console.error('💥 Error updating user access:', error);
+    res.status(500).json({ error: 'Zugriffsrechte konnten nicht aktualisiert werden.' });
   }
 });
 
@@ -583,17 +657,10 @@ app.post('/api/admin/users/approve', authenticateToken, requireAdmin, (req, res)
 app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
     const userId = req.params.id;
-    console.log('🗑️ Admin delete request for user:', userId, 'by', req.user.id);
 
-    const user = db
-      .prepare('SELECT id, username, role FROM users WHERE id = ?')
-      .get(userId);
+    const user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(userId);
     if (!user) {
       return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-    }
-
-    if (user.id === req.user.id) {
-      return res.status(400).json({ error: 'Admins können ihr eigenes Konto nicht löschen.' });
     }
 
     if (user.role === 'admin') {
@@ -603,12 +670,10 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) =
     const deleteStmt = db.prepare('DELETE FROM users WHERE id = ?');
     const result = deleteStmt.run(userId);
 
-    console.log('✅ User deleted. Changes:', result.changes);
-
     res.json({
       success: true,
       message: `Benutzer "${user.username}" wurde dauerhaft gelöscht.`,
-      changes: result.changes
+      changes: result.changes,
     });
   } catch (error) {
     console.error('💥 Error deleting user:', error);
@@ -626,7 +691,7 @@ app.get('/overview/files-data', (req, res) => {
     const files = rows.map((row) => ({
       ...row,
       headers: JSON.parse(row.headers || '[]'),
-      data: JSON.parse(row.data || '[]')
+      data: JSON.parse(row.data || '[]'),
     }));
 
     res.json(files);
@@ -652,7 +717,7 @@ app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => 
       size: req.file.size,
       uploadDate: new Date().toISOString(),
       headers: JSON.stringify(parsedData.headers),
-      data: JSON.stringify(parsedData.data)
+      data: JSON.stringify(parsedData.data),
     };
 
     const stmt = db.prepare(
@@ -673,7 +738,6 @@ app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => 
       newFile.data
     );
 
-    console.log('Overview file uploaded and parsed:', newFile.name);
     res.json({
       message: 'Datei erfolgreich hochgeladen und verarbeitet',
       file: {
@@ -684,8 +748,8 @@ app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => 
         size: newFile.size,
         uploadDate: newFile.uploadDate,
         headers: parsedData.headers,
-        data: parsedData.data
-      }
+        data: parsedData.data,
+      },
     });
   } catch (error) {
     console.error('Upload error:', error);
@@ -751,7 +815,7 @@ app.get('/honor/files-data', (req, res) => {
     const files = rows.map((row) => ({
       ...row,
       headers: JSON.parse(row.headers || '[]'),
-      data: JSON.parse(row.data || '[]')
+      data: JSON.parse(row.data || '[]'),
     }));
 
     res.json(files);
@@ -777,7 +841,7 @@ app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
       size: req.file.size,
       uploadDate: new Date().toISOString(),
       headers: JSON.stringify(parsedData.headers),
-      data: JSON.stringify(parsedData.data)
+      data: JSON.stringify(parsedData.data),
     };
 
     const stmt = db.prepare(
@@ -798,7 +862,6 @@ app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
       newFile.data
     );
 
-    console.log('Honor file uploaded and parsed:', newFile.name);
     res.json({
       message: 'Datei erfolgreich hochgeladen und verarbeitet',
       file: {
@@ -809,8 +872,8 @@ app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
         size: newFile.size,
         uploadDate: newFile.uploadDate,
         headers: parsedData.headers,
-        data: parsedData.data
-      }
+        data: parsedData.data,
+      },
     });
   } catch (error) {
     console.error('Upload error:', error);
@@ -872,7 +935,7 @@ app.get('/health', (req, res) => {
     status: 'Backend läuft',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    database: dbPath
+    database: dbPath,
   });
 });
 
@@ -880,36 +943,37 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'KD3619 Backend API',
-    version: '1.2.0',
+    version: '1.3.0',
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
       auth: [
         'POST /api/auth/register',
         'POST /api/auth/login',
         'GET /api/auth/validate',
-        'POST /api/auth/check-gov-id'
+        'POST /api/auth/check-gov-id',
       ],
       admin: [
         'GET /api/admin/users',
         'POST /api/admin/users/approve',
+        'POST /api/admin/users/access',
         'DELETE /api/admin/users/:id',
-        'POST /api/admin/create-admin'
+        'POST /api/admin/create-admin',
       ],
       debug: ['GET /api/debug/users'],
       overview: [
         'GET /overview/files-data',
         'POST /overview/upload',
         'DELETE /overview/files/:id',
-        'POST /overview/files/reorder'
+        'POST /overview/files/reorder',
       ],
       honor: [
         'GET /honor/files-data',
         'POST /honor/upload',
         'DELETE /honor/files/:id',
-        'POST /honor/files/reorder'
+        'POST /honor/files/reorder',
       ],
-      health: 'GET /health'
-    }
+      health: 'GET /health',
+    },
   });
 });
 
