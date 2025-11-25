@@ -30,17 +30,16 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl }) 
 
   const [startFileId, setStartFileId] = useState<string>('');
   const [endFileId, setEndFileId] = useState<string>('');
-  const [comparisonStats, setComparisonStats] = useState<HonorComparisonStats | null>(
-    null
-  );
+  const [comparisonStats, setComparisonStats] = useState<HonorComparisonStats | null>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [searchResults, setSearchResults] = useState<PlayerHonorChange[]>([]);
-  const [selectedPlayer, setSelectedPlayer] = useState<PlayerHonorHistory | null>(
-    null
-  );
+  const [searchResults, setSearchResults] = useState<HonorPlayerInfo[] | 'not_found' | null>(null);
+  const [selectedPlayerHistory, setSelectedPlayerHistory] = useState<PlayerHonorHistory | null>(null);
 
+  // ---------------------------------------------------------------------------
+  // Files laden
+  // ---------------------------------------------------------------------------
   const fetchFiles = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -96,192 +95,266 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl }) 
     setUploadedFiles(reorderedFiles);
   };
 
-  const parseCsvContent = useCallback((csvContent: string, filename: string): HonorPlayerInfo[] => {
-    const lines = csvContent.trim().split('\n');
-    if (lines.length < 2) return [];
+  // ---------------------------------------------------------------------------
+  // UploadedFile → HonorPlayerInfo[]
+  // ---------------------------------------------------------------------------
+  const parseHonorFromFile = useCallback((file: UploadedFile): HonorPlayerInfo[] => {
+    if (!file || !Array.isArray(file.headers) || !Array.isArray(file.data)) {
+      return [];
+    }
 
-    const header = lines[0].split(';').map((h) => h.trim().toLowerCase());
-    const findIndex = (possibleNames: string[]) =>
-      findColumnIndex(header, possibleNames);
+    const idxGovernorId = findColumnIndex(file.headers, ['governorid', 'id', 'gov id', 'governor id']);
+    const idxName = findColumnIndex(file.headers, ['name', 'playername', 'player']);
+    const idxHonor = findColumnIndex(file.headers, ['honor', 'honour', 'points', 'honor points']);
 
-    const idxGovernorId = findIndex(['governorid', 'id']);
-    const idxName = findIndex(['name', 'playername']);
-    const idxHonor = findIndex(['honor', 'honour', 'points']);
-
-    if (idxGovernorId === -1 || idxName === -1 || idxHonor === -1) {
-      console.warn(`Missing required columns in file: ${filename}`);
+    if (idxGovernorId === undefined || idxName === undefined || idxHonor === undefined) {
+      console.warn(`Missing required columns in honor file: ${file.name}`);
       return [];
     }
 
     const players: HonorPlayerInfo[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const row = lines[i].split(';');
-      if (row.length !== header.length) continue;
 
-      const getVal = (idx: number | null | undefined): string =>
-        idx !== undefined && idx !== null && idx >= 0 && idx < row.length
-          ? row[idx].trim()
+    file.data.forEach((row: any[]) => {
+      const getVal = (idx: number | undefined): string =>
+        idx !== undefined && idx >= 0 && idx < row.length
+          ? String(row[idx] ?? '').trim()
           : '';
 
-      const player: HonorPlayerInfo = {
-        governorId: getVal(idxGovernorId),
-        name: getVal(idxName),
-        honorPoint: parseGermanNumber(getVal(idxHonor)),
-      };
+      const governorId = getVal(idxGovernorId);
+      const name = getVal(idxName);
+      const honorPoint = parseGermanNumber(getVal(idxHonor));
 
-      if (player.governorId && player.name && player.honorPoint >= 0) {
-        players.push(player);
+      if (governorId && name) {
+        players.push({ governorId, name, honorPoint });
       }
-    }
+    });
 
     return players;
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Honor-Vergleich (Start/Ende)
+  // ---------------------------------------------------------------------------
   const handleCompare = useCallback(() => {
     setComparisonError(null);
 
-    if (!endFileId) {
+    if (!startFileId || !endFileId) {
       setComparisonStats(null);
       return;
     }
 
+    const startFile = uploadedFiles.find((f) => f.id === startFileId);
     const endFile = uploadedFiles.find((f) => f.id === endFileId);
-    if (!endFile) {
-      setComparisonError('Could not find selected file.');
+
+    if (!startFile || !endFile) {
+      setComparisonError('Could not find selected files.');
       setComparisonStats(null);
       return;
     }
 
     try {
-      const data = parseCsvContent(endFile.content, endFile.name);
+      const startPlayers = parseHonorFromFile(startFile);
+      const endPlayers = parseHonorFromFile(endFile);
 
-      const changes: PlayerHonorChange[] = data.map((p) => ({
-        governorId: p.governorId,
-        name: p.name,
-        honorPoint: p.honorPoint,
-        diffHonorPoint: p.honorPoint, // Only one file – treat as absolute
-      }));
+      const mapStart = new Map<string, HonorPlayerInfo>();
+      startPlayers.forEach((p) => mapStart.set(p.governorId, p));
 
-      const totalHonor = data.reduce((sum, p) => sum + p.honorPoint, 0);
+      const changes: PlayerHonorChange[] = [];
 
-      setComparisonStats({
-        fileName: cleanFileName(endFile.name),
-        totalHonor,
-        changes,
+      endPlayers.forEach((p2) => {
+        const base = mapStart.get(p2.governorId);
+        const oldHonor = base ? base.honorPoint : 0;
+        const newHonor = p2.honorPoint;
+        const diffHonor = newHonor - oldHonor;
+
+        changes.push({
+          governorId: p2.governorId,
+          name: p2.name,
+          oldHonor,
+          newHonor,
+          diffHonor,
+        });
       });
+
+      const stats: HonorComparisonStats = {
+        playerHonorChanges: changes,
+      };
+
+      setComparisonStats(stats);
     } catch (err) {
       console.error(err);
-      setComparisonError('Error analyzing data.');
+      setComparisonError('Error analyzing honor data.');
       setComparisonStats(null);
     }
-  }, [endFileId, uploadedFiles, parseCsvContent]);
+  }, [startFileId, endFileId, uploadedFiles, parseHonorFromFile]);
 
   useEffect(() => {
-    if (endFileId && uploadedFiles.length >= 1) {
+    if (startFileId && endFileId && uploadedFiles.length >= 1) {
       handleCompare();
     }
-  }, [endFileId, uploadedFiles, handleCompare]);
+  }, [startFileId, endFileId, uploadedFiles, handleCompare]);
 
-  const allPlayersForSearch = useMemo<HonorPlayerInfo[]>(() => {
-    if (!comparisonStats) return [];
-    return comparisonStats.changes.map((change) => ({
-      governorId: change.governorId,
-      name: change.name,
-      honorPoint: change.honorPoint,
-    }));
-  }, [comparisonStats]);
+  // ---------------------------------------------------------------------------
+  // Honor-Historien über alle Files (für Suche / Chart)
+  // ---------------------------------------------------------------------------
+  const honorHistories = useMemo(() => {
+    const histories = new Map<string, PlayerHonorHistory>();
+
+    if (!uploadedFiles || uploadedFiles.length === 0) return histories;
+
+    const sorted = [...uploadedFiles].sort(
+      (a, b) =>
+        new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime()
+    );
+
+    sorted.forEach((file) => {
+      const players = parseHonorFromFile(file);
+      const label = cleanFileName(file.name);
+
+      players.forEach((p) => {
+        if (!histories.has(p.governorId)) {
+          histories.set(p.governorId, {
+            id: p.governorId,
+            name: p.name,
+            history: [],
+          });
+        }
+        const entry = histories.get(p.governorId)!;
+        entry.name = p.name;
+        entry.history.push({
+          fileName: label,
+          honorPoint: p.honorPoint,
+        });
+      });
+    });
+
+    return histories;
+  }, [uploadedFiles, parseHonorFromFile]);
+
+  // aktueller Stand (letztes File) für Suche
+  const latestSnapshotPlayers: HonorPlayerInfo[] = useMemo(() => {
+    if (!uploadedFiles || uploadedFiles.length === 0) return [];
+    const latestFile = [...uploadedFiles].sort(
+      (a, b) =>
+        new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime()
+    )[uploadedFiles.length - 1];
+
+    return parseHonorFromFile(latestFile);
+  }, [uploadedFiles, parseHonorFromFile]);
+
+  // ---------------------------------------------------------------------------
+  // Suche nach Spieler (Honor-Historie)
+  // ---------------------------------------------------------------------------
+  const isDataLoaded = uploadedFiles.length > 0;
 
   const handleSearch = () => {
-    if (!searchQuery.trim() || !comparisonStats) {
-      setSearchResults([]);
-      setSelectedPlayer(null);
+    if (!isDataLoaded || !searchQuery.trim()) {
+      setSearchResults(null);
+      setSelectedPlayerHistory(null);
       return;
     }
 
-    const queryLower = searchQuery.toLowerCase();
-    const results = comparisonStats.changes.filter(
+    const queryLower = searchQuery.trim().toLowerCase();
+
+    const matches = latestSnapshotPlayers.filter(
       (p) =>
         p.name.toLowerCase().includes(queryLower) ||
         p.governorId.toLowerCase().includes(queryLower)
     );
-    setSearchResults(results);
+
+    if (matches.length === 0) {
+      setSearchResults('not_found');
+      setSelectedPlayerHistory(null);
+    } else if (matches.length === 1) {
+      setSearchResults(null);
+      const m = matches[0];
+      const history = honorHistories.get(m.governorId) || null;
+      setSelectedPlayerHistory(history);
+    } else {
+      setSearchResults(matches);
+      setSelectedPlayerHistory(null);
+    }
   };
 
   const handleClearSearch = () => {
     setSearchQuery('');
-    setSearchResults([]);
-    setSelectedPlayer(null);
+    setSearchResults(null);
+    setSelectedPlayerHistory(null);
   };
 
-  const handleSelectPlayer = (playerChange: PlayerHonorChange | null) => {
-    if (!playerChange) {
-      setSelectedPlayer(null);
-      return;
-    }
-
-    setSelectedPlayer({
-      governorId: playerChange.governorId,
-      name: playerChange.name,
-      history: [
-        {
-          fileName: comparisonStats?.fileName || '',
-          honorPoint: playerChange.honorPoint,
-        },
-      ],
-    });
+  const handleSelectPlayer = (player: HonorPlayerInfo) => {
+    const history = honorHistories.get(player.governorId) || null;
+    setSelectedPlayerHistory(history);
+    setSearchResults(null);
   };
 
-  if (isLoading) {
-    return (
-      <div className="p-6 text-center text-gray-300">Loading files…</div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">
-        {error}
-      </div>
-    );
-  }
-
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
-    <div className="space-y-8">
-      {/* Upload + File list – only for R4, R5 & Admin */}
-      {canManageFiles && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+    <div className="space-y-6">
+      {/* Upload + Liste */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="lg:w-1/3 space-y-4">
+          {canManageFiles && (
             <FileUpload
-              uploadUrl={`${backendUrl}/honor/upload`}
+              backendUrl={backendUrl}
+              endpoint="/honor/upload"
               onUploadComplete={handleUploadComplete}
+              title="Upload Honor File"
             />
-          </div>
-          <div>
-            <FileList
-              files={uploadedFiles || []}
-              onDeleteFile={handleDeleteFile}
-              onReorder={handleReorderFiles}
-            />
-          </div>
-        </div>
-      )}
+          )}
 
-      <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-        <HonorHistoryChart files={uploadedFiles || []} />
+          <FileList
+            files={uploadedFiles}
+            onDelete={canManageFiles ? handleDeleteFile : undefined}
+            onReorder={canManageFiles ? handleReorderFiles : undefined}
+            isLoading={isLoading}
+            error={error}
+            isBasicUser={false}
+          />
+        </div>
+
+        {/* Honor-Gesamtverlauf */}
+        <div className="lg:w-2/3">
+          <HonorHistoryChart files={uploadedFiles} />
+        </div>
       </div>
 
-      <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-        <h3 className="text-lg font-semibold text-gray-200 mb-4">Comparison Controls</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+      {/* Vergleichs-Steuerung */}
+      <div className="bg-gray-800 p-4 rounded-xl shadow-lg">
+        <h3 className="text-lg font-semibold text-gray-200 mb-4">Honor Comparison Controls</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="flex flex-col">
             <label
-              htmlFor="end-date-select-honor"
+              htmlFor="honor-start-date-select"
               className="text-sm font-medium text-gray-400 mb-1"
             >
-              Snapshot
+              Start Date
             </label>
             <select
-              id="end-date-select-honor"
+              id="honor-start-date-select"
+              value={startFileId}
+              onChange={(e) => setStartFileId(e.target.value)}
+              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
+            >
+              <option value="">Select…</option>
+              {uploadedFiles.map((file) => (
+                <option key={file.id} value={file.id}>
+                  {cleanFileName(file.name)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col">
+            <label
+              htmlFor="honor-end-date-select"
+              className="text-sm font-medium text-gray-400 mb-1"
+            >
+              End Date
+            </label>
+            <select
+              id="honor-end-date-select"
               value={endFileId}
               onChange={(e) => setEndFileId(e.target.value)}
               className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
@@ -294,23 +367,40 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl }) 
               ))}
             </select>
           </div>
+          <div className="flex flex-col">
+            <button
+              onClick={handleCompare}
+              disabled={!startFileId || !endFileId}
+              className="mt-5 bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+            >
+              Compare
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* Suche nach Honor-Historie */}
       <HonorPlayerSearch
         query={searchQuery}
         setQuery={setSearchQuery}
         onSearch={handleSearch}
         onClear={handleClearSearch}
         results={searchResults}
-        selectedPlayer={selectedPlayer}
+        selectedPlayerHistory={selectedPlayerHistory}
         onSelectPlayer={handleSelectPlayer}
-        allPlayers={allPlayersForSearch}
+        isDataLoaded={isDataLoaded}
       />
 
+      {/* Vergleichstabelle */}
       <HonorOverviewTable
         stats={comparisonStats}
         error={comparisonError}
+        startFileName={cleanFileName(
+          uploadedFiles?.find((f) => f.id === startFileId)?.name ?? ''
+        )}
+        endFileName={cleanFileName(
+          uploadedFiles?.find((f) => f.id === endFileId)?.name ?? ''
+        )}
       />
     </div>
   );
