@@ -3,32 +3,44 @@ import type { UploadedFile } from '../types';
 
 interface FileListProps {
   files: UploadedFile[];
-  canManageFiles: boolean;
-  onDeleteFile: (id: string) => void;
-  onReorder: (reorderedFiles: UploadedFile[]) => void;
+  onDeleteFile?: (id: string) => void;
+  onReorder?: (reorderedFiles: UploadedFile[]) => void;
 }
 
-const FileList: React.FC<FileListProps> = ({ files, canManageFiles, onDeleteFile, onReorder }) => {
+/**
+ * Zeigt eine Liste der hochgeladenen Dateien.
+ * - Wird NUR im Dashboard gerendert, wenn die Rolle das darf (R4/R5/Admin).
+ * - Drag & Drop Reorder funktioniert, wenn `onReorder` übergeben wird.
+ * - Löschen funktioniert, wenn `onDeleteFile` übergeben wird.
+ */
+const FileList: React.FC<FileListProps> = ({
+  files,
+  onDeleteFile,
+  onReorder,
+}) => {
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  // Nur R4/R5/Admin sollen dieses Fenster überhaupt sehen
-  if (!canManageFiles || files.length === 0) return null;
+  // Wenn keine Dateien vorhanden -> gar nichts anzeigen
+  if (!files || files.length === 0) return null;
+
+  const canReorder = typeof onReorder === 'function';
+  const canDelete = typeof onDeleteFile === 'function';
 
   const handleDragStart = (index: number) => {
-    if (!canManageFiles) return;
+    if (!canReorder) return;
     dragItem.current = index;
     setDragging(true);
   };
 
   const handleDragEnter = (index: number) => {
-    if (!canManageFiles) return;
+    if (!canReorder) return;
     dragOverItem.current = index;
   };
 
-  const handleDropOrEnd = () => {
-    if (!canManageFiles) {
+  const finishDrag = () => {
+    if (!canReorder) {
       dragItem.current = null;
       dragOverItem.current = null;
       setDragging(false);
@@ -46,15 +58,14 @@ const FileList: React.FC<FileListProps> = ({ files, canManageFiles, onDeleteFile
       return;
     }
 
-    const updatedFiles = [...files];
-    const draggedItemContent = updatedFiles[dragItem.current];
+    const updated = [...files];
+    const dragged = updated[dragItem.current];
+    // altes raus
+    updated.splice(dragItem.current, 1);
+    // an neuer Position rein
+    updated.splice(dragOverItem.current, 0, dragged);
 
-    // Entfernen
-    updatedFiles.splice(dragItem.current, 1);
-    // An neuer Position einfügen
-    updatedFiles.splice(dragOverItem.current, 0, draggedItemContent);
-
-    onReorder(updatedFiles);
+    onReorder(updated);
 
     dragItem.current = null;
     dragOverItem.current = null;
@@ -67,7 +78,6 @@ const FileList: React.FC<FileListProps> = ({ files, canManageFiles, onDeleteFile
         Uploaded Files
       </h2>
 
-      {/* kompakter Bereich mit Scroll, falls viele Dateien */}
       <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
         {files.map((file, index) => {
           const isDragSource = dragging && dragItem.current === index;
@@ -76,13 +86,13 @@ const FileList: React.FC<FileListProps> = ({ files, canManageFiles, onDeleteFile
           return (
             <div
               key={file.id}
-              draggable={canManageFiles}
+              draggable={canReorder}
               onDragStart={() => handleDragStart(index)}
               onDragEnter={() => handleDragEnter(index)}
-              onDragEnd={handleDropOrEnd}
-              onDrop={handleDropOrEnd}
+              onDragEnd={finishDrag}
+              onDrop={finishDrag}
               className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm border transition-all duration-150 ${
-                canManageFiles ? 'cursor-move' : 'cursor-default'
+                canReorder ? 'cursor-move' : 'cursor-default'
               } ${
                 isDragSource
                   ? 'opacity-70 scale-[1.01] border-blue-500 bg-gray-800'
@@ -93,35 +103,37 @@ const FileList: React.FC<FileListProps> = ({ files, canManageFiles, onDeleteFile
             >
               <div className="flex flex-col min-w-0">
                 <span className="font-medium text-gray-100 truncate">
-                  {(file as any).name || (file as any).filename || 'Unnamed file'}
+                  {file.name}
                 </span>
-                {(file as any).uploadDate && (
+                {file.uploadDate && (
                   <span className="text-xs text-gray-400">
-                    {new Date((file as any).uploadDate).toLocaleString()}
+                    {new Date(file.uploadDate).toLocaleString()}
                   </span>
                 )}
               </div>
 
-              <button
-                onClick={() => onDeleteFile(file.id)}
-                className="ml-3 inline-flex items-center justify-center p-1 rounded-md text-gray-400 hover:text-red-300 hover:bg-red-900/40 transition-colors"
-                title="Delete file"
-                type="button"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              {canDelete && (
+                <button
+                  onClick={() => onDeleteFile && onDeleteFile(file.id)}
+                  className="ml-3 inline-flex items-center justify-center p-1 rounded-md text-gray-400 hover:text-red-300 hover:bg-red-900/40 transition-colors"
+                  title="Delete file"
+                  type="button"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.8}
-                    d="M6 7h12m-9 3v7m6-7v7M9 4h6a1 1 0 011 1v2H8V5a1 1 0 011-1zm2 0h2"
-                  />
-                </svg>
-              </button>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.8}
+                      d="M6 7h12m-9 3v7m6-7v7M9 4h6a1 1 0 011 1v2H8V5a1 1 0 011-1zm2 0h2"
+                    />
+                  </svg>
+                </button>
+              )}
             </div>
           );
         })}
