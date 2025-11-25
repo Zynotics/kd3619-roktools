@@ -3,25 +3,38 @@ import type { UploadedFile } from '../types';
 
 interface FileListProps {
   files: UploadedFile[];
+  canManageFiles: boolean;
   onDeleteFile: (id: string) => void;
   onReorder: (reorderedFiles: UploadedFile[]) => void;
 }
 
-const FileList: React.FC<FileListProps> = ({ files, onDeleteFile, onReorder }) => {
+const FileList: React.FC<FileListProps> = ({ files, canManageFiles, onDeleteFile, onReorder }) => {
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
 
+  // Nur R4/R5/Admin sollen dieses Fenster überhaupt sehen
+  if (!canManageFiles || files.length === 0) return null;
+
   const handleDragStart = (index: number) => {
+    if (!canManageFiles) return;
     dragItem.current = index;
     setDragging(true);
   };
 
   const handleDragEnter = (index: number) => {
+    if (!canManageFiles) return;
     dragOverItem.current = index;
   };
 
   const handleDropOrEnd = () => {
+    if (!canManageFiles) {
+      dragItem.current = null;
+      dragOverItem.current = null;
+      setDragging(false);
+      return;
+    }
+
     if (
       dragItem.current === null ||
       dragOverItem.current === null ||
@@ -36,9 +49,9 @@ const FileList: React.FC<FileListProps> = ({ files, onDeleteFile, onReorder }) =
     const updatedFiles = [...files];
     const draggedItemContent = updatedFiles[dragItem.current];
 
-    // Remove dragged item
+    // Entfernen
     updatedFiles.splice(dragItem.current, 1);
-    // Insert at new position
+    // An neuer Position einfügen
     updatedFiles.splice(dragOverItem.current, 0, draggedItemContent);
 
     onReorder(updatedFiles);
@@ -47,8 +60,6 @@ const FileList: React.FC<FileListProps> = ({ files, onDeleteFile, onReorder }) =
     dragOverItem.current = null;
     setDragging(false);
   };
-
-  if (files.length === 0) return null;
 
   return (
     <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4 shadow-md shadow-black/30">
@@ -65,12 +76,14 @@ const FileList: React.FC<FileListProps> = ({ files, onDeleteFile, onReorder }) =
           return (
             <div
               key={file.id}
-              draggable
+              draggable={canManageFiles}
               onDragStart={() => handleDragStart(index)}
               onDragEnter={() => handleDragEnter(index)}
               onDragEnd={handleDropOrEnd}
               onDrop={handleDropOrEnd}
-              className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm border transition-all duration-150 cursor-move ${
+              className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm border transition-all duration-150 ${
+                canManageFiles ? 'cursor-move' : 'cursor-default'
+              } ${
                 isDragSource
                   ? 'opacity-70 scale-[1.01] border-blue-500 bg-gray-800'
                   : isDragTarget
@@ -80,11 +93,11 @@ const FileList: React.FC<FileListProps> = ({ files, onDeleteFile, onReorder }) =
             >
               <div className="flex flex-col min-w-0">
                 <span className="font-medium text-gray-100 truncate">
-                  {file.name || file.filename || 'Unnamed file'}
+                  {(file as any).name || (file as any).filename || 'Unnamed file'}
                 </span>
-                {file.uploadDate && (
+                {(file as any).uploadDate && (
                   <span className="text-xs text-gray-400">
-                    {new Date(file.uploadDate).toLocaleString()}
+                    {new Date((file as any).uploadDate).toLocaleString()}
                   </span>
                 )}
               </div>
