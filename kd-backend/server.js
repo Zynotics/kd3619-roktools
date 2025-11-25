@@ -185,16 +185,20 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Admin-Middleware
+// Admin / R5 middleware (for user management & admin endpoints)
 const requireAdmin = (req, res, next) => {
   if (!req.user) {
-    return res.status(401).json({ error: 'Nicht authentifiziert' });
+    return res.status(401).json({ error: 'Not authenticated' });
   }
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin Zugriff erforderlich' });
+  // Only admin and R5 are allowed to access admin endpoints
+  if (req.user.role !== 'admin' && req.user.role !== 'r5') {
+    return res
+      .status(403)
+      .json({ error: 'Admin or R5 privileges required' });
   }
   next();
 };
+
 
 // Hilfsfunktion zum Finden von Spalten-Index (case-insensitive)
 function findColumnIndex(headers, possibleNames) {
@@ -652,6 +656,44 @@ app.post('/api/admin/users/access', authenticateToken, requireAdmin, (req, res) 
     res.status(500).json({ error: 'Zugriffsrechte konnten nicht aktualisiert werden.' });
   }
 });
+
+// Change user role (user / r4 / r5, admin only via code or DB)
+app.post('/api/admin/users/role', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { userId, role } = req.body;
+
+    if (!userId || !role) {
+      return res.status(400).json({ error: 'userId and role are required' });
+    }
+
+    // Only allow these roles to be set from UI
+    const allowedRoles = ['user', 'r4', 'r5'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+
+    // Prevent changing own role via UI
+    if (req.user.id === userId) {
+      return res.status(400).json({ error: 'You cannot change your own role.' });
+    }
+
+    const stmt = db.prepare('UPDATE users SET role = ? WHERE id = ?');
+    const result = stmt.run(role, userId);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      message: `Role updated to "${role}"`,
+    });
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    res.status(500).json({ error: 'Could not update role' });
+  }
+});
+
 
 // Benutzer löschen (nicht Admin, nicht eigener Account)
 app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
