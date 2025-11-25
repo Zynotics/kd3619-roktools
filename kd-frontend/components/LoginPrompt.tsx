@@ -24,7 +24,6 @@ const LoginPrompt: React.FC = () => {
   const { login, register } = useAuth();
 
   const validateGovId = async () => {
-    // nur im Registriermodus prüfen
     if (isLogin) return;
 
     const value = governorId.trim();
@@ -64,7 +63,6 @@ const LoginPrompt: React.FC = () => {
       if (isLogin) {
         await login(username, password);
       } else {
-        // zusätzliche Sicherheitschecks, auch wenn Button eigentlich disabled wäre
         if (password !== confirmPassword) {
           setError('Die Passwörter stimmen nicht überein.');
           setIsLoading(false);
@@ -78,20 +76,16 @@ const LoginPrompt: React.FC = () => {
         }
 
         if (govIdStatus !== 'valid') {
-          setError('Bitte geben Sie eine gültige Gov ID an.');
+          setError('Gov ID nicht gefunden.');
           setIsLoading(false);
           return;
         }
 
-        // Registrierung mit Gov ID
         await register(email, username, password, governorId.trim());
-
-        // Direkt danach automatisch einloggen
         await login(username, password);
 
         setSuccessMessage('Account erfolgreich erstellt!');
 
-        // Felder leeren
         setEmail('');
         setUsername('');
         setGovernorId('');
@@ -103,10 +97,7 @@ const LoginPrompt: React.FC = () => {
       const msg = err?.message || 'Ein Fehler ist aufgetreten.';
 
       if (msg.toLowerCase().includes('gov id')) {
-        setError(
-          'Die angegebene Gov ID wurde in den hochgeladenen Daten nicht gefunden. ' +
-            'Bitte überprüfe die Eingabe oder wende dich an einen Admin.'
-        );
+        setError('Gov ID nicht gefunden.');
         setGovIdStatus('invalid');
       } else {
         setError(msg);
@@ -128,7 +119,6 @@ const LoginPrompt: React.FC = () => {
     setGovIdStatus('idle');
   };
 
-  // Button-Disable-Logik
   const isLoginFormInvalid = !username || !password || password.length < 6;
 
   const isRegisterFormInvalid =
@@ -146,15 +136,11 @@ const LoginPrompt: React.FC = () => {
 
   return (
     <Card className="max-w-md mx-auto p-8">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-white mb-2">
+      <div className="text-center mb-6">
+        <h2 className="text-2xl font-bold text-white">
           {isLogin ? 'Anmelden' : 'Registrieren'}
         </h2>
-        <p className="text-gray-400">
-          {isLogin
-            ? 'Melden Sie sich an, um auf das Overview Dashboard zuzugreifen'
-            : 'Erstellen Sie einen Account für den Zugriff auf das Overview Dashboard'}
-        </p>
+        {/* Untertitel entfernt */}
       </div>
 
       {successMessage && (
@@ -203,7 +189,7 @@ const LoginPrompt: React.FC = () => {
                 value={governorId}
                 onChange={(e) => {
                   setGovernorId(e.target.value);
-                  setGovIdStatus('idle'); // Status reset bei Änderung
+                  setGovIdStatus('idle');
                 }}
                 onBlur={validateGovId}
                 className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
@@ -217,9 +203,7 @@ const LoginPrompt: React.FC = () => {
                 <p className="text-xs text-green-400 mt-1">Gov ID gefunden.</p>
               )}
               {govIdStatus === 'invalid' && (
-                <p className="text-xs text-red-400 mt-1">
-                  Gov ID wurde in den hochgeladenen Daten nicht gefunden.
-                </p>
+                <p className="text-xs text-red-400 mt-1">Gov ID nicht gefunden.</p>
               )}
             </div>
           </>
