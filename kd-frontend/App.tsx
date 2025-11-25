@@ -37,7 +37,7 @@ const AppContent: React.FC = () => {
                   KD3619 Kingdom Analytics
                 </h1>
                 <p className="text-xs text-gray-400">
-                  Honor Dashboard · Player Analytics · CH25 Kingdom Analytics
+        
                 </p>
               </div>
             </div>
