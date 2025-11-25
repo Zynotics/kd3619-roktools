@@ -293,153 +293,171 @@ const AdminUserManagement: React.FC = () => {
           </tr>
         </TableHeader>
         <tbody>
-          {users.map((user) => (
-            <TableRow key={user.id}>
-              <TableCell align="left" className="font-medium text-white">
-                {user.username}
-                {user.id === currentUser?.id && (
-                  <span className="ml-2 text-xs text-blue-400">
-                    (Current)
+          {users.map((user) => {
+            const isSelf = user.id === currentUser?.id;
+            const isAdminUser = user.role === 'admin';
+
+            return (
+              <TableRow key={user.id}>
+                <TableCell align="left" className="font-medium text-white">
+                  {user.username}
+                  {isSelf && (
+                    <span className="ml-2 text-xs text-blue-400">
+                      (Current)
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell align="left">{user.email}</TableCell>
+                <TableCell align="center">
+                  <span className="text-xs text-gray-300">
+                    {user.governorId && user.governorId.trim().length > 0
+                      ? user.governorId
+                      : '—'}
                   </span>
-                )}
-              </TableCell>
-              <TableCell align="left">{user.email}</TableCell>
-              <TableCell align="center">
-                <span className="text-xs text-gray-300">
-                  {user.governorId && user.governorId.trim().length > 0
-                    ? user.governorId
-                    : '—'}
-                </span>
-              </TableCell>
-              <TableCell align="center">
-                {new Date(user.createdAt).toLocaleDateString('en-GB')}
-              </TableCell>
+                </TableCell>
+                <TableCell align="center">
+                  {new Date(user.createdAt).toLocaleDateString('en-GB')}
+                </TableCell>
 
-              {/* ROLE */}
-              <TableCell align="center">
-                {!canManageUsers || user.id === currentUser?.id ? (
-                  <span className="text-gray-300 text-sm capitalize">
-                    {user.role}
-                  </span>
-                ) : (
-                  <select
-                    value={user.role}
-                    onChange={(e) =>
-                      updateRole(user, e.target.value as UserRole)
-                    }
-                    className="bg-gray-800 border border-gray-600 text-gray-200 text-xs px-2 py-1 rounded-lg"
-                  >
-                    <option value="user">User</option>
-                    <option value="r4">R4</option>
-                    <option value="r5">R5</option>
-                  </select>
-                )}
-              </TableCell>
-
-              {/* Access: Honor */}
-              <TableCell align="center">
-                <button
-                  disabled={!canManageUsers}
-                  onClick={() =>
-                    updateAccess(user, {
-                      canAccessHonor: !user.canAccessHonor,
-                    })
-                  }
-                  className={`px-2 py-1 rounded text-xs font-semibold ${
-                    user.canAccessHonor
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-700 text-gray-300'
-                  } ${!canManageUsers ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {user.canAccessHonor ? 'Yes' : 'No'}
-                </button>
-              </TableCell>
-
-              {/* Access: Analytics */}
-              <TableCell align="center">
-                <button
-                  disabled={!canManageUsers}
-                  onClick={() =>
-                    updateAccess(user, {
-                      canAccessAnalytics: !user.canAccessAnalytics,
-                    })
-                  }
-                  className={`px-2 py-1 rounded text-xs font-semibold ${
-                    user.canAccessAnalytics
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-700 text-gray-300'
-                  } ${!canManageUsers ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {user.canAccessAnalytics ? 'Yes' : 'No'}
-                </button>
-              </TableCell>
-
-              {/* Access: Overview */}
-              <TableCell align="center">
-                <button
-                  disabled={!canManageUsers}
-                  onClick={() =>
-                    updateAccess(user, {
-                      canAccessOverview: !user.canAccessOverview,
-                    })
-                  }
-                  className={`px-2 py-1 rounded text-xs font-semibold ${
-                    user.canAccessOverview
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-700 text-gray-300'
-                  } ${!canManageUsers ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {user.canAccessOverview ? 'Yes' : 'No'}
-                </button>
-              </TableCell>
-
-              {/* Approval */}
-              <TableCell align="center">
-                <span
-                  className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                    user.isApproved
-                      ? 'bg-green-500 text-white'
-                      : 'bg-yellow-500 text-black'
-                  }`}
-                >
-                  {user.isApproved ? 'Approved' : 'Pending'}
-                </span>
-              </TableCell>
-
-              {/* Actions */}
-              <TableCell align="center">
-                {user.id !== currentUser?.id && user.role !== 'admin' && canManageUsers ? (
-                  <div className="flex gap-2 justify-center">
-                    {!user.isApproved ? (
-                      <button
-                        onClick={() => toggleApproval(user.id, true)}
-                        className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors text-sm"
-                      >
-                        Approve
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => toggleApproval(user.id, false)}
-                        className="bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700 transition-colors text-sm"
-                      >
-                        Block
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => deleteUser(user.id, user.username)}
-                      className="bg-red-700 text-white px-3 py-1 rounded hover:bg-red-800 transition-colors text-sm"
+                {/* ROLE */}
+                <TableCell align="center">
+                  {!canManageUsers || isSelf || isAdminUser ? (
+                    <span className="text-gray-300 text-sm capitalize">
+                      {user.role}
+                    </span>
+                  ) : (
+                    <select
+                      value={user.role}
+                      onChange={(e) =>
+                        updateRole(user, e.target.value as UserRole)
+                      }
+                      className="bg-gray-800 border border-gray-600 text-gray-200 text-xs px-2 py-1 rounded-lg"
                     >
-                      Delete
-                    </button>
-                  </div>
-                )}
-                {(!canManageUsers || user.id === currentUser?.id) && (
-                  <span className="text-gray-500 text-sm">No actions</span>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
+                      <option value="user">User</option>
+                      <option value="r4">R4</option>
+                      <option value="r5">R5</option>
+                    </select>
+                  )}
+                </TableCell>
+
+                {/* Access: Honor */}
+                <TableCell align="center">
+                  <button
+                    disabled={!canManageUsers || isAdminUser}
+                    onClick={() =>
+                      updateAccess(user, {
+                        canAccessHonor: !user.canAccessHonor,
+                      })
+                    }
+                    className={`px-2 py-1 rounded text-xs font-semibold ${
+                      user.canAccessHonor
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-700 text-gray-300'
+                    } ${
+                      !canManageUsers || isAdminUser
+                        ? 'opacity-50 cursor-not-allowed'
+                        : ''
+                    }`}
+                  >
+                    {user.canAccessHonor ? 'Yes' : 'No'}
+                  </button>
+                </TableCell>
+
+                {/* Access: Analytics */}
+                <TableCell align="center">
+                  <button
+                    disabled={!canManageUsers || isAdminUser}
+                    onClick={() =>
+                      updateAccess(user, {
+                        canAccessAnalytics: !user.canAccessAnalytics,
+                      })
+                    }
+                    className={`px-2 py-1 rounded text-xs font-semibold ${
+                      user.canAccessAnalytics
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-700 text-gray-300'
+                    } ${
+                      !canManageUsers || isAdminUser
+                        ? 'opacity-50 cursor-not-allowed'
+                        : ''
+                    }`}
+                  >
+                    {user.canAccessAnalytics ? 'Yes' : 'No'}
+                  </button>
+                </TableCell>
+
+                {/* Access: Overview */}
+                <TableCell align="center">
+                  <button
+                    disabled={!canManageUsers || isAdminUser}
+                    onClick={() =>
+                      updateAccess(user, {
+                        canAccessOverview: !user.canAccessOverview,
+                      })
+                    }
+                    className={`px-2 py-1 rounded text-xs font-semibold ${
+                      user.canAccessOverview
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-700 text-gray-300'
+                    } ${
+                      !canManageUsers || isAdminUser
+                        ? 'opacity-50 cursor-not-allowed'
+                        : ''
+                    }`}
+                  >
+                    {user.canAccessOverview ? 'Yes' : 'No'}
+                  </button>
+                </TableCell>
+
+                {/* Approval */}
+                <TableCell align="center">
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      user.isApproved
+                        ? 'bg-green-500 text-white'
+                        : 'bg-yellow-500 text-black'
+                    }`}
+                  >
+                    {user.isApproved ? 'Approved' : 'Pending'}
+                  </span>
+                </TableCell>
+
+                {/* Actions */}
+                <TableCell align="center">
+                  {canManageUsers && !isSelf && !isAdminUser ? (
+                    <div className="flex gap-2 justify-center">
+                      {!user.isApproved ? (
+                        <button
+                          onClick={() => toggleApproval(user.id, true)}
+                          className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors text-sm"
+                        >
+                          Approve
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => toggleApproval(user.id, false)}
+                          className="bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700 transition-colors text-sm"
+                        >
+                          Block
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => deleteUser(user.id, user.username)}
+                        className="bg-red-700 text-white px-3 py-1 rounded hover:bg-red-800 transition-colors text-sm"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-gray-500 text-sm">
+                      {isSelf ? 'Own account' : isAdminUser ? 'Admin' : 'No actions'}
+                    </span>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </tbody>
       </Table>
 
