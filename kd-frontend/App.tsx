@@ -90,7 +90,7 @@ const AppContent: React.FC = () => {
                       : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
                   }`}
                 >
-                  Overview
+                  CH25 Kingdom Analytics
                 </button>
                 <button
                   onClick={() => setActiveView('honor')}
