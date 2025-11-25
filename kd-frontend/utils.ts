@@ -24,13 +24,13 @@ export const formatNumber = (num: number): string => {
  * Examples:
  *   "1.234.567"   -> 1234567
  *   "12,345"      -> 12345
- *   "  9.876  "   -> 9876
+ *   9876          -> 9876
  *   undefined     -> 0
  *   null          -> 0
- *   "" / " "      -> 0
+ *   ""            -> 0
  */
 export const parseGermanNumber = (value: any): number => {
-  // Null / undefined => 0
+  // null / undefined → 0
   if (value === null || value === undefined) {
     return 0;
   }
@@ -40,44 +40,39 @@ export const parseGermanNumber = (value: any): number => {
     return isNaN(value) ? 0 : value;
   }
 
-  // Alles andere in String umwandeln (auch z.B. 0, Objekte, etc.)
-  const str = String(value);
+  // Convert everything to string
+  const s = String(value);
 
-  if (str.trim() === '') {
+  // Remove everything that is not a digit
+  const cleaned = s.replace(/[^0-9]/g, '');
+  if (!cleaned) {
     return 0;
   }
 
-  // Nur Ziffern behalten (d.h. Punkte, Kommas, etc. werden entfernt)
-  const cleanedString = str.replace(/[^0-9]/g, '');
-  if (cleanedString === '') {
-    return 0;
-  }
-
-  const num = parseInt(cleanedString, 10);
-  return isNaN(num) ? 0 : num;
+  const n = parseInt(cleaned, 10);
+  return isNaN(n) ? 0 : n;
 };
 
 /**
  * Cleans file names for display:
  * - removes .csv / .CSV
  * - replaces underscores with spaces
- * - trims surrounding spaces
  */
 export const cleanFileName = (filename: string): string => {
   if (!filename) return '';
 
-  return filename
-    .replace(/\.csv$/i, '')   // entfernt .csv / .CSV am Ende
-    .replace(/_/g, ' ')
-    .trim();
+  const s = String(filename);
+  return s
+    .replace(/\.csv$/i, '')  // remove .csv or .CSV at the end
+    .replace(/_/g, ' ');
 };
 
 /**
  * Abbreviates large numbers:
- *   950        -> "950"
- *   12_300     -> "12.3K"
- *   1_200_000  -> "1.2M"
- *   2_500_000_000 -> "2.5B"
+ *   950              -> "950"
+ *   12_300           -> "12.3K"
+ *   1_200_000        -> "1.2M"
+ *   2_500_000_000    -> "2.5B"
  */
 export const abbreviateNumber = (num: number): string => {
   if (typeof num !== 'number' || isNaN(num)) return '0';
@@ -108,16 +103,19 @@ export const findColumnIndex = (
   headers: string[],
   keywords: string[]
 ): number | undefined => {
-  // Normalize keywords once
+  if (!Array.isArray(headers) || headers.length === 0) {
+    return undefined;
+  }
+
   const normalizedKeywords = keywords.map((k) =>
-    k.toLowerCase().replace(/[^a-z0-9]/g, '')
+    String(k).toLowerCase().replace(/[^a-z0-9]/g, '')
   );
 
   for (let i = 0; i < headers.length; i++) {
     const header = headers[i];
-    if (!header) continue;
+    if (!header && header !== 0) continue;
 
-    const normalizedHeader = header
+    const normalizedHeader = String(header)
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '');
 
