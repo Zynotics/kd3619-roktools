@@ -330,6 +330,16 @@ const honorUpload = multer({
 
 // ==================== AUTH ENDPOINTS ====================
 
+// 🔍 Gov ID Check für Live-Validierung im Frontend
+app.post('/api/auth/check-gov-id', (req, res) => {
+  const { governorId } = req.body;
+  if (!governorId || !String(governorId).trim()) {
+    return res.status(400).json({ exists: false, error: 'Gov ID wird benötigt' });
+  }
+  const exists = governorIdExists(governorId);
+  res.json({ exists });
+});
+
 // Registrierung mit Gov-ID-Check
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -870,10 +880,15 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'KD3619 Backend API',
-    version: '1.1.0',
+    version: '1.2.0',
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
-      auth: ['POST /api/auth/register', 'POST /api/auth/login', 'GET /api/auth/validate'],
+      auth: [
+        'POST /api/auth/register',
+        'POST /api/auth/login',
+        'GET /api/auth/validate',
+        'POST /api/auth/check-gov-id'
+      ],
       admin: [
         'GET /api/admin/users',
         'POST /api/admin/users/approve',
