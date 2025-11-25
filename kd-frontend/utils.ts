@@ -1,4 +1,3 @@
-
 /**
  * Formats a number as an integer with thousand separators (dots).
  * e.g., 1234567 -> "1.234.567", -9876 -> "-9.876"
@@ -15,60 +14,73 @@ export const formatNumber = (num: number): string => {
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
-  return (isNegative ? '-' : '') + withDots;
+  return isNegative ? `-${withDots}` : withDots;
 };
 
 /**
- * Parses a "German" formatted number from Excel/CSV:
- * - removes all non-digit characters
- * - interprets the result as an integer
- * e.g., "1.234.567" -> 1234567
+ * Converts a German formatted number (string or number) to an integer.
+ * Handles undefined, null, empty, missing, invalid formats safely.
+ *
+ * Example:
+ *   "1.234.567" -> 1234567
+ *   "12,345"    -> 12345
+ *   undefined   -> 0
  */
-export const parseGermanNumber = (value: string | number): number => {
-    if (typeof value === 'number') {
-      return isNaN(value) ? 0 : value;
-    }
+export const parseGermanNumber = (value: any): number => {
+  // Null & undefined → safe zero
+  if (value === null || value === undefined) {
+    return 0;
+  }
 
-    if (typeof value !== 'string' || value.trim() === '') {
-      return 0;
-    }
+  // Already a number → return if valid
+  if (typeof value === 'number') {
+    return isNaN(value) ? 0 : value;
+  }
 
-    const cleanedString = value.replace(/[^0-9]/g, '');
+  // Convert everything else to string safely
+  const str = String(value);
 
-    if (cleanedString === '') {
-      return 0;
-    }
+  // Empty or whitespace only
+  if (str.trim() === '') {
+    return 0;
+  }
 
-    const number = parseInt(cleanedString, 10);
-    return isNaN(number) ? 0 : number;
+  // Keep only digits
+  const cleanedString = str.replace(/[^0-9]/g, '');
+  if (cleanedString === '') {
+    return 0;
+  }
+
+  const number = parseInt(cleanedString, 10);
+  return isNaN(number) ? 0 : number;
 };
 
 /**
- * Removes the file extension from a filename.
+ * Generate short file names for display.
+ * Removes unnecessary prefixes or file extensions.
  */
-export const cleanFileName = (name: string): string => name.replace(/\.(xlsx|xls|csv)$/i, '');
-
-
-/**
- * Formats a large number with an abbreviation (K, M, B).
- * e.g., 1234 -> 1.2K, 1234567 -> 1.2M
- */
-export const abbreviateNumber = (num: number): string => {
-  if (Math.abs(num) < 1e3) return num.toString();
-  if (Math.abs(num) < 1e6) return (num / 1e3).toFixed(1) + 'K';
-  if (Math.abs(num) < 1e9) return (num / 1e6).toFixed(1) + 'M';
-  return (num / 1e9).toFixed(1) + 'B';
+export const cleanFileName = (filename: string): string => {
+  if (!filename) return '';
+  return filename
+    .replace('.csv', '')
+    .replace('.CSV', '')
+    .replace(/_/g, ' ')
+    .trim();
 };
 
 /**
- * Finds the index of a column in a header array by searching for keywords.
- * It's case-insensitive and ignores non-alphanumeric characters.
- * @param headers The array of header strings.
- * @param keywords An array of keywords to search for.
- * @returns The index of the found column, or undefined if not found.
+ * Finds the first column index in `headers` whose name contains any keyword in `keywords`.
+ * Matching is case-insensitive and ignores non-alphanumeric characters.
+ *
+ * @param headers Array of CSV header column names
+ * @param keywords e.g. ["kills", "killpoints"]
+ * @returns index or undefined
  */
 export const findColumnIndex = (headers: string[], keywords: string[]): number | undefined => {
-  const normalizedKeywords = keywords.map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const normalizedKeywords = keywords.map(k =>
+    k.toLowerCase().replace(/[^a-z0-9]/g, '')
+  );
+
   for (let i = 0; i < headers.length; i++) {
     if (headers[i]) {
       const normalizedHeader = headers[i].toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -77,5 +89,6 @@ export const findColumnIndex = (headers: string[], keywords: string[]): number |
       }
     }
   }
+
   return undefined;
 };
