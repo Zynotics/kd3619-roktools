@@ -27,19 +27,25 @@ const StatCard: React.FC<StatCardProps> = ({
   const variantClasses = {
     default: "bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg",
     gradient: "bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 p-6 rounded-xl shadow-lg",
-    hover: "bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 p-6 rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl hover:border-gray-600 hover:scale-[1.02]"
+    hover: "bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 p-6 rounded-xl shadow-lg transition-transform transition-shadow duration-200 hover:shadow-xl hover:border-gray-600 hover:scale-[1.02]"
   };
 
   const cardClasses = `${variantClasses[variant]} text-center ${className}`;
 
   // Fallback für changeColor wenn nicht provided
-  const calculatedChangeColor = changeColor || (change && change >= 0 ? 'text-green-400' : 'text-red-400');
+  const calculatedChangeColor =
+    changeColor || (change && change >= 0 ? 'text-green-400' : 'text-red-400');
 
   return (
     <div className={cardClasses}>
       {icon && <div className="flex justify-center mb-3">{icon}</div>}
-      <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate mb-2">{title}</h4>
-      <p className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-2">{value}</p>
+      <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate mb-2">
+        {title}
+      </h4>
+      {/* HIER der wichtige Fix: immer helle Zahl */}
+      <p className="text-2xl font-bold text-gray-100 mb-2">
+        {value}
+      </p>
       {(change !== undefined && changePercent !== undefined) && (
         <div className={`text-sm font-semibold ${calculatedChangeColor}`}>
           <span>
