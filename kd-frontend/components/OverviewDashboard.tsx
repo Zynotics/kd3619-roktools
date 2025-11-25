@@ -4,6 +4,7 @@ import FileList from './FileList';
 import ComparisonSection from './ComparisonSection';
 import PowerHistoryChart from './PowerHistoryChart';
 import PlayerSearch from './PlayerSearch';
+import { useAuth } from './AuthContext';
 import { cleanFileName, parseGermanNumber, findColumnIndex } from '../utils';
 import type {
   UploadedFile,
@@ -18,6 +19,11 @@ interface OverviewDashboardProps {
 }
 
 const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendUrl }) => {
+  const { user } = useAuth();
+  const role = user?.role;
+  const isBasicUser = role === 'user';
+  const canManageFiles = isAdmin || role === 'r4' || role === 'r5';
+
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,26 +33,35 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
   const [comparisonStats, setComparisonStats] = useState<ComparisonStats | null>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<PlayerStatChange[] | 'not_found' | null>(null);
-  const [selectedPlayer, setSelectedPlayer] = useState<PlayerStatChange | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<PlayerInfo[]>([]);
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerInfo | null>(null);
 
-  // --- Dateien vom Backend laden ---
   const fetchFiles = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
     try {
-      const res = await fetch(`${backendUrl}/overview/files-data`);
-      if (!res.ok) {
-        throw new Error(`Server responded with status ${res.status}`);
+      setIsLoading(true);
+      setError(null);
+      const response = await fetch(`${backendUrl}/overview/files`);
+      if (!response.ok) throw new Error('Failed to fetch files from server.');
+      const data = await response.json();
+      setUploadedFiles(data);
+
+      if (data.length >= 2) {
+        const sorted = [...data].sort(
+          (a, b) =>
+            new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime()
+        );
+        const last = sorted[sorted.length - 1];
+        const secondLast = sorted[sorted.length - 2];
+        setStartFileId(secondLast.id);
+        setEndFileId(last.id);
+      } else if (data.length === 1) {
+        setStartFileId(data[0].id);
+        setEndFileId(data[0].id);
       }
-      const data: UploadedFile[] = await res.json();
-      setUploadedFiles(data || []); // NULL CHECK HINZUGEFÜGT
     } catch (err) {
-      console.error('Error loading file data:', err);
-      setError(
-        'Error loading file data. Please ensure the backend server is running and accessible.'
-      );
+      console.error(err);
+      setError('Error loading files from server.');
     } finally {
       setIsLoading(false);
     }
@@ -55,16 +70,6 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
   useEffect(() => {
     fetchFiles();
   }, [fetchFiles]);
-
-  // Beim Laden automatisch die letzten zwei Files wählen
-  useEffect(() => {
-    if (uploadedFiles && uploadedFiles.length >= 2) {
-      setStartFileId(uploadedFiles[uploadedFiles.length - 2].id);
-      setEndFileId(uploadedFiles[uploadedFiles.length - 1].id);
-    } else if (uploadedFiles && uploadedFiles.length === 1) {
-      setEndFileId(uploadedFiles[0].id);
-    }
-  }, [uploadedFiles]);
 
   const handleUploadComplete = () => {
     fetchFiles();
@@ -78,210 +83,262 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
       if (!response.ok) throw new Error('Failed to delete file on server.');
       setUploadedFiles((prev) => (prev || []).filter((f) => f.id !== id));
     } catch (err) {
-      console.error('Delete error:', err);
-      alert('Could not delete the file.');
+      console.error(err);
+      setError('Failed to delete file.');
     }
   };
 
-  const handleReorderFiles = async (reorderedFiles: UploadedFile[]) => {
-    setUploadedFiles(reorderedFiles); // Optimistic UI
-    try {
-      const order = reorderedFiles.map((f) => f.id);
-      const response = await fetch(`${backendUrl}/overview/files/reorder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order }),
-      });
-      if (!response.ok) throw new Error('Failed to save new order.');
-    } catch (err) {
-      console.error('Reorder error:', err);
-      alert('Could not save the new file order.');
-      fetchFiles(); // revert on error
-    }
+  const handleReorderFiles = (reorderedFiles: UploadedFile[]) => {
+    setUploadedFiles(reorderedFiles);
   };
 
-  // --- Vergleichslogik ---
+  const parseCsvContent = useCallback((csvContent: string, filename: string): PlayerInfo[] => {
+    const lines = csvContent.trim().split('\n');
+    if (lines.length < 2) return [];
+
+    const header = lines[0].split(';').map((h) => h.trim().toLowerCase());
+    const findIndex = (possibleNames: string[]) =>
+      findColumnIndex(header, possibleNames);
+
+    const idxGovernorId = findIndex(['governorid', 'id']);
+    const idxName = findIndex(['name', 'playername']);
+    const idxPower = findIndex(['power', 'macht']);
+    const idxTroopsPower = findIndex(['troopspower', 'troops power']);
+    const idxKillPoints = findIndex(['killpoints', 'kill points', 'kills']);
+    const idxDeadTroops = findIndex(['deadtroops', 'dead troops']);
+    const idxT4 = findIndex(['t4', 'tier4']);
+    const idxT5 = findIndex(['t5', 'tier5']);
+
+    if (idxGovernorId === -1 || idxName === -1 || idxPower === -1) {
+      console.warn(`Missing required columns in file: ${filename}`);
+      return [];
+    }
+
+    const players: PlayerInfo[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const row = lines[i].split(';');
+      if (row.length !== header.length) continue;
+
+      const getVal = (idx: number | null | undefined): string =>
+        idx !== undefined && idx !== null && idx >= 0 && idx < row.length
+          ? row[idx].trim()
+          : '';
+
+      const player: PlayerInfo = {
+        governorId: getVal(idxGovernorId),
+        name: getVal(idxName),
+        power: parseGermanNumber(getVal(idxPower)),
+        troopsPower:
+          idxTroopsPower !== -1 ? parseGermanNumber(getVal(idxTroopsPower)) : 0,
+        totalKillPoints:
+          idxKillPoints !== -1 ? parseGermanNumber(getVal(idxKillPoints)) : 0,
+        deadTroops:
+          idxDeadTroops !== -1 ? parseGermanNumber(getVal(idxDeadTroops)) : 0,
+        t4:
+          idxT4 !== -1 ? parseGermanNumber(getVal(idxT4)) : 0,
+        t5:
+          idxT5 !== -1 ? parseGermanNumber(getVal(idxT5)) : 0,
+      };
+
+      if (player.governorId && player.name && player.power > 0) {
+        players.push(player);
+      }
+    }
+
+    return players;
+  }, []);
+
   const handleCompare = useCallback(() => {
     setComparisonError(null);
-    setSearchResults(null);
-    setSelectedPlayer(null);
-    setSearchQuery('');
 
-    if (!startFileId || !endFileId) {
-      setComparisonError('Please select both a start and end file.');
+    if (!startFileId || !endFileId || startFileId === endFileId) {
+      setComparisonStats(null);
       return;
     }
 
-    // NULL/UNDEFINED CHECKS HINZUGEFÜGT
-    if (!uploadedFiles || !Array.isArray(uploadedFiles)) {
-      setComparisonError('No files available for comparison.');
+    const startFile = uploadedFiles.find((f) => f.id === startFileId);
+    const endFile = uploadedFiles.find((f) => f.id === endFileId);
+
+    if (!startFile || !endFile) {
+      setComparisonError('Could not find selected files.');
+      setComparisonStats(null);
       return;
     }
 
-    const file1 = uploadedFiles.find((f) => f.id === startFileId);
-    const file2 = uploadedFiles.find((f) => f.id === endFileId);
+    try {
+      const data1 = parseCsvContent(startFile.content, startFile.name);
+      const data2 = parseCsvContent(endFile.content, endFile.name);
 
-    if (!file1 || !file2) {
-      setComparisonError('Selected files could not be found.');
-      return;
-    }
+      const map1 = new Map<string, PlayerInfo>();
+      data1.forEach((p) => map1.set(p.governorId, p));
 
-    const parseRow = (row: any[], headers: string[]): PlayerInfo => {
-      const getVal = (keywords: string[]) => {
-        const index = findColumnIndex(headers, keywords);
-        return index !== undefined ? row[index] : 0;
-      };
-      const getString = (keywords: string[]) => {
-        const index = findColumnIndex(headers, keywords);
-        return index !== undefined ? String(row[index] ?? '') : '';
-      };
+      const statChanges: PlayerStatChange[] = [];
+      const positive = { power: 0, troopsPower: 0, killPoints: 0, deadTroops: 0 };
+      const negative = { power: 0, troopsPower: 0, killPoints: 0, deadTroops: 0 };
 
-      return {
-        id: getString(['governorid', 'id']),
-        name: getString(['name']),
-        power: parseGermanNumber(getVal(['power'])),
-        alliance: getString(['alliance']),
-        t1Kills: parseGermanNumber(getVal(['t1', 't1kills'])),
-        t2Kills: parseGermanNumber(getVal(['t2', 't2kills'])),
-        t3Kills: parseGermanNumber(getVal(['t3', 't3kills'])),
-        t4Kills: parseGermanNumber(getVal(['t4', 't4kills'])),
-        t5Kills: parseGermanNumber(getVal(['t5', 't5kills'])),
-        totalKillPoints: parseGermanNumber(getVal(['killpoints', 'kp'])),
-        deadTroops: parseGermanNumber(getVal(['dead'])),
-        cityHall: parseGermanNumber(getVal(['ch', 'cityhall'])),
-        troopsPower: parseGermanNumber(getVal(['troopspower'])),
-        techPower: parseGermanNumber(getVal(['techpower'])),
-        buildingPower: parseGermanNumber(getVal(['buildingpower'])),
-        commanderPower: parseGermanNumber(getVal(['commanderpower'])),
-      };
-    };
+      data2.forEach((p2) => {
+        const p1 = map1.get(p2.governorId);
+        if (!p1) return;
 
-    // NULL/UNDEFINED CHECKS FÜR DATA HINZUGEFÜGT
-    const data1 = file1.data && Array.isArray(file1.data) ? file1.data.map((row) => parseRow(row, file1.headers)) : [];
-    const data2 = file2.data && Array.isArray(file2.data) ? file2.data.map((row) => parseRow(row, file2.headers)) : [];
+        const diffPower = p2.power - p1.power;
+        const diffTroops = p2.troopsPower - p1.troopsPower;
+        const diffKills = p2.totalKillPoints - p1.totalKillPoints;
+        const diffDead = p2.deadTroops - p1.deadTroops;
 
-    const map1 = new Map(data1.map((p) => [p.id, p]));
-    const map2 = new Map(data2.map((p) => [p.id, p]));
-
-    const newPlayers = data2.filter((p) => !map1.has(p.id));
-    const disappearedPlayers = data1.filter((p) => !map2.has(p.id));
-
-    const playerStatChanges: PlayerStatChange[] = [];
-    data2.forEach((p2) => {
-      const p1 = map1.get(p2.id);
-      if (p1) {
-        playerStatChanges.push({
-          id: p2.id,
+        statChanges.push({
+          governorId: p2.governorId,
           name: p2.name,
-          alliance: p2.alliance,
           oldPower: p1.power,
           newPower: p2.power,
-          diffPower: p2.power - p1.power,
-          oldKillPoints: p1.totalKillPoints,
-          newKillPoints: p2.totalKillPoints,
-          diffKillPoints: p2.totalKillPoints - p1.totalKillPoints,
-          oldDeadTroops: p1.deadTroops,
-          newDeadTroops: p2.deadTroops,
-          diffDeadTroops: p2.deadTroops - p1.deadTroops,
+          diffPower,
           oldTroopsPower: p1.troopsPower,
           newTroopsPower: p2.troopsPower,
-          diffTroopsPower: p2.troopsPower - p1.troopsPower,
+          diffTroopsPower: diffTroops,
+          oldKillPoints: p1.totalKillPoints,
+          newKillPoints: p2.totalKillPoints,
+          diffKillPoints: diffKills,
+          oldDeadTroops: p1.deadTroops,
+          newDeadTroops: p2.deadTroops,
+          diffDeadTroops: diffDead,
         });
-      }
-    });
 
-    const calculateTotals = (data: PlayerInfo[]) => ({
-      totalPower: data.reduce((sum, p) => sum + p.power, 0),
-      totalTroopsPower: data.reduce((sum, p) => sum + p.troopsPower, 0),
-      totalKillPoints: data.reduce((sum, p) => sum + p.totalKillPoints, 0),
-      totalDeadTroops: data.reduce((sum, p) => sum + p.deadTroops, 0),
-    });
+        if (diffPower > 0) positive.power += diffPower;
+        else negative.power += diffPower;
 
-    const totals1 = calculateTotals(data1);
-    const totals2 = calculateTotals(data2);
+        if (diffTroops > 0) positive.troopsPower += diffTroops;
+        else negative.troopsPower += diffTroops;
 
-    setComparisonStats({
-      totalPowerFile1: totals1.totalPower,
-      totalPowerFile2: totals2.totalPower,
-      powerDifference: totals2.totalPower - totals1.totalPower,
-      totalTroopsPowerFile1: totals1.totalTroopsPower,
-      totalTroopsPowerFile2: totals2.totalTroopsPower,
-      troopsPowerDifference: totals2.totalTroopsPower - totals1.totalTroopsPower,
-      totalKillPointsFile1: totals1.totalKillPoints,
-      totalKillPointsFile2: totals2.totalKillPoints,
-      killPointsDifference: totals2.totalKillPoints - totals1.totalKillPoints,
-      totalDeadTroopsFile1: totals1.totalDeadTroops,
-      totalDeadTroopsFile2: totals2.totalDeadTroops,
-      deadTroopsDifference: totals2.totalDeadTroops - totals1.totalDeadTroops,
-      newPlayers,
-      disappearedPlayers,
-      playerStatChanges,
-    });
-  }, [startFileId, endFileId, uploadedFiles]);
+        if (diffKills > 0) positive.killPoints += diffKills;
+        else negative.killPoints += diffKills;
+
+        if (diffDead > 0) positive.deadTroops += diffDead;
+        else negative.deadTroops += diffDead;
+      });
+
+      const calculateTotals = (data: PlayerInfo[]) => ({
+        totalPower: data.reduce((sum, p) => sum + p.power, 0),
+        totalTroopsPower: data.reduce((sum, p) => sum + p.troopsPower, 0),
+        totalKillPoints: data.reduce((sum, p) => sum + p.totalKillPoints, 0),
+        totalDeadTroops: data.reduce((sum, p) => sum + p.deadTroops, 0),
+      });
+
+      const totals1 = calculateTotals(data1);
+      const totals2 = calculateTotals(data2);
+
+      const totalsDiff = {
+        power: totals2.totalPower - totals1.totalPower,
+        troopsPower: totals2.totalTroopsPower - totals1.totalTroopsPower,
+        killPoints: totals2.totalKillPoints - totals1.totalKillPoints,
+        deadTroops: totals2.totalDeadTroops - totals1.totalDeadTroops,
+      };
+
+      setComparisonStats({
+        startFileName: cleanFileName(startFile.name),
+        endFileName: cleanFileName(endFile.name),
+        totals1,
+        totals2,
+        totalsDiff,
+        positive,
+        negative,
+        changes: statChanges,
+      });
+    } catch (err) {
+      console.error(err);
+      setComparisonError('Error analyzing data.');
+      setComparisonStats(null);
+    }
+  }, [startFileId, endFileId, uploadedFiles, parseCsvContent]);
 
   useEffect(() => {
-    if (startFileId && endFileId && startFileId !== endFileId) {
+    if (startFileId && endFileId && uploadedFiles.length >= 2) {
       handleCompare();
     }
-  }, [startFileId, endFileId, handleCompare]);
+  }, [startFileId, endFileId, uploadedFiles, handleCompare]);
 
-  // --- Suche ---
+  const allPlayersForSearch = useMemo<PlayerInfo[]>(() => {
+    if (!comparisonStats) return [];
+    return comparisonStats.changes.map((change) => ({
+      governorId: change.governorId,
+      name: change.name,
+      power: change.newPower,
+      troopsPower: change.newTroopsPower,
+      totalKillPoints: change.newKillPoints,
+      deadTroops: change.newDeadTroops,
+      t4: 0,
+      t5: 0,
+    }));
+  }, [comparisonStats]);
+
   const handleSearch = () => {
-    if (!searchQuery || !comparisonStats || !comparisonStats.playerStatChanges) return;
-    const lowerCaseQuery = searchQuery.toLowerCase();
-
-    const exactIdMatch = comparisonStats.playerStatChanges.find((p) => p.id === searchQuery);
-    if (exactIdMatch) {
-      setSelectedPlayer(exactIdMatch);
-      setSearchResults(null);
+    if (!searchQuery.trim() || !comparisonStats) {
+      setSearchResults([]);
+      setSelectedPlayer(null);
       return;
     }
 
-    const nameMatches = comparisonStats.playerStatChanges.filter((p) =>
-      p.name.toLowerCase().includes(lowerCaseQuery)
+    const queryLower = searchQuery.toLowerCase();
+    const results = comparisonStats.changes.filter(
+      (p) =>
+        p.name.toLowerCase().includes(queryLower) ||
+        p.governorId.toLowerCase().includes(queryLower)
     );
-
-    if (nameMatches.length === 1) {
-      setSelectedPlayer(nameMatches[0]);
-      setSearchResults(null);
-    } else if (nameMatches.length > 1) {
-      setSearchResults(nameMatches);
-      setSelectedPlayer(null);
-    } else {
-      setSearchResults('not_found');
-      setSelectedPlayer(null);
-    }
+    setSearchResults(results);
   };
 
   const handleClearSearch = () => {
     setSearchQuery('');
-    setSearchResults(null);
+    setSearchResults([]);
     setSelectedPlayer(null);
   };
 
-  const handleSelectPlayer = (player: PlayerStatChange) => {
-    setSelectedPlayer(player);
-    setSearchResults(null);
+  const handleSelectPlayer = (playerChange: PlayerStatChange | null) => {
+    if (!playerChange) {
+      setSelectedPlayer(null);
+      return;
+    }
+
+    setSelectedPlayer({
+      governorId: playerChange.governorId,
+      name: playerChange.name,
+      power: playerChange.newPower,
+      troopsPower: playerChange.newTroopsPower,
+      totalKillPoints: playerChange.newKillPoints,
+      deadTroops: playerChange.newDeadTroops,
+      t4: 0,
+      t5: 0,
+    });
   };
 
-  // NULL/UNDEFINED CHECK FÜR UPLOADEDFILES
-  const isDataLoaded = uploadedFiles && Array.isArray(uploadedFiles) && uploadedFiles.length > 0;
-
-  if (isLoading) {
-    return <div className="text-center p-8">Loading files...</div>;
+  // 👉 BASIC USER: Only charts in this view
+  if (isBasicUser) {
+    return (
+      <div className="space-y-8">
+        {error && (
+          <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">
+            {error}
+          </div>
+        )}
+        <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+          <h3 className="text-lg font-semibold text-gray-200 mb-4">
+            Kingdom Power Progression
+          </h3>
+          <PowerHistoryChart files={uploadedFiles || []} />
+        </div>
+      </div>
+    );
   }
 
+  // 👉 R4, R5, Admin: full view
   return (
     <div className="space-y-8">
-      {/* Fehleranzeige */}
       {error && (
         <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">
           {error}
         </div>
       )}
 
-      {/* Admin: Upload + FileList - NUR wenn Admin */}
-      {isAdmin && (
+      {/* Upload + File list – only for R4, R5 & Admin */}
+      {canManageFiles && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
             <FileUpload
@@ -289,8 +346,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
               onUploadComplete={handleUploadComplete}
             />
           </div>
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-            {/* NULL/UNDEFINED CHECK FÜR FILES */}
+          <div>
             <FileList
               files={uploadedFiles || []}
               onDeleteFile={handleDeleteFile}
@@ -300,8 +356,9 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
         </div>
       )}
 
-      {/* Power History Chart */}
-      <PowerHistoryChart files={uploadedFiles || []} />
+      <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+        <PowerHistoryChart files={uploadedFiles || []} />
+      </div>
 
       {/* Comparison Controls */}
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
@@ -318,18 +375,16 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
               id="start-date-select"
               value={startFileId}
               onChange={(e) => setStartFileId(e.target.value)}
-              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
             >
-              <option value="">Select Start Date</option>
-              {/* NULL/UNDEFINED CHECK FÜR UPLOADEDFILES */}
-              {uploadedFiles && uploadedFiles.map((file) => (
-                <option key={file.id} value={file.id} disabled={file.id === endFileId}>
+              <option value="">Select…</option>
+              {uploadedFiles.map((file) => (
+                <option key={file.id} value={file.id}>
                   {cleanFileName(file.name)}
                 </option>
               ))}
             </select>
           </div>
-
           <div className="flex flex-col">
             <label
               htmlFor="end-date-select"
@@ -341,29 +396,29 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
               id="end-date-select"
               value={endFileId}
               onChange={(e) => setEndFileId(e.target.value)}
-              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
             >
-              <option value="">Select End Date</option>
-              {/* NULL/UNDEFINED CHECK FÜR UPLOADEDFILES */}
-              {uploadedFiles && uploadedFiles.map((file) => (
-                <option key={file.id} value={file.id} disabled={file.id === startFileId}>
+              <option value="">Select…</option>
+              {uploadedFiles.map((file) => (
+                <option key={file.id} value={file.id}>
                   {cleanFileName(file.name)}
                 </option>
               ))}
             </select>
           </div>
-
-          <button
-            onClick={handleCompare}
-            disabled={!startFileId || !endFileId || startFileId === endFileId}
-            className="w-full px-4 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed transition-colors"
-          >
-            Compare
-          </button>
+          <div className="flex flex-col">
+            <button
+              onClick={handleCompare}
+              disabled={!startFileId || !endFileId || startFileId === endFileId}
+              className="mt-5 bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+            >
+              Compare
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Suche + Spielerfokus - zwischen Comparison Controls und Summary/Tabellen */}
+      {/* Search + Player focus */}
       <PlayerSearch
         query={searchQuery}
         setQuery={setSearchQuery}
@@ -375,7 +430,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
         isComparisonLoaded={!!comparisonStats}
       />
 
-      {/* ComparisonSection mit Summary UND Tabellen */}
+      {/* ComparisonSection with summary AND tables */}
       <ComparisonSection
         stats={comparisonStats}
         error={comparisonError}
