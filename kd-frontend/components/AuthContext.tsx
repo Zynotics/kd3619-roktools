@@ -1,17 +1,23 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 
 interface User {
   id: string;
   email: string;
   username: string;
-  isApproved: boolean; // Jetzt Boolean!
+  isApproved: boolean;
   role: 'user' | 'admin';
+  governorId?: string | null;
 }
 
 interface AuthContextType {
   user: User | null;
   login: (username: string, password: string) => Promise<void>;
-  register: (email: string, username: string, password: string) => Promise<void>;
+  register: (
+    email: string,
+    username: string,
+    password: string,
+    governorId: string
+  ) => Promise<any>;
   logout: () => void;
   isLoading: boolean;
   hasOverviewAccess: boolean;
@@ -20,161 +26,189 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Backend URL aus App.tsx übernehmen
-  const BACKEND_URL = process.env.NODE_ENV === 'production' 
+// zentrale Backend-URL – ident wie in App.tsx
+const BACKEND_URL =
+  process.env.NODE_ENV === 'production'
     ? 'https://kd3619-backend.onrender.com'
     : 'http://localhost:4000';
 
-  // REPARIERT: User-Daten vom Backend abrufen mit Boolean Konvertierung
-  const refreshUser = async () => {
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-      setUser(null);
-      return;
-    }
+interface AuthProviderProps {
+  children: ReactNode;
+}
 
-    try {
-      console.log('🔄 Refreshing user data...');
-      const response = await fetch(`${BACKEND_URL}/api/auth/validate`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Token aus localStorage holen und User validieren
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/auth/validate`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          localStorage.removeItem('authToken');
+          setUser(null);
+        } else {
+          const data = await res.json();
+          setUser({
+            id: data.id,
+            email: data.email,
+            username: data.username,
+            isApproved: !!data.isApproved,
+            role: data.role,
+            governorId: data.governorId ?? null,
+          });
         }
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        
-        // REPARIERT: Number zu Boolean konvertieren
-        const processedUserData: User = {
-          ...userData,
-          isApproved: Boolean(userData.isApproved) // 1 -> true, 0 -> false
-        };
-        
-        console.log('✅ User data refreshed:', processedUserData);
-        setUser(processedUserData);
-      } else {
-        console.log('❌ Token invalid during refresh');
+      } catch (err) {
+        console.error('Auth init error:', err);
         localStorage.removeItem('authToken');
         setUser(null);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('💥 Error refreshing user:', error);
-      localStorage.removeItem('authToken');
-      setUser(null);
-    }
-  };
+    };
 
-  useEffect(() => {
-    // Session beim Start prüfen
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      refreshUser().finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-    }
+    initAuth();
   }, []);
 
   const login = async (username: string, password: string) => {
-    setIsLoading(true);
-    try {
-      console.log('🔄 Login attempt:', { username });
-      
-      const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
+    const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
 
-      console.log('📡 Login response status:', response.status);
-      
-      if (response.ok) {
-        const { user: userData, token } = await response.json();
-        
-        // REPARIERT: Auch hier Number zu Boolean konvertieren
-        const processedUserData: User = {
-          ...userData,
-          isApproved: Boolean(userData.isApproved)
-        };
-        
-        console.log('✅ Login successful:', processedUserData);
-        setUser(processedUserData);
-        localStorage.setItem('authToken', token);
-      } else {
-        const errorData = await response.json();
-        console.log('❌ Login failed:', errorData);
-        throw new Error(errorData.error || 'Login fehlgeschlagen');
+    if (!res.ok) {
+      const text = await res.text();
+      let message = 'Login fehlgeschlagen';
+      try {
+        const errJson = JSON.parse(text);
+        message = errJson.error || message;
+      } catch {
+        // ignore
       }
-    } catch (error) {
-      console.error('💥 Login error:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
+      throw new Error(message);
     }
+
+    const data = await res.json();
+    if (data.token) {
+      localStorage.setItem('authToken', data.token);
+    }
+
+    setUser({
+      id: data.user.id,
+      email: data.user.email,
+      username: data.user.username,
+      isApproved: !!data.user.isApproved,
+      role: data.user.role,
+      governorId: data.user.governorId ?? null,
+    });
   };
 
-  const register = async (email: string, username: string, password: string) => {
+  const register = async (
+    email: string,
+    username: string,
+    password: string,
+    governorId: string
+  ) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/auth/register`, {
+      const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, username, password })
+        body: JSON.stringify({ email, username, password, governorId }),
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        return result;
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Registrierung fehlgeschlagen');
+      const text = await res.text();
+      let json: any = {};
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        // plain text
       }
-    } catch (error) {
-      throw error;
+
+      if (!res.ok) {
+        const message = json.error || 'Registrierung fehlgeschlagen';
+        throw new Error(message);
+      }
+
+      // Registrierung erfolgreich – Rückgabe für UI (z.B. Message)
+      return json;
     } finally {
       setIsLoading(false);
     }
   };
 
   const logout = () => {
-    console.log('🚪 Logging out...');
-    setUser(null);
     localStorage.removeItem('authToken');
+    setUser(null);
   };
 
-  // REPARIERTE Zugriffslogik
-  const hasOverviewAccess = user?.isApproved === true || user?.role === 'admin';
-  
-  console.log('🔐 Auth Status:', { 
-    user: user?.username,
-    isApproved: user?.isApproved,
-    role: user?.role,
-    hasOverviewAccess 
-  });
+  const refreshUser = async () => {
+    const token = localStorage.getItem('authToken');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/auth/validate`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        localStorage.removeItem('authToken');
+        setUser(null);
+        return;
+      }
+
+      const data = await res.json();
+      setUser({
+        id: data.id,
+        email: data.email,
+        username: data.username,
+        isApproved: !!data.isApproved,
+        role: data.role,
+        governorId: data.governorId ?? null,
+      });
+    } catch (err) {
+      console.error('refreshUser error:', err);
+    }
+  };
+
+  const hasOverviewAccess = !!user?.isApproved;
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      login, 
-      register, 
-      logout, 
-      isLoading, 
-      hasOverviewAccess,
-      refreshUser
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        register,
+        logout,
+        isLoading,
+        hasOverviewAccess,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
+export const useAuth = (): AuthContextType => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context;
+  return ctx;
 };

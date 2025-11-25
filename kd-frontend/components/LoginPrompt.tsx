@@ -6,6 +6,7 @@ const LoginPrompt: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
+  const [governorId, setGovernorId] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -22,27 +23,35 @@ const LoginPrompt: React.FC = () => {
 
     try {
       if (isLogin) {
+        // Normaler Login
         await login(username, password);
       } else {
-        // Passwort-Bestätigung prüfen
+        // Registrierung: Passwort-Abgleich
         if (password !== confirmPassword) {
           setError('Die Passwörter stimmen nicht überein.');
           setIsLoading(false);
           return;
         }
 
-        // Registrierung
-        await register(email, username, password);
+        if (!governorId.trim()) {
+          setError('Bitte geben Sie Ihre Gov ID ein.');
+          setIsLoading(false);
+          return;
+        }
 
-        // Automatisch einloggen
+        // Registrierung mit Gov ID
+        await register(email, username, password, governorId.trim());
+
+        // Direkt danach automatisch einloggen
         await login(username, password);
 
-        // ➜ HINWEIS EINBLENDEN
+        // Hinweis anzeigen
         setSuccessMessage('Account erfolgreich erstellt!');
 
         // Felder leeren
         setEmail('');
         setUsername('');
+        setGovernorId('');
         setPassword('');
         setConfirmPassword('');
       }
@@ -59,6 +68,7 @@ const LoginPrompt: React.FC = () => {
     setSuccessMessage(null);
     setEmail('');
     setUsername('');
+    setGovernorId('');
     setPassword('');
     setConfirmPassword('');
   };
@@ -76,14 +86,12 @@ const LoginPrompt: React.FC = () => {
         </p>
       </div>
 
-      {/* ➜ Erfolgs-Hinweis */}
       {successMessage && (
         <div className="mb-4 p-4 bg-green-900/50 border border-green-700 rounded-lg text-green-400 text-sm">
           {successMessage}
         </div>
       )}
 
-      {/* Fehleranzeige */}
       {error && (
         <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded-lg text-red-400 text-sm">
           {error}
@@ -92,52 +100,97 @@ const LoginPrompt: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isLogin && (
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">E-Mail</label>
-            <input
-              type="email"
-              className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required={!isLogin}
-            />
-          </div>
+          <>
+            <div>
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-400 mb-1"
+              >
+                E-Mail
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
+                placeholder="ihre@email.de"
+                required={!isLogin}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="governorId"
+                className="block text-sm font-medium text-gray-400 mb-1"
+              >
+                Gov ID
+              </label>
+              <input
+                id="governorId"
+                type="text"
+                value={governorId}
+                onChange={(e) => setGovernorId(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
+                placeholder="Gov ID aus den KD-Daten"
+                required={!isLogin}
+              />
+            </div>
+          </>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-400 mb-1">Benutzername</label>
+          <label
+            htmlFor="username"
+            className="block text-sm font-medium text-gray-400 mb-1"
+          >
+            Benutzername
+          </label>
           <input
+            id="username"
             type="text"
-            className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
+            placeholder="Benutzername"
             required
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-400 mb-1">Passwort</label>
+          <label
+            htmlFor="password"
+            className="block text-sm font-medium text-gray-400 mb-1"
+          >
+            Passwort
+          </label>
           <input
+            id="password"
             type="password"
-            className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
+            placeholder="Passwort"
             required
             minLength={6}
           />
         </div>
 
-        {/* Passwort-Bestätigung nur im Registriermodus */}
         {!isLogin && (
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">
+            <label
+              htmlFor="confirmPassword"
+              className="block text-sm font-medium text-gray-400 mb-1"
+            >
               Passwort bestätigen
             </label>
             <input
+              id="confirmPassword"
               type="password"
-              className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
+              placeholder="Passwort erneut eingeben"
               required
               minLength={6}
             />
@@ -147,7 +200,7 @@ const LoginPrompt: React.FC = () => {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full bg-blue-600 text-white font-semibold py-2.5 rounded-lg hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed"
+          className="w-full bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed transition-colors"
         >
           {isLoading ? 'Bitte warten...' : isLogin ? 'Anmelden' : 'Registrieren'}
         </button>
@@ -156,7 +209,7 @@ const LoginPrompt: React.FC = () => {
       <div className="mt-6 text-center">
         <button
           onClick={switchMode}
-          className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+          className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
         >
           {isLogin
             ? 'Noch keinen Account? Jetzt registrieren'
