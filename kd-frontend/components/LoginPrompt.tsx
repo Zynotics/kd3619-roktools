@@ -142,15 +142,6 @@ const LoginPrompt: React.FC = () => {
           }
         </button>
       </div>
-
-      <div className="mt-6 p-4 bg-gray-700 rounded-lg">
-        <h4 className="text-sm font-semibold text-gray-300 mb-2">Zugriffsinformationen:</h4>
-        <ul className="text-xs text-gray-400 space-y-1">
-          <li>• <strong>Gast:</strong> Honor + Player Analytics sofort sichtbar</li>
-          <li>• <strong>Registriert:</strong> Overview Dashboard nach Freigabe</li>
-          <li>• <strong>Freigegeben:</strong> Vollzugriff auf alle Bereiche</li>
-        </ul>
-      </div>
     </Card>
   );
 };
