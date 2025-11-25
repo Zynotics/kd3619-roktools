@@ -7,6 +7,7 @@ const LoginPrompt: React.FC = () => {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState(''); // NEU: Passwort-Bestätigung
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -21,18 +22,30 @@ const LoginPrompt: React.FC = () => {
 
     try {
       if (isLogin) {
+        // Normaler Login
         await login(username, password);
       } else {
-        const result = await register(email, username, password);
-        setSuccessMessage(result.message);
-        // Nach Registrierung auf Login umschalten
-        setIsLogin(true);
+        // Registrierung: zuerst Passwort-Abgleich
+        if (password !== confirmPassword) {
+          setError('Die Passwörter stimmen nicht überein.');
+          setIsLoading(false);
+          return;
+        }
+
+        // Registrieren
+        await register(email, username, password);
+
+        // Direkt danach automatisch einloggen
+        await login(username, password);
+
+        // Optional: Felder leeren
         setEmail('');
         setUsername('');
         setPassword('');
+        setConfirmPassword('');
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Ein Fehler ist aufgetreten.');
     } finally {
       setIsLoading(false);
     }
@@ -45,6 +58,7 @@ const LoginPrompt: React.FC = () => {
     setEmail('');
     setUsername('');
     setPassword('');
+    setConfirmPassword('');
   };
 
   return (
@@ -54,8 +68,8 @@ const LoginPrompt: React.FC = () => {
           {isLogin ? 'Anmelden' : 'Registrieren'}
         </h2>
         <p className="text-gray-400">
-          {isLogin 
-            ? 'Melden Sie sich an, um auf das Overview Dashboard zuzugreifen' 
+          {isLogin
+            ? 'Melden Sie sich an, um auf das Overview Dashboard zuzugreifen'
             : 'Erstellen Sie einen Account für den Zugriff auf das Overview Dashboard'
           }
         </p>
@@ -122,6 +136,25 @@ const LoginPrompt: React.FC = () => {
           />
         </div>
 
+        {/* NEU: Passwort-Bestätigung nur im Registrier-Modus */}
+        {!isLogin && (
+          <div>
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-400 mb-1">
+              Passwort bestätigen
+            </label>
+            <input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
+              placeholder="Passwort erneut eingeben"
+              required
+              minLength={6}
+            />
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={isLoading}
@@ -136,8 +169,8 @@ const LoginPrompt: React.FC = () => {
           onClick={switchMode}
           className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
         >
-          {isLogin 
-            ? 'Noch keinen Account? Jetzt registrieren' 
+          {isLogin
+            ? 'Noch keinen Account? Jetzt registrieren'
             : 'Bereits registriert? Jetzt anmelden'
           }
         </button>
