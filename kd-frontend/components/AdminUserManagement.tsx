@@ -11,18 +11,21 @@ interface User {
   role: 'user' | 'admin';
   createdAt: string;
   governorId?: string | null;
+  canAccessHonor?: boolean;
+  canAccessAnalytics?: boolean;
+  canAccessOverview?: boolean;
 }
+
+const BACKEND_URL =
+  process.env.NODE_ENV === 'production'
+    ? 'https://kd3619-backend.onrender.com'
+    : 'http://localhost:4000';
 
 const AdminUserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user: currentUser } = useAuth();
-
-  const BACKEND_URL =
-    process.env.NODE_ENV === 'production'
-      ? 'https://kd3619-backend.onrender.com'
-      : 'http://localhost:4000';
 
   useEffect(() => {
     fetchUsers();
@@ -31,7 +34,6 @@ const AdminUserManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      console.log('🔄 Fetching users.');
       const token = localStorage.getItem('authToken');
       if (!token) {
         setError('Nicht angemeldet');
@@ -45,11 +47,8 @@ const AdminUserManagement: React.FC = () => {
         },
       });
 
-      console.log('📡 Users response status:', response.status);
-
       if (response.ok) {
         const userData: User[] = await response.json();
-        console.log('✅ Users fetched successfully:', userData);
         setUsers(userData);
       } else if (response.status === 403) {
         setError('Keine Admin-Berechtigung');
@@ -67,12 +66,8 @@ const AdminUserManagement: React.FC = () => {
   };
 
   const toggleApproval = async (userId: string, approved: boolean) => {
-    console.log('🔄 Frontend: Toggle approval', { userId, approved });
-
     try {
       const token = localStorage.getItem('authToken');
-      console.log('🔐 Token:', token ? 'Present' : 'Missing');
-
       if (!token) {
         throw new Error('Nicht angemeldet');
       }
@@ -89,16 +84,11 @@ const AdminUserManagement: React.FC = () => {
         }),
       });
 
-      console.log('📡 Approve response status:', response.status);
-
       if (!response.ok) {
         const errorText = await response.text();
         console.log('❌ Server Error:', errorText);
-        throw new Error(`Server responded with ${response.status}: ${errorText}`);
+        throw new Error(errorText || 'Serverfehler');
       }
-
-      const result = await response.json();
-      console.log('✅ Server Response:', result);
 
       setUsers((prev) =>
         prev.map((user) =>
@@ -111,10 +101,62 @@ const AdminUserManagement: React.FC = () => {
     }
   };
 
+  const updateAccess = async (
+    targetUser: User,
+    changes: Partial<Pick<User, 'canAccessHonor' | 'canAccessAnalytics' | 'canAccessOverview'>>
+  ) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('Nicht angemeldet');
+      }
+
+      const body = {
+        userId: targetUser.id,
+        canAccessHonor:
+          changes.canAccessHonor ?? !!targetUser.canAccessHonor,
+        canAccessAnalytics:
+          changes.canAccessAnalytics ?? !!targetUser.canAccessAnalytics,
+        canAccessOverview:
+          changes.canAccessOverview ?? !!targetUser.canAccessOverview,
+      };
+
+      const response = await fetch(`${BACKEND_URL}/api/admin/users/access`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('❌ Access update error:', errorText);
+        throw new Error(errorText || 'Zugriffsrechte konnten nicht aktualisiert werden.');
+      }
+
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === targetUser.id
+            ? {
+                ...u,
+                canAccessHonor: body.canAccessHonor,
+                canAccessAnalytics: body.canAccessAnalytics,
+                canAccessOverview: body.canAccessOverview,
+              }
+            : u
+        )
+      );
+    } catch (err: any) {
+      console.error('💥 Frontend Error in updateAccess:', err);
+      alert('Zugriffsrechte konnten nicht geändert werden: ' + (err.message || err));
+    }
+  };
+
   const deleteUser = async (userId: string, username: string) => {
     const confirmed = window.confirm(
-      `Benutzer "${username}" wirklich dauerhaft löschen?\n` +
-        `Dies kann nicht rückgängig gemacht werden.`
+      `Benutzer "${username}" wirklich dauerhaft löschen?\nDies kann nicht rückgängig gemacht werden.`
     );
     if (!confirmed) return;
 
@@ -131,16 +173,11 @@ const AdminUserManagement: React.FC = () => {
         },
       });
 
-      console.log('📡 Delete response status:', response.status);
-
       if (!response.ok) {
         const errorText = await response.text();
         console.log('❌ Delete Server Error:', errorText);
         throw new Error(errorText || 'Serverfehler beim Löschen');
       }
-
-      const result = await response.json();
-      console.log('✅ User deleted:', result);
 
       setUsers((prev) => prev.filter((user) => user.id !== userId));
     } catch (err: any) {
@@ -152,7 +189,7 @@ const AdminUserManagement: React.FC = () => {
   if (isLoading) {
     return (
       <Card className="p-6 text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto" />
         <p className="mt-2 text-gray-400">Lade Benutzer.</p>
       </Card>
     );
@@ -187,6 +224,15 @@ const AdminUserManagement: React.FC = () => {
             </TableCell>
             <TableCell align="center" header>
               Rolle
+            </TableCell>
+            <TableCell align="center" header>
+              Honor
+            </TableCell>
+            <TableCell align="center" header>
+              Analytics
+            </TableCell>
+            <TableCell align="center" header>
+              Overview
             </TableCell>
             <TableCell align="center" header>
               Freigabe
@@ -226,6 +272,69 @@ const AdminUserManagement: React.FC = () => {
                 >
                   {user.role === 'admin' ? 'Admin' : 'User'}
                 </span>
+              </TableCell>
+              {/* Zugriff: Honor */}
+              <TableCell align="center">
+                {user.role === 'admin' ? (
+                  <span className="text-xs text-green-400 font-semibold">immer</span>
+                ) : (
+                  <button
+                    onClick={() =>
+                      updateAccess(user, {
+                        canAccessHonor: !user.canAccessHonor,
+                      })
+                    }
+                    className={`px-2 py-1 rounded text-xs font-semibold ${
+                      user.canAccessHonor
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-700 text-gray-300'
+                    }`}
+                  >
+                    {user.canAccessHonor ? 'Ja' : 'Nein'}
+                  </button>
+                )}
+              </TableCell>
+              {/* Zugriff: Analytics */}
+              <TableCell align="center">
+                {user.role === 'admin' ? (
+                  <span className="text-xs text-green-400 font-semibold">immer</span>
+                ) : (
+                  <button
+                    onClick={() =>
+                      updateAccess(user, {
+                        canAccessAnalytics: !user.canAccessAnalytics,
+                      })
+                    }
+                    className={`px-2 py-1 rounded text-xs font-semibold ${
+                      user.canAccessAnalytics
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-700 text-gray-300'
+                    }`}
+                  >
+                    {user.canAccessAnalytics ? 'Ja' : 'Nein'}
+                  </button>
+                )}
+              </TableCell>
+              {/* Zugriff: Overview */}
+              <TableCell align="center">
+                {user.role === 'admin' ? (
+                  <span className="text-xs text-green-400 font-semibold">immer</span>
+                ) : (
+                  <button
+                    onClick={() =>
+                      updateAccess(user, {
+                        canAccessOverview: !user.canAccessOverview,
+                      })
+                    }
+                    className={`px-2 py-1 rounded text-xs font-semibold ${
+                      user.canAccessOverview
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-700 text-gray-300'
+                    }`}
+                  >
+                    {user.canAccessOverview ? 'Ja' : 'Nein'}
+                  </button>
+                )}
               </TableCell>
               <TableCell align="center">
                 <span

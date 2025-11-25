@@ -1,4 +1,10 @@
-import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
+import React, {
+  createContext,
+  useState,
+  useContext,
+  useEffect,
+  ReactNode,
+} from 'react';
 
 interface User {
   id: string;
@@ -7,6 +13,9 @@ interface User {
   isApproved: boolean;
   role: 'user' | 'admin';
   governorId?: string | null;
+  canAccessHonor?: boolean;
+  canAccessAnalytics?: boolean;
+  canAccessOverview?: boolean;
 }
 
 interface AuthContextType {
@@ -21,12 +30,13 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   hasOverviewAccess: boolean;
+  hasHonorAccess: boolean;
+  hasAnalyticsAccess: boolean;
   refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// zentrale Backend-URL – ident wie in App.tsx
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
     ? 'https://kd3619-backend.onrender.com'
@@ -68,6 +78,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             isApproved: !!data.isApproved,
             role: data.role,
             governorId: data.governorId ?? null,
+            canAccessHonor: !!data.canAccessHonor,
+            canAccessAnalytics: !!data.canAccessAnalytics,
+            canAccessOverview: !!data.canAccessOverview,
           });
         }
       } catch (err) {
@@ -113,6 +126,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       isApproved: !!data.user.isApproved,
       role: data.user.role,
       governorId: data.user.governorId ?? null,
+      canAccessHonor: !!data.user.canAccessHonor,
+      canAccessAnalytics: !!data.user.canAccessAnalytics,
+      canAccessOverview: !!data.user.canAccessOverview,
     });
   };
 
@@ -143,7 +159,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error(message);
       }
 
-      // Registrierung erfolgreich – Rückgabe für UI (z.B. Message)
       return json;
     } finally {
       setIsLoading(false);
@@ -180,13 +195,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isApproved: !!data.isApproved,
         role: data.role,
         governorId: data.governorId ?? null,
+        canAccessHonor: !!data.canAccessHonor,
+        canAccessAnalytics: !!data.canAccessAnalytics,
+        canAccessOverview: !!data.canAccessOverview,
       });
     } catch (err) {
       console.error('refreshUser error:', err);
     }
   };
 
-  const hasOverviewAccess = !!user?.isApproved;
+  const isAdmin = user?.role === 'admin';
+
+  const hasOverviewAccess =
+    !!user && (isAdmin || (user.isApproved && !!user.canAccessOverview));
+  const hasHonorAccess =
+    !!user && (isAdmin || (user.isApproved && !!user.canAccessHonor));
+  const hasAnalyticsAccess =
+    !!user && (isAdmin || (user.isApproved && !!user.canAccessAnalytics));
 
   return (
     <AuthContext.Provider
@@ -197,6 +222,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         logout,
         isLoading,
         hasOverviewAccess,
+        hasHonorAccess,
+        hasAnalyticsAccess,
         refreshUser,
       }}
     >

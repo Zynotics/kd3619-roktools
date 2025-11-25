@@ -5,46 +5,62 @@ import ApprovalPending from './ApprovalPending';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  accessType?: 'overview' | 'honor' | 'analytics';
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user, isLoading, hasOverviewAccess, refreshUser } = useAuth();
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
+  children,
+  accessType = 'overview',
+}) => {
+  const {
+    user,
+    isLoading,
+    hasOverviewAccess,
+    hasHonorAccess,
+    hasAnalyticsAccess,
+    refreshUser,
+  } = useAuth();
 
   // User-Daten aktualisieren wenn Komponente mounted
   useEffect(() => {
     if (user) {
-      console.log('🔄 ProtectedRoute: Refreshing user data on mount');
       refreshUser();
     }
-  }, []);
-
-  console.log('🔐 ProtectedRoute Check:', {
-    user: user?.username,
-    isLoading,
-    hasOverviewAccess,
-    isApproved: user?.isApproved,
-    role: user?.role
-  });
+  }, [user, refreshUser]);
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
       </div>
     );
   }
 
   if (!user) {
-    console.log('❌ ProtectedRoute: No user - showing login');
     return <LoginPrompt />;
   }
 
-  if (!hasOverviewAccess) {
-    console.log('❌ ProtectedRoute: No access - showing approval pending');
+  const isAdmin = user.role === 'admin';
+
+  // noch nicht generell freigegeben?
+  if (!isAdmin && !user.isApproved) {
     return <ApprovalPending />;
   }
 
-  console.log('✅ ProtectedRoute: Access granted');
+  let hasAccess = false;
+  if (isAdmin) {
+    hasAccess = true;
+  } else {
+    if (accessType === 'overview') hasAccess = hasOverviewAccess;
+    if (accessType === 'honor') hasAccess = hasHonorAccess;
+    if (accessType === 'analytics') hasAccess = hasAnalyticsAccess;
+  }
+
+  if (!hasAccess) {
+    // einfacher Re-Use: gleiche Karte wie bei ausstehender Freigabe
+    return <ApprovalPending />;
+  }
+
   return <>{children}</>;
 };
 
