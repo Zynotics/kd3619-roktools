@@ -1,4 +1,4 @@
-// App.tsx - KD3619 mit Login, Admin & Feature-Rechten
+// App.tsx - KD3619 with Login, Admin & Feature Permissions (EN Version)
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -24,6 +24,7 @@ const AppContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
         {/* Header */}
         <header className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
@@ -35,14 +36,14 @@ const AppContent: React.FC = () => {
                 KD3619 Kingdom Analytics
               </h1>
               <p className="text-xs text-gray-400">
-                Honor Dashboard · Player Analytics · Overview Dashboard
+                Honor Dashboard · Player Analytics · CH25 Kingdom Analytics
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             {isLoading && (
-              <span className="text-xs text-gray-400">Prüfe Anmeldung…</span>
+              <span className="text-xs text-gray-400">Checking login…</span>
             )}
             {user ? (
               <>
@@ -56,32 +57,36 @@ const AppContent: React.FC = () => {
                     )}
                   </div>
                   <div className="text-xs text-gray-400">
-                    {user.isApproved ? 'Freigegeben' : 'Freigabe ausstehend'}
+                    {user.isApproved ? 'Approved' : 'Pending approval'}
                   </div>
                 </div>
+
                 <button
                   onClick={logout}
                   className="text-xs px-3 py-1.5 rounded-md border border-gray-600 text-gray-200 hover:bg-gray-800 transition-colors"
                 >
-                  Abmelden
+                  Log out
                 </button>
               </>
             ) : (
               <span className="text-xs text-gray-400">
-                Bitte anmelden oder registrieren, um Zugriff zu erhalten.
+                Please sign in or register to access the dashboards.
               </span>
             )}
           </div>
         </header>
 
         <div className="flex flex-col lg:flex-row gap-6">
-          {/* Seiten-Navigation */}
+
+          {/* Navigation */}
           <nav className="lg:w-64 flex-shrink-0">
             <div className="bg-gray-900/70 border border-gray-800 rounded-xl p-4 shadow-xl shadow-black/40">
               <p className="text-xs font-semibold text-gray-400 mb-3">
-                Ansichten
+                Views
               </p>
               <div className="flex lg:flex-col gap-2">
+
+                {/* Overview */}
                 <button
                   onClick={() => setActiveView('overview')}
                   className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -92,6 +97,8 @@ const AppContent: React.FC = () => {
                 >
                   CH25 Kingdom Analytics
                 </button>
+
+                {/* Honor Ranking */}
                 <button
                   onClick={() => setActiveView('honor')}
                   className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -102,6 +109,8 @@ const AppContent: React.FC = () => {
                 >
                   Honor Ranking
                 </button>
+
+                {/* Player Analytics */}
                 <button
                   onClick={() => setActiveView('analytics')}
                   className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -112,6 +121,8 @@ const AppContent: React.FC = () => {
                 >
                   Player Analytics
                 </button>
+
+                {/* Admin */}
                 {isAdmin && (
                   <button
                     onClick={() => setActiveView('admin')}
@@ -121,16 +132,16 @@ const AppContent: React.FC = () => {
                         : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
                     }`}
                   >
-                    Admin · Benutzer
+                    Admin · Users
                   </button>
                 )}
               </div>
             </div>
           </nav>
 
-          {/* Hauptinhalt */}
+          {/* CONTENT AREA */}
           <main className="flex-1 space-y-6">
-            {/* Inhalt je nach aktiver View */}
+
             {activeView === 'overview' && (
               <ProtectedRoute accessType="overview">
                 <OverviewDashboard isAdmin={!!isAdmin} backendUrl={BACKEND_URL} />
@@ -158,7 +169,7 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             )}
 
-            {/* Chart nur für angemeldete & freigegebene User */}
+            {/* Show chart only for logged-in & approved users */}
             {user && user.isApproved && (
               <div className="mt-4">
                 <PowerHistoryChart />

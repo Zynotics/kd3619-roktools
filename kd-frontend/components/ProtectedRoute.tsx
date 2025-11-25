@@ -21,7 +21,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     refreshUser,
   } = useAuth();
 
-  // User-Daten aktualisieren wenn Komponente mounted
+  // Refresh user data when component mounts
   useEffect(() => {
     if (user) {
       refreshUser();
@@ -36,17 +36,19 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
+  // Not logged in → show login prompt
   if (!user) {
     return <LoginPrompt />;
   }
 
   const isAdmin = user.role === 'admin';
 
-  // noch nicht generell freigegeben?
+  // Not approved yet (and not admin)
   if (!isAdmin && !user.isApproved) {
     return <ApprovalPending />;
   }
 
+  // Check access rights
   let hasAccess = false;
   if (isAdmin) {
     hasAccess = true;
@@ -56,11 +58,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     if (accessType === 'analytics') hasAccess = hasAnalyticsAccess;
   }
 
+  // No permission → show pending-style card
   if (!hasAccess) {
-    // einfacher Re-Use: gleiche Karte wie bei ausstehender Freigabe
     return <ApprovalPending />;
   }
 
+  // Allowed → render target component
   return <>{children}</>;
 };
 
