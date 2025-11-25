@@ -1,7 +1,6 @@
 /**
  * Formats a number as an integer with thousand separators (dots).
- * e.g. 1234567  -> "1.234.567"
- *      -9876    -> "-9.876"
+ * e.g. 1234567 -> "1.234.567", -9876 -> "-9.876"
  */
 export const formatNumber = (num: number): string => {
   if (typeof num !== 'number' || isNaN(num)) {
@@ -57,14 +56,18 @@ export const parseGermanNumber = (value: any): number => {
  * Cleans file names for display:
  * - removes .csv / .CSV
  * - replaces underscores with spaces
+ * - trims whitespace at both ends (ohne String.trim)
  */
 export const cleanFileName = (filename: string): string => {
   if (!filename) return '';
 
   const s = String(filename);
-  return s
-    .replace(/\.csv$/i, '')  // remove .csv or .CSV at the end
-    .replace(/_/g, ' ');
+  // remove .csv or .CSV at end
+  const noExt = s.replace(/\.csv$/i, '');
+  // replace underscores with spaces
+  const withSpaces = noExt.replace(/_/g, ' ');
+  // manuelles "trim" über Regex (kein .trim)
+  return withSpaces.replace(/^\s+|\s+$/g, '');
 };
 
 /**
@@ -113,7 +116,7 @@ export const findColumnIndex = (
 
   for (let i = 0; i < headers.length; i++) {
     const header = headers[i];
-    if (!header && header !== 0) continue;
+    if (header === undefined || header === null) continue;
 
     const normalizedHeader = String(header)
       .toLowerCase()
