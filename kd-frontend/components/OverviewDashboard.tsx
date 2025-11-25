@@ -41,7 +41,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch(`${backendUrl}/overview/files`);
+      const response = await fetch(`${backendUrl}/overview/files-data`);
       if (!response.ok) throw new Error('Failed to fetch files from server.');
       const data = await response.json();
       setUploadedFiles(data);
@@ -429,7 +429,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
         onSelectPlayer={handleSelectPlayer}
         isComparisonLoaded={!!comparisonStats}
       />
-
+f
       {/* ComparisonSection with summary AND tables */}
       <ComparisonSection
         stats={comparisonStats}

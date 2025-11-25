@@ -45,7 +45,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl }) 
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch(`${backendUrl}/honor/files`);
+      const response = await fetch(`${backendUrl}/honor/files-data`);
       if (!response.ok) throw new Error('Failed to fetch files from server.');
       const data = await response.json();
       setUploadedFiles(data);
