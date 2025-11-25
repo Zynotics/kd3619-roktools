@@ -61,7 +61,7 @@ const LoginPrompt: React.FC = () => {
       // 👉 Spezielle, klare Meldung für falsche Gov ID
       if (msg.toLowerCase().includes('gov id')) {
         setError(
-          'Die angegebene Gov ID wurde in den hochgeladenen Daten nicht gefunden. ' +
+          'Die angegebene Gov ID wurde nicht gefunden. ' +
           'Bitte überprüfe die Eingabe oder wende dich an einen Admin.'
         );
       } else {
