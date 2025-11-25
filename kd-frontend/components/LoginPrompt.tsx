@@ -56,7 +56,17 @@ const LoginPrompt: React.FC = () => {
         setConfirmPassword('');
       }
     } catch (err: any) {
-      setError(err.message || 'Ein Fehler ist aufgetreten.');
+      const msg = err?.message || 'Ein Fehler ist aufgetreten.';
+
+      // 👉 Spezielle, klare Meldung für falsche Gov ID
+      if (msg.toLowerCase().includes('gov id')) {
+        setError(
+          'Die angegebene Gov ID wurde in den hochgeladenen Daten nicht gefunden. ' +
+          'Bitte überprüfe die Eingabe oder wende dich an einen Admin.'
+        );
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsLoading(false);
     }
