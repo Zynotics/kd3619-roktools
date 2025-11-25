@@ -3,12 +3,14 @@ import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { useAuth } from './AuthContext';
 
+type UserRole = 'user' | 'r4' | 'r5' | 'admin';
+
 interface User {
   id: string;
   email: string;
   username: string;
   isApproved: boolean;
-  role: 'user' | 'admin';
+  role: UserRole;
   createdAt: string;
   governorId?: string | null;
   canAccessHonor?: boolean;
@@ -97,19 +99,14 @@ const AdminUserManagement: React.FC = () => {
       );
     } catch (err: any) {
       console.error('💥 Frontend Error in toggleApproval:', err);
-      alert(
-        'Action could not be completed: ' + (err.message || String(err))
-      );
+      alert('Action could not be completed: ' + (err.message || String(err)));
     }
   };
 
   const updateAccess = async (
     targetUser: User,
     changes: Partial<
-      Pick<
-        User,
-        'canAccessHonor' | 'canAccessAnalytics' | 'canAccessOverview'
-      >
+      Pick<User, 'canAccessHonor' | 'canAccessAnalytics' | 'canAccessOverview'>
     >
   ) => {
     try {
@@ -139,9 +136,7 @@ const AdminUserManagement: React.FC = () => {
       if (!response.ok) {
         const errorText = await response.text();
         console.log('❌ Access update error:', errorText);
-        throw new Error(
-          errorText || 'Could not update access rights.'
-        );
+        throw new Error(errorText || 'Could not update access rights.');
       }
 
       setUsers((prev) =>
@@ -161,6 +156,40 @@ const AdminUserManagement: React.FC = () => {
       alert(
         'Access rights could not be changed: ' + (err.message || String(err))
       );
+    }
+  };
+
+  const updateRole = async (targetUser: User, newRole: UserRole) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error('Not signed in');
+
+      const response = await fetch(`${BACKEND_URL}/api/admin/users/role`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: targetUser.id,
+          role: newRole,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('❌ Role update error:', errorText);
+        throw new Error(errorText || 'Could not update role.');
+      }
+
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === targetUser.id ? { ...u, role: newRole } : u
+        )
+      );
+    } catch (err: any) {
+      console.error('💥 Frontend Error in updateRole:', err);
+      alert('Role could not be changed: ' + (err.message || String(err)));
     }
   };
 
@@ -213,11 +242,20 @@ const AdminUserManagement: React.FC = () => {
     );
   }
 
+  const canManageUsers =
+    currentUser?.role === 'admin' || currentUser?.role === 'r5';
+
   return (
     <Card className="p-6">
       <h2 className="text-2xl font-bold text-white mb-6">
         User Management
       </h2>
+
+      {!canManageUsers && (
+        <p className="text-sm text-yellow-400 mb-4">
+          You do not have permission to manage users.
+        </p>
+      )}
 
       <Table>
         <TableHeader>
@@ -276,90 +314,86 @@ const AdminUserManagement: React.FC = () => {
               <TableCell align="center">
                 {new Date(user.createdAt).toLocaleDateString('en-GB')}
               </TableCell>
+
+              {/* ROLE */}
               <TableCell align="center">
-                <span
-                  className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                    user.role === 'admin'
-                      ? 'bg-purple-500 text-white'
-                      : 'bg-gray-500 text-white'
-                  }`}
-                >
-                  {user.role === 'admin' ? 'Admin' : 'User'}
-                </span>
+                {!canManageUsers || user.id === currentUser?.id ? (
+                  <span className="text-gray-300 text-sm capitalize">
+                    {user.role}
+                  </span>
+                ) : (
+                  <select
+                    value={user.role}
+                    onChange={(e) =>
+                      updateRole(user, e.target.value as UserRole)
+                    }
+                    className="bg-gray-800 border border-gray-600 text-gray-200 text-xs px-2 py-1 rounded-lg"
+                  >
+                    <option value="user">User</option>
+                    <option value="r4">R4</option>
+                    <option value="r5">R5</option>
+                  </select>
+                )}
               </TableCell>
 
               {/* Access: Honor */}
               <TableCell align="center">
-                {user.role === 'admin' ? (
-                  <span className="text-xs text-green-400 font-semibold">
-                    always
-                  </span>
-                ) : (
-                  <button
-                    onClick={() =>
-                      updateAccess(user, {
-                        canAccessHonor: !user.canAccessHonor,
-                      })
-                    }
-                    className={`px-2 py-1 rounded text-xs font-semibold ${
-                      user.canAccessHonor
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-700 text-gray-300'
-                    }`}
-                  >
-                    {user.canAccessHonor ? 'Yes' : 'No'}
-                  </button>
-                )}
+                <button
+                  disabled={!canManageUsers}
+                  onClick={() =>
+                    updateAccess(user, {
+                      canAccessHonor: !user.canAccessHonor,
+                    })
+                  }
+                  className={`px-2 py-1 rounded text-xs font-semibold ${
+                    user.canAccessHonor
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-700 text-gray-300'
+                  } ${!canManageUsers ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {user.canAccessHonor ? 'Yes' : 'No'}
+                </button>
               </TableCell>
 
               {/* Access: Analytics */}
               <TableCell align="center">
-                {user.role === 'admin' ? (
-                  <span className="text-xs text-green-400 font-semibold">
-                    always
-                  </span>
-                ) : (
-                  <button
-                    onClick={() =>
-                      updateAccess(user, {
-                        canAccessAnalytics: !user.canAccessAnalytics,
-                      })
-                    }
-                    className={`px-2 py-1 rounded text-xs font-semibold ${
-                      user.canAccessAnalytics
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-700 text-gray-300'
-                    }`}
-                  >
-                    {user.canAccessAnalytics ? 'Yes' : 'No'}
-                  </button>
-                )}
+                <button
+                  disabled={!canManageUsers}
+                  onClick={() =>
+                    updateAccess(user, {
+                      canAccessAnalytics: !user.canAccessAnalytics,
+                    })
+                  }
+                  className={`px-2 py-1 rounded text-xs font-semibold ${
+                    user.canAccessAnalytics
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-700 text-gray-300'
+                  } ${!canManageUsers ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {user.canAccessAnalytics ? 'Yes' : 'No'}
+                </button>
               </TableCell>
 
               {/* Access: Overview */}
               <TableCell align="center">
-                {user.role === 'admin' ? (
-                  <span className="text-xs text-green-400 font-semibold">
-                    always
-                  </span>
-                ) : (
-                  <button
-                    onClick={() =>
-                      updateAccess(user, {
-                        canAccessOverview: !user.canAccessOverview,
-                      })
-                    }
-                    className={`px-2 py-1 rounded text-xs font-semibold ${
-                      user.canAccessOverview
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-700 text-gray-300'
-                    }`}
-                  >
-                    {user.canAccessOverview ? 'Yes' : 'No'}
-                  </button>
-                )}
+                <button
+                  disabled={!canManageUsers}
+                  onClick={() =>
+                    updateAccess(user, {
+                      canAccessOverview: !user.canAccessOverview,
+                    })
+                  }
+                  className={`px-2 py-1 rounded text-xs font-semibold ${
+                    user.canAccessOverview
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-700 text-gray-300'
+                  } ${!canManageUsers ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {user.canAccessOverview ? 'Yes' : 'No'}
+                </button>
               </TableCell>
 
+              {/* Approval */}
               <TableCell align="center">
                 <span
                   className={`px-2 py-1 rounded-full text-xs font-semibold ${
@@ -372,8 +406,9 @@ const AdminUserManagement: React.FC = () => {
                 </span>
               </TableCell>
 
+              {/* Actions */}
               <TableCell align="center">
-                {user.id !== currentUser?.id && user.role !== 'admin' && (
+                {user.id !== currentUser?.id && user.role !== 'admin' && canManageUsers ? (
                   <div className="flex gap-2 justify-center">
                     {!user.isApproved ? (
                       <button
@@ -399,11 +434,8 @@ const AdminUserManagement: React.FC = () => {
                     </button>
                   </div>
                 )}
-                {user.id === currentUser?.id && (
-                  <span className="text-gray-500 text-sm">Own account</span>
-                )}
-                {user.role === 'admin' && user.id !== currentUser?.id && (
-                  <span className="text-gray-500 text-sm">Admin</span>
+                {(!canManageUsers || user.id === currentUser?.id) && (
+                  <span className="text-gray-500 text-sm">No actions</span>
                 )}
               </TableCell>
             </TableRow>

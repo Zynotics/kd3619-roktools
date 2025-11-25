@@ -6,12 +6,14 @@ import React, {
   ReactNode,
 } from 'react';
 
+type UserRole = 'user' | 'r4' | 'r5' | 'admin';
+
 interface User {
   id: string;
   email: string;
   username: string;
   isApproved: boolean;
-  role: 'user' | 'admin';
+  role: UserRole;
   governorId?: string | null;
   canAccessHonor?: boolean;
   canAccessAnalytics?: boolean;
@@ -76,7 +78,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             email: data.email,
             username: data.username,
             isApproved: !!data.isApproved,
-            role: data.role,
+            role: data.role as UserRole,
             governorId: data.governorId ?? null,
             canAccessHonor: !!data.canAccessHonor,
             canAccessAnalytics: !!data.canAccessAnalytics,
@@ -124,7 +126,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       email: data.user.email,
       username: data.user.username,
       isApproved: !!data.user.isApproved,
-      role: data.user.role,
+      role: data.user.role as UserRole,
       governorId: data.user.governorId ?? null,
       canAccessHonor: !!data.user.canAccessHonor,
       canAccessAnalytics: !!data.user.canAccessAnalytics,
@@ -193,7 +195,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         email: data.email,
         username: data.username,
         isApproved: !!data.isApproved,
-        role: data.role,
+        role: data.role as UserRole,
         governorId: data.governorId ?? null,
         canAccessHonor: !!data.canAccessHonor,
         canAccessAnalytics: !!data.canAccessAnalytics,
@@ -204,14 +206,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const isAdmin = user?.role === 'admin';
+  const isElevated =
+    user?.role === 'admin' || user?.role === 'r4' || user?.role === 'r5';
 
   const hasOverviewAccess =
-    !!user && (isAdmin || (user.isApproved && !!user.canAccessOverview));
+    !!user && (isElevated || (user.isApproved && !!user.canAccessOverview));
   const hasHonorAccess =
-    !!user && (isAdmin || (user.isApproved && !!user.canAccessHonor));
+    !!user && (isElevated || (user.isApproved && !!user.canAccessHonor));
   const hasAnalyticsAccess =
-    !!user && (isAdmin || (user.isApproved && !!user.canAccessAnalytics));
+    !!user && (isElevated || (user.isApproved && !!user.canAccessAnalytics));
 
   return (
     <AuthContext.Provider
