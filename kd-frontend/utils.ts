@@ -1,6 +1,6 @@
 /**
  * Formats a number as an integer with thousand separators (dots).
- * e.g. 1234567 -> "1.234.567", -9876 -> "-9.876"
+ * e.g., 1234567 -> "1.234.567", -9876 -> "-9.876"
  */
 export const formatNumber = (num: number): string => {
   if (typeof num !== 'number' || isNaN(num)) {
@@ -66,7 +66,7 @@ export const cleanFileName = (filename: string): string => {
   const noExt = s.replace(/\.csv$/i, '');
   // replace underscores with spaces
   const withSpaces = noExt.replace(/_/g, ' ');
-  // manuelles "trim" über Regex (kein .trim)
+  // "trim" über Regex (kein .trim())
   return withSpaces.replace(/^\s+|\s+$/g, '');
 };
 
