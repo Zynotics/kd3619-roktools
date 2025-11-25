@@ -36,7 +36,7 @@ const AdminUserManagement: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       if (!token) {
-        setError('Nicht angemeldet');
+        setError('Not signed in');
         return;
       }
 
@@ -51,15 +51,15 @@ const AdminUserManagement: React.FC = () => {
         const userData: User[] = await response.json();
         setUsers(userData);
       } else if (response.status === 403) {
-        setError('Keine Admin-Berechtigung');
+        setError('No admin privileges');
       } else {
         const errorText = await response.text();
         console.log('❌ Users fetch failed:', errorText);
-        throw new Error('Fehler beim Laden der Benutzer');
+        throw new Error('Error loading users');
       }
     } catch (err) {
       console.error('💥 Error loading users:', err);
-      setError('Konnte Benutzer nicht laden');
+      setError('Could not load users');
     } finally {
       setIsLoading(false);
     }
@@ -69,7 +69,7 @@ const AdminUserManagement: React.FC = () => {
     try {
       const token = localStorage.getItem('authToken');
       if (!token) {
-        throw new Error('Nicht angemeldet');
+        throw new Error('Not signed in');
       }
 
       const response = await fetch(`${BACKEND_URL}/api/admin/users/approve`, {
@@ -87,7 +87,7 @@ const AdminUserManagement: React.FC = () => {
       if (!response.ok) {
         const errorText = await response.text();
         console.log('❌ Server Error:', errorText);
-        throw new Error(errorText || 'Serverfehler');
+        throw new Error(errorText || 'Server error');
       }
 
       setUsers((prev) =>
@@ -97,24 +97,30 @@ const AdminUserManagement: React.FC = () => {
       );
     } catch (err: any) {
       console.error('💥 Frontend Error in toggleApproval:', err);
-      alert('Aktion konnte nicht durchgeführt werden: ' + (err.message || err));
+      alert(
+        'Action could not be completed: ' + (err.message || String(err))
+      );
     }
   };
 
   const updateAccess = async (
     targetUser: User,
-    changes: Partial<Pick<User, 'canAccessHonor' | 'canAccessAnalytics' | 'canAccessOverview'>>
+    changes: Partial<
+      Pick<
+        User,
+        'canAccessHonor' | 'canAccessAnalytics' | 'canAccessOverview'
+      >
+    >
   ) => {
     try {
       const token = localStorage.getItem('authToken');
       if (!token) {
-        throw new Error('Nicht angemeldet');
+        throw new Error('Not signed in');
       }
 
       const body = {
         userId: targetUser.id,
-        canAccessHonor:
-          changes.canAccessHonor ?? !!targetUser.canAccessHonor,
+        canAccessHonor: changes.canAccessHonor ?? !!targetUser.canAccessHonor,
         canAccessAnalytics:
           changes.canAccessAnalytics ?? !!targetUser.canAccessAnalytics,
         canAccessOverview:
@@ -133,7 +139,9 @@ const AdminUserManagement: React.FC = () => {
       if (!response.ok) {
         const errorText = await response.text();
         console.log('❌ Access update error:', errorText);
-        throw new Error(errorText || 'Zugriffsrechte konnten nicht aktualisiert werden.');
+        throw new Error(
+          errorText || 'Could not update access rights.'
+        );
       }
 
       setUsers((prev) =>
@@ -150,20 +158,22 @@ const AdminUserManagement: React.FC = () => {
       );
     } catch (err: any) {
       console.error('💥 Frontend Error in updateAccess:', err);
-      alert('Zugriffsrechte konnten nicht geändert werden: ' + (err.message || err));
+      alert(
+        'Access rights could not be changed: ' + (err.message || String(err))
+      );
     }
   };
 
   const deleteUser = async (userId: string, username: string) => {
     const confirmed = window.confirm(
-      `Benutzer "${username}" wirklich dauerhaft löschen?\nDies kann nicht rückgängig gemacht werden.`
+      `Really permanently delete user "${username}"?\nThis cannot be undone.`
     );
     if (!confirmed) return;
 
     try {
       const token = localStorage.getItem('authToken');
       if (!token) {
-        throw new Error('Nicht angemeldet');
+        throw new Error('Not signed in');
       }
 
       const response = await fetch(`${BACKEND_URL}/api/admin/users/${userId}`, {
@@ -176,13 +186,13 @@ const AdminUserManagement: React.FC = () => {
       if (!response.ok) {
         const errorText = await response.text();
         console.log('❌ Delete Server Error:', errorText);
-        throw new Error(errorText || 'Serverfehler beim Löschen');
+        throw new Error(errorText || 'Server error while deleting');
       }
 
       setUsers((prev) => prev.filter((user) => user.id !== userId));
     } catch (err: any) {
       console.error('💥 Frontend Error in deleteUser:', err);
-      alert('Benutzer konnte nicht gelöscht werden: ' + (err.message || err));
+      alert('User could not be deleted: ' + (err.message || String(err)));
     }
   };
 
@@ -190,7 +200,7 @@ const AdminUserManagement: React.FC = () => {
     return (
       <Card className="p-6 text-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto" />
-        <p className="mt-2 text-gray-400">Lade Benutzer.</p>
+        <p className="mt-2 text-gray-400">Loading users…</p>
       </Card>
     );
   }
@@ -205,25 +215,27 @@ const AdminUserManagement: React.FC = () => {
 
   return (
     <Card className="p-6">
-      <h2 className="text-2xl font-bold text-white mb-6">Benutzerverwaltung</h2>
+      <h2 className="text-2xl font-bold text-white mb-6">
+        User Management
+      </h2>
 
       <Table>
         <TableHeader>
           <tr>
             <TableCell align="left" header>
-              Benutzername
+              Username
             </TableCell>
             <TableCell align="left" header>
-              E-Mail
+              E-mail
             </TableCell>
             <TableCell align="center" header>
               Gov ID
             </TableCell>
             <TableCell align="center" header>
-              Registriert am
+              Registered on
             </TableCell>
             <TableCell align="center" header>
-              Rolle
+              Role
             </TableCell>
             <TableCell align="center" header>
               Honor
@@ -235,10 +247,10 @@ const AdminUserManagement: React.FC = () => {
               Overview
             </TableCell>
             <TableCell align="center" header>
-              Freigabe
+              Approval
             </TableCell>
             <TableCell align="center" header>
-              Aktionen
+              Actions
             </TableCell>
           </tr>
         </TableHeader>
@@ -248,7 +260,9 @@ const AdminUserManagement: React.FC = () => {
               <TableCell align="left" className="font-medium text-white">
                 {user.username}
                 {user.id === currentUser?.id && (
-                  <span className="ml-2 text-xs text-blue-400">(Aktuell)</span>
+                  <span className="ml-2 text-xs text-blue-400">
+                    (Current)
+                  </span>
                 )}
               </TableCell>
               <TableCell align="left">{user.email}</TableCell>
@@ -260,7 +274,7 @@ const AdminUserManagement: React.FC = () => {
                 </span>
               </TableCell>
               <TableCell align="center">
-                {new Date(user.createdAt).toLocaleDateString('de-DE')}
+                {new Date(user.createdAt).toLocaleDateString('en-GB')}
               </TableCell>
               <TableCell align="center">
                 <span
@@ -273,10 +287,13 @@ const AdminUserManagement: React.FC = () => {
                   {user.role === 'admin' ? 'Admin' : 'User'}
                 </span>
               </TableCell>
-              {/* Zugriff: Honor */}
+
+              {/* Access: Honor */}
               <TableCell align="center">
                 {user.role === 'admin' ? (
-                  <span className="text-xs text-green-400 font-semibold">immer</span>
+                  <span className="text-xs text-green-400 font-semibold">
+                    always
+                  </span>
                 ) : (
                   <button
                     onClick={() =>
@@ -290,14 +307,17 @@ const AdminUserManagement: React.FC = () => {
                         : 'bg-gray-700 text-gray-300'
                     }`}
                   >
-                    {user.canAccessHonor ? 'Ja' : 'Nein'}
+                    {user.canAccessHonor ? 'Yes' : 'No'}
                   </button>
                 )}
               </TableCell>
-              {/* Zugriff: Analytics */}
+
+              {/* Access: Analytics */}
               <TableCell align="center">
                 {user.role === 'admin' ? (
-                  <span className="text-xs text-green-400 font-semibold">immer</span>
+                  <span className="text-xs text-green-400 font-semibold">
+                    always
+                  </span>
                 ) : (
                   <button
                     onClick={() =>
@@ -311,14 +331,17 @@ const AdminUserManagement: React.FC = () => {
                         : 'bg-gray-700 text-gray-300'
                     }`}
                   >
-                    {user.canAccessAnalytics ? 'Ja' : 'Nein'}
+                    {user.canAccessAnalytics ? 'Yes' : 'No'}
                   </button>
                 )}
               </TableCell>
-              {/* Zugriff: Overview */}
+
+              {/* Access: Overview */}
               <TableCell align="center">
                 {user.role === 'admin' ? (
-                  <span className="text-xs text-green-400 font-semibold">immer</span>
+                  <span className="text-xs text-green-400 font-semibold">
+                    always
+                  </span>
                 ) : (
                   <button
                     onClick={() =>
@@ -332,10 +355,11 @@ const AdminUserManagement: React.FC = () => {
                         : 'bg-gray-700 text-gray-300'
                     }`}
                   >
-                    {user.canAccessOverview ? 'Ja' : 'Nein'}
+                    {user.canAccessOverview ? 'Yes' : 'No'}
                   </button>
                 )}
               </TableCell>
+
               <TableCell align="center">
                 <span
                   className={`px-2 py-1 rounded-full text-xs font-semibold ${
@@ -344,9 +368,10 @@ const AdminUserManagement: React.FC = () => {
                       : 'bg-yellow-500 text-black'
                   }`}
                 >
-                  {user.isApproved ? 'Freigegeben' : 'Ausstehend'}
+                  {user.isApproved ? 'Approved' : 'Pending'}
                 </span>
               </TableCell>
+
               <TableCell align="center">
                 {user.id !== currentUser?.id && user.role !== 'admin' && (
                   <div className="flex gap-2 justify-center">
@@ -355,14 +380,14 @@ const AdminUserManagement: React.FC = () => {
                         onClick={() => toggleApproval(user.id, true)}
                         className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors text-sm"
                       >
-                        Freigeben
+                        Approve
                       </button>
                     ) : (
                       <button
                         onClick={() => toggleApproval(user.id, false)}
                         className="bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700 transition-colors text-sm"
                       >
-                        Sperren
+                        Block
                       </button>
                     )}
 
@@ -370,12 +395,12 @@ const AdminUserManagement: React.FC = () => {
                       onClick={() => deleteUser(user.id, user.username)}
                       className="bg-red-700 text-white px-3 py-1 rounded hover:bg-red-800 transition-colors text-sm"
                     >
-                      Löschen
+                      Delete
                     </button>
                   </div>
                 )}
                 {user.id === currentUser?.id && (
-                  <span className="text-gray-500 text-sm">Eigenes Konto</span>
+                  <span className="text-gray-500 text-sm">Own account</span>
                 )}
                 {user.role === 'admin' && user.id !== currentUser?.id && (
                   <span className="text-gray-500 text-sm">Admin</span>
@@ -388,7 +413,7 @@ const AdminUserManagement: React.FC = () => {
 
       {users.length === 0 && (
         <div className="text-center text-gray-400 py-8">
-          Keine Benutzer gefunden
+          No users found
         </div>
       )}
     </Card>

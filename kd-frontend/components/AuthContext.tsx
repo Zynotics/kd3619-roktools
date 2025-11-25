@@ -50,7 +50,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Token aus localStorage holen und User validieren
+  // Load token & validate user
   useEffect(() => {
     const initAuth = async () => {
       const token = localStorage.getItem('authToken');
@@ -104,7 +104,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     if (!res.ok) {
       const text = await res.text();
-      let message = 'Login fehlgeschlagen';
+      let message = 'Login failed';
       try {
         const errJson = JSON.parse(text);
         message = errJson.error || message;
@@ -151,11 +151,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         json = text ? JSON.parse(text) : {};
       } catch {
-        // plain text
+        // Plain text
       }
 
       if (!res.ok) {
-        const message = json.error || 'Registrierung fehlgeschlagen';
+        const message = json.error || 'Registration failed';
         throw new Error(message);
       }
 
