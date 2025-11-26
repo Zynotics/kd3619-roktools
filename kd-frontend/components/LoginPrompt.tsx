@@ -56,24 +56,28 @@ const LoginPrompt: React.FC = () => {
       const existsInFiles = !!data.existsInFiles;
 
       if (existsInUsers) {
-        // Gov ID gehört bereits zu einem Account -> Registrierung nicht erlaubt
+        // Gov ID already bound to an existing account
         const msg =
-          'Für diese Gov ID existiert bereits ein Account. Bitte melde dich an.';
+          'An account already exists for this Gov ID. Please sign in instead.';
         setGovIdStatus('invalid');
         setGovIdMessage(msg);
       } else if (existsInFiles) {
-        // Gov ID kommt in KD-Daten vor und ist noch nicht vergeben
+        // Gov ID is present in KD data and not yet registered
         setGovIdStatus('valid');
-        setGovIdMessage('Gov ID gefunden. Registrierung möglich.');
+        setGovIdMessage('Gov ID found. Registration is possible.');
       } else {
-        // kommt in keinen Uploads vor
+        // Gov ID not found in any uploaded KD data
         setGovIdStatus('invalid');
-        setGovIdMessage('Gov ID wurde in den KD-Daten nicht gefunden.');
+        setGovIdMessage(
+          'Gov ID was not found in the KD data. Please check it or contact an admin.'
+        );
       }
     } catch (e) {
       console.error('Gov ID check failed:', e);
       setGovIdStatus('invalid');
-      setGovIdMessage('Gov ID-Prüfung fehlgeschlagen. Bitte versuche es erneut.');
+      setGovIdMessage(
+        'Gov ID check failed. Please try again or contact an admin.'
+      );
     }
   };
 
@@ -102,7 +106,7 @@ const LoginPrompt: React.FC = () => {
         if (govIdStatus !== 'valid') {
           setError(
             govIdMessage ||
-              'Gov ID ist nicht gültig. Bitte prüfe sie oder kontaktiere einen Admin.'
+              'Gov ID is not valid. Please check it or contact an admin.'
           );
           setIsLoading(false);
           return;
@@ -130,16 +134,23 @@ const LoginPrompt: React.FC = () => {
         (lower.includes('existiert bereits') || lower.includes('already'))
       ) {
         const friendly =
-          'An account already exists for this Gov ID';
+          'An account already exists for this Gov ID. Please sign in instead.';
         setError(friendly);
         setGovIdStatus('invalid');
         setGovIdMessage(friendly);
       } else if (lower.includes('gov id')) {
-        setError(msg);
+        const friendly =
+          'There was a problem with this Gov ID. Please check it or contact an admin.';
+        setError(friendly);
         setGovIdStatus('invalid');
-        if (!govIdMessage) {
-          setGovIdMessage(msg);
-        }
+        setGovIdMessage(friendly);
+      } else if (lower.includes('passwort muss mindestens')) {
+        setError('Password must be at least 6 characters long.');
+      } else if (
+        lower.includes('email oder benutzername ist bereits vergeben') ||
+        lower.includes('email oder benutzername')
+      ) {
+        setError('Email or username is already taken.');
       } else {
         setError(msg);
       }
@@ -247,12 +258,13 @@ const LoginPrompt: React.FC = () => {
               )}
               {govIdStatus === 'valid' && (
                 <p className="text-xs text-green-400 mt-1">
-                  {govIdMessage || 'Gov ID found.'}
+                  {govIdMessage || 'Gov ID found. Registration is possible.'}
                 </p>
               )}
               {govIdStatus === 'invalid' && (
                 <p className="text-xs text-red-400 mt-1">
-                  {govIdMessage || 'Gov ID not valid.'}
+                  {govIdMessage ||
+                    'Gov ID is not valid. Please check it or contact an admin.'}
                 </p>
               )}
             </div>
