@@ -190,13 +190,35 @@ const requireAdmin = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
-  // Only admin and R5 are allowed to access admin endpoints
-  if (req.user.role !== 'admin' && req.user.role !== 'r5') {
+
+  try {
+    // Rolle IMMER aus der Datenbank holen (aktuellster Stand)
+    const stmt = db.prepare('SELECT role FROM users WHERE id = ?');
+    const dbUser = stmt.get(req.user.id);
+
+    if (!dbUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const role = dbUser.role;
+
+    // Nur admin & r5 dürfen Admin-Endpunkte aufrufen
+    if (role !== 'admin' && role !== 'r5') {
+      return res
+        .status(403)
+        .json({ error: 'Admin or R5 privileges required' });
+    }
+
+    // Rolle am Request-Objekt aktualisieren (falls sich was geändert hat)
+    req.user.role = role;
+
+    next();
+  } catch (error) {
+    console.error('Error checking admin privileges:', error);
     return res
-      .status(403)
-      .json({ error: 'Admin or R5 privileges required' });
+      .status(500)
+      .json({ error: 'Failed to verify admin privileges' });
   }
-  next();
 };
 
 
