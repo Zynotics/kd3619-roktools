@@ -19,7 +19,8 @@ const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('overview');
   const { user, logout, isLoading } = useAuth();
 
-  const isAdmin = user?.role === 'admin';
+  // 👉 R5 wird hier wie Admin behandelt
+  const isAdmin = user?.role === 'admin' || user?.role === 'r5';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
@@ -37,7 +38,7 @@ const AppContent: React.FC = () => {
                   KD3619 Kingdom Analytics
                 </h1>
                 <p className="text-xs text-gray-400">
-        
+                  {/* optionaler Untertitel */}
                 </p>
               </div>
             </div>
@@ -113,6 +114,7 @@ const AppContent: React.FC = () => {
                 Player Analytics
               </button>
 
+              {/* 👉 Admin-Users Button jetzt auch für R5 */}
               {isAdmin && (
                 <button
                   onClick={() => setActiveView('admin')}
@@ -153,6 +155,7 @@ const AppContent: React.FC = () => {
             </ProtectedRoute>
           )}
 
+          {/* 👉 Admin-View nur rendern, wenn isAdmin (Admin oder R5) */}
           {activeView === 'admin' && isAdmin && (
             <ProtectedRoute>
               <AdminUserManagement />
