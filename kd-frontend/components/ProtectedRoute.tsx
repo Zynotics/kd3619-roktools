@@ -41,9 +41,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <LoginPrompt />;
   }
 
-  const isAdmin = user.role === 'admin';
+  // 👉 R5 wird hier wie Admin behandelt (volle Rechte, keine Approval-Checks)
+  const isAdmin = user.role === 'admin' || user.role === 'r5';
 
-  // Not approved yet (and not admin)
+  // Not approved yet (and not admin/R5)
   if (!isAdmin && !user.isApproved) {
     return <ApprovalPending />;
   }
