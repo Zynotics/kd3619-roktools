@@ -1,5 +1,3 @@
-// OverviewDashboard.tsx – NEU AUFGEBAUT mit korrekter ComparisonStats-Struktur
-
 import React, { useEffect, useState, useCallback } from 'react';
 import FileUpload from './FileUpload';
 import FileList from './FileList';
@@ -63,8 +61,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       setUploadedFiles(data || []);
 
       if (data.length >= 2) {
-        // Reihenfolge aus DB (fileOrder, uploadDate) ist schon sortiert,
-        // wir suchen einfach "vorletzte" und "letzte" Datei raus.
+        // Reihenfolge kommt bereits sortiert aus dem Backend (fileOrder, uploadDate)
         const last = data[data.length - 1];
         const secondLast = data[data.length - 2];
         setStartFileId(secondLast.id);
@@ -105,14 +102,15 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     }
   };
 
+  // 🔁 Reihenfolge aktualisieren & im Backend speichern
   const handleReorderFiles = async (reorderedFiles: UploadedFile[]) => {
-    // Frontend-Order aktualisieren
+    // Frontend-Order sofort aktualisieren
     setUploadedFiles(reorderedFiles);
 
-    // Reihenfolge auch im Backend speichern (damit nach Reload gleich bleibt)
+    // Reihenfolge auch im Backend persistent speichern
     try {
       const order = reorderedFiles.map((f) => f.id);
-      await fetch(`${backendUrl}/overview/reorder`, {
+      await fetch(`${backendUrl}/overview/files/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ order }),
@@ -124,51 +122,61 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
   // ---------------------------------------------------
   // Hilfsfunktion: Datei -> PlayerInfo[]
+  // arbeitet direkt mit headers + data aus der DB
   // ---------------------------------------------------
   const parseFileToPlayers = (file: UploadedFile): PlayerInfo[] => {
     if (!file || !file.headers || !file.data) return [];
 
     const headers = file.headers;
 
-    const getVal = (row: any[], keywords: string[]): number => {
+    const getNumber = (row: any[], keywords: string[]): number => {
       const idx = findColumnIndex(headers, keywords);
-      if (idx === undefined) return 0;
-      return parseGermanNumber(row[idx]);
+      if (idx === undefined || idx < 0 || idx >= row.length) return 0;
+      const raw = row[idx];
+      if (raw === null || raw === undefined) return 0;
+      return parseGermanNumber(String(raw));
     };
 
     const getString = (row: any[], keywords: string[]): string => {
       const idx = findColumnIndex(headers, keywords);
-      if (idx === undefined) return '';
+      if (idx === undefined || idx < 0 || idx >= row.length) return '';
       const v = row[idx];
-      return v !== undefined && v !== null ? String(v) : '';
+      return v === null || v === undefined ? '' : String(v);
     };
 
     const players: PlayerInfo[] = [];
 
     file.data.forEach((row: any[]) => {
-      const id = getString(row, ['governorid', 'id']);
-      const name = getString(row, ['name']);
-      const alliance = getString(row, ['alliance']);
+      const id = getString(row, ['governorid', 'governor id', 'id', 'gov id']);
+      const name = getString(row, ['name', 'player name', 'playername']);
+      const alliance = getString(row, ['alliance', 'allianz', 'alliance tag']);
 
-      const power = getVal(row, ['power']);
-      const troopsPower = getVal(row, ['troopspower']);
-      const totalKillPoints = getVal(row, ['killpoints', 'kp']);
-      const deadTroops = getVal(row, ['dead']);
+      const power = getNumber(row, ['power', 'macht']);
+      const troopsPower = getNumber(row, ['troopspower', 'troops power']);
+      const totalKillPoints = getNumber(row, [
+        'killpoints',
+        'kill points',
+        'kills',
+        'kp',
+      ]);
+      const deadTroops = getNumber(row, ['deadtroops', 'dead troops', 'dead']);
 
-      const t1Kills = getVal(row, ['t1', 't1kills']);
-      const t2Kills = getVal(row, ['t2', 't2kills']);
-      const t3Kills = getVal(row, ['t3', 't3kills']);
-      const t4Kills = getVal(row, ['t4', 't4kills']);
-      const t5Kills = getVal(row, ['t5', 't5kills']);
+      const t1Kills = getNumber(row, ['t1', 't1 kills']);
+      const t2Kills = getNumber(row, ['t2', 't2 kills']);
+      const t3Kills = getNumber(row, ['t3', 't3 kills']);
+      const t4Kills = getNumber(row, ['t4', 't4 kills', 'tier4']);
+      const t5Kills = getNumber(row, ['t5', 't5 kills', 'tier5']);
 
-      // optionale Felder – wenn nicht vorhanden, bleiben sie 0
-      const cityHall = getVal(row, ['cityhall', 'ch']);
-      const techPower = getVal(row, ['techpower']);
-      const buildingPower = getVal(row, ['buildingpower']);
-      const commanderPower = getVal(row, ['commanderpower']);
+      const cityHall = getNumber(row, ['cityhall', 'city hall', 'ch']);
+      const techPower = getNumber(row, ['techpower', 'tech power']);
+      const buildingPower = getNumber(row, ['buildingpower', 'building power']);
+      const commanderPower = getNumber(row, [
+        'commanderpower',
+        'commander power',
+      ]);
 
       if (!id && !name && power === 0 && troopsPower === 0) {
-        // offensichtliche Leere / Summenzeile o.Ä. -> überspringen
+        // offensichtlich leere/summe Zeile
         return;
       }
 
@@ -219,7 +227,6 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       const data1 = parseFileToPlayers(startFile);
       const data2 = parseFileToPlayers(endFile);
 
-      // Totals berechnen
       const totalPowerFile1 = data1.reduce((sum, p) => sum + (p.power || 0), 0);
       const totalPowerFile2 = data2.reduce((sum, p) => sum + (p.power || 0), 0);
 
@@ -250,7 +257,6 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         0
       );
 
-      // Player-Maps für schnellen Zugriff
       const map1 = new Map<string, PlayerInfo>();
       data1.forEach((p) => {
         if (p.id) map1.set(p.id, p);
@@ -261,7 +267,6 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         if (p.id) map2.set(p.id, p);
       });
 
-      // Stat-Changes für Spieler, die in beiden Dateien vorkommen
       const playerStatChanges: PlayerStatChange[] = [];
 
       data2.forEach((p2) => {
@@ -293,12 +298,9 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         });
       });
 
-      // Neue Spieler: in File2, aber nicht in File1
       const newPlayers: PlayerInfo[] = data2.filter(
         (p2) => p2.id && !map1.has(p2.id)
       );
-
-      // Verschwundene Spieler: in File1, aber nicht in File2
       const disappearedPlayers: PlayerInfo[] = data1.filter(
         (p1) => p1.id && !map2.has(p1.id)
       );
@@ -416,7 +418,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         </div>
       )}
 
-      {/* Upload + File list – nur für R4, R5 & Admin */}
+      {/* Upload + File list – only for R4, R5 & Admin */}
       {canManageFiles && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
@@ -439,7 +441,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         <PowerHistoryChart files={uploadedFiles || []} />
       </div>
 
-      {/* Vergleichs-Steuerung */}
+      {/* Comparison controls */}
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
         <h3 className="text-lg font-semibold text-gray-200 mb-4">
           Comparison Controls
@@ -499,7 +501,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         </div>
       </div>
 
-      {/* Suche + Detail-View */}
+      {/* Search + Detail view */}
       <PlayerSearch
         query={searchQuery}
         setQuery={setSearchQuery}
@@ -511,7 +513,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         isComparisonLoaded={!!comparisonStats?.playerStatChanges}
       />
 
-      {/* ComparisonSection mit Summary + Tabellen */}
+      {/* ComparisonSection with summary + tables */}
       <ComparisonSection
         stats={comparisonStats}
         error={comparisonError}
