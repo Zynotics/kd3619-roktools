@@ -130,7 +130,7 @@ const LoginPrompt: React.FC = () => {
         (lower.includes('existiert bereits') || lower.includes('already'))
       ) {
         const friendly =
-          'Für diese Gov ID existiert bereits ein Account. Bitte melde dich an.';
+          'An account already exists for this Gov ID';
         setError(friendly);
         setGovIdStatus('invalid');
         setGovIdMessage(friendly);
