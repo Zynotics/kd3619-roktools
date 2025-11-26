@@ -425,7 +425,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     const normalizedGovId = String(governorId).trim();
 
-    // ❗ 1) Prüfen, ob es schon einen Account mit dieser Gov ID gibt
+    // 1) Prüfen, ob es schon einen Account mit dieser Gov ID gibt
     if (userGovIdExists(normalizedGovId)) {
       return res.status(400).json({
         error: 'Für diese Gov ID existiert bereits ein Account.',
@@ -445,21 +445,30 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    // (Optional) Wenn du sicherstellen willst, dass die Gov ID
-    // wirklich in hochgeladenen Dateien existiert:
+    // OPTIONAL: nur erlauben, wenn Gov ID in den Upload-Dateien existiert
     // if (!governorIdExists(normalizedGovId)) {
     //   return res.status(400).json({
     //     error: 'Diese Gov ID wurde in den Uploads nicht gefunden',
     //   });
     // }
 
+    // 3) Passwort hashen (hier braucht es das "await" → darum async-Funktion)
     const passwordHash = await bcrypt.hash(password, 10);
+
     const userId = 'user-' + Date.now();
 
     const stmt = db.prepare(`
       INSERT INTO users (
-        id, email, username, password_hash, is_approved, role,
-        governor_id, can_access_honor, can_access_analytics, can_access_overview
+        id,
+        email,
+        username,
+        password_hash,
+        is_approved,
+        role,
+        governor_id,
+        can_access_honor,
+        can_access_analytics,
+        can_access_overview
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
@@ -469,15 +478,15 @@ app.post('/api/auth/register', async (req, res) => {
       email,
       username,
       passwordHash,
-      0, // is_approved
-      'user', // role
+      0,          // is_approved
+      'user',     // role
       normalizedGovId,
-      0,
-      0,
-      0
+      0,          // can_access_honor
+      0,          // can_access_analytics
+      0           // can_access_overview
     );
 
-    res.json({
+    return res.json({
       message:
         'Registrierung erfolgreich. Bitte warten Sie auf die Freigabe durch einen Administrator.',
       user: {
@@ -494,7 +503,7 @@ app.post('/api/auth/register', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error during registration:', error);
-    res.status(500).json({ error: 'Registrierung fehlgeschlagen' });
+    return res.status(500).json({ error: 'Registrierung fehlgeschlagen' });
   }
 });
 
