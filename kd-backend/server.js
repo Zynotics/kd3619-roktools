@@ -234,6 +234,23 @@ function findColumnIndex(headers, possibleNames) {
   return undefined;
 }
 
+// Hilfsfunktion: Gov-ID in der USERS-Tabelle prüfen
+function userGovIdExists(governorIdRaw) {
+  if (!governorIdRaw) return false;
+  const governorId = String(governorIdRaw).trim();
+  if (!governorId) return false;
+
+  try {
+    const row = db
+      .prepare('SELECT id FROM users WHERE governor_id = ? LIMIT 1')
+      .get(governorId);
+    return !!row;
+  } catch (error) {
+    console.error('Error checking governor_id in users table:', error);
+    return false;
+  }
+}
+
 // Hilfsfunktion: Gov-ID in hochgeladenen Dateien suchen
 function governorIdExists(governorIdRaw) {
   if (!governorIdRaw) return false;
@@ -370,12 +387,24 @@ const honorUpload = multer({
 // Gov ID Check für Live-Validierung im Frontend
 app.post('/api/auth/check-gov-id', (req, res) => {
   const { governorId } = req.body;
+
   if (!governorId || !String(governorId).trim()) {
-    return res.status(400).json({ exists: false, error: 'Gov ID wird benötigt' });
+    return res
+      .status(400)
+      .json({ exists: false, error: 'Gov ID wird benötigt' });
   }
-  const exists = governorIdExists(governorId);
-  res.json({ exists });
+
+  const existsInUsers = userGovIdExists(governorId);
+  const existsInFiles = governorIdExists(governorId);
+
+  // "exists" bleibt wie bisher für dein Frontend
+  res.json({
+    exists: existsInUsers || existsInFiles,
+    existsInUsers,
+    existsInFiles,
+  });
 });
+
 
 // Registrierung mit Gov-ID-Check
 app.post('/api/auth/register', async (req, res) => {
@@ -387,6 +416,87 @@ app.post('/api/auth/register', async (req, res) => {
         error: 'Email, Benutzername, Passwort und Gov ID werden benötigt',
       });
     }
+
+    if (password.length < 6) {
+      return res
+        .status(400)
+        .json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
+    }
+
+    const normalizedGovId = String(governorId).trim();
+
+    // ❗ 1) Prüfen, ob es schon einen Account mit dieser Gov ID gibt
+    if (userGovIdExists(normalizedGovId)) {
+      return res.status(400).json({
+        error: 'Für diese Gov ID existiert bereits ein Account.',
+      });
+    }
+
+    // 2) Prüfen, ob Email oder Username bereits vergeben sind
+    const existingUser = db
+      .prepare(
+        'SELECT id FROM users WHERE email = ? OR username = ? LIMIT 1'
+      )
+      .get(email, username);
+
+    if (existingUser) {
+      return res.status(400).json({
+        error: 'Email oder Benutzername ist bereits vergeben',
+      });
+    }
+
+    // (Optional) Wenn du sicherstellen willst, dass die Gov ID
+    // wirklich in hochgeladenen Dateien existiert:
+    // if (!governorIdExists(normalizedGovId)) {
+    //   return res.status(400).json({
+    //     error: 'Diese Gov ID wurde in den Uploads nicht gefunden',
+    //   });
+    // }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const userId = 'user-' + Date.now();
+
+    const stmt = db.prepare(`
+      INSERT INTO users (
+        id, email, username, password_hash, is_approved, role,
+        governor_id, can_access_honor, can_access_analytics, can_access_overview
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      userId,
+      email,
+      username,
+      passwordHash,
+      0, // is_approved
+      'user', // role
+      normalizedGovId,
+      0,
+      0,
+      0
+    );
+
+    res.json({
+      message:
+        'Registrierung erfolgreich. Bitte warten Sie auf die Freigabe durch einen Administrator.',
+      user: {
+        id: userId,
+        email,
+        username,
+        isApproved: false,
+        role: 'user',
+        governorId: normalizedGovId,
+        canAccessHonor: false,
+        canAccessAnalytics: false,
+        canAccessOverview: false,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Error during registration:', error);
+    res.status(500).json({ error: 'Registrierung fehlgeschlagen' });
+  }
+});
 
     if (password.length < 6) {
       return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
