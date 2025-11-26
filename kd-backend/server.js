@@ -25,7 +25,8 @@ app.use(
     origin: function (origin, callback) {
       if (!origin) return callback(null, true);
       if (allowedOrigins.indexOf(origin) === -1) {
-        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+        const msg =
+          'The CORS policy for this site does not allow access from the specified Origin.';
         return callback(new Error(msg), false);
       }
       return callback(null, true);
@@ -125,7 +126,9 @@ addColumnIfNotExists('users', 'can_access_overview', 'INTEGER DEFAULT 0');
 
 // Admin-Benutzer erstellen/verifizieren
 try {
-  const existingAdmin = db.prepare('SELECT * FROM users WHERE username = ?').get('Stadmin');
+  const existingAdmin = db
+    .prepare('SELECT * FROM users WHERE username = ?')
+    .get('Stadmin');
 
   if (!existingAdmin) {
     const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
@@ -221,11 +224,12 @@ const requireAdmin = (req, res, next) => {
   }
 };
 
-
 // Hilfsfunktion zum Finden von Spalten-Index (case-insensitive)
 function findColumnIndex(headers, possibleNames) {
   if (!Array.isArray(headers)) return undefined;
-  const lowerHeaders = headers.map((h) => (h ? String(h).toLowerCase().trim() : ''));
+  const lowerHeaders = headers.map((h) =>
+    h ? String(h).toLowerCase().trim() : ''
+  );
   for (const name of possibleNames) {
     const target = String(name).toLowerCase().trim();
     const idx = lowerHeaders.indexOf(target);
@@ -333,7 +337,10 @@ const overviewStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueName =
-      Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname);
+      Date.now() +
+      '-' +
+      Math.round(Math.random() * 1e9) +
+      path.extname(file.originalname);
     cb(null, uniqueName);
   },
 });
@@ -345,7 +352,10 @@ const honorStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueName =
-      Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname);
+      Date.now() +
+      '-' +
+      Math.round(Math.random() * 1e9) +
+      path.extname(file.originalname);
     cb(null, uniqueName);
   },
 });
@@ -405,8 +415,7 @@ app.post('/api/auth/check-gov-id', (req, res) => {
   });
 });
 
-
-// Registrierung mit Gov-ID-Check
+// Registrierung mit Gov-ID-Check und "nur eine Gov-ID pro Account"
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, username, password, governorId } = req.body;
@@ -434,9 +443,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     // 2) Prüfen, ob Email oder Username bereits vergeben sind
     const existingUser = db
-      .prepare(
-        'SELECT id FROM users WHERE email = ? OR username = ? LIMIT 1'
-      )
+      .prepare('SELECT id FROM users WHERE email = ? OR username = ? LIMIT 1')
       .get(email, username);
 
     if (existingUser) {
@@ -452,9 +459,8 @@ app.post('/api/auth/register', async (req, res) => {
     //   });
     // }
 
-    // 3) Passwort hashen (hier braucht es das "await" → darum async-Funktion)
+    // 3) Passwort hashen
     const passwordHash = await bcrypt.hash(password, 10);
-
     const userId = 'user-' + Date.now();
 
     const stmt = db.prepare(`
@@ -478,12 +484,12 @@ app.post('/api/auth/register', async (req, res) => {
       email,
       username,
       passwordHash,
-      0,          // is_approved
-      'user',     // role
+      0, // is_approved
+      'user', // role
       normalizedGovId,
-      0,          // can_access_honor
-      0,          // can_access_analytics
-      0           // can_access_overview
+      0, // can_access_honor
+      0, // can_access_analytics
+      0 // can_access_overview
     );
 
     return res.json({
@@ -507,83 +513,20 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
-    }
-
-    // Prüfen ob Benutzer bereits existiert
-    const existingUser = db
-      .prepare('SELECT * FROM users WHERE email = ? OR username = ?')
-      .get(email, username);
-    if (existingUser) {
-      return res
-        .status(400)
-        .json({ error: 'Benutzer mit dieser Email oder diesem Benutzernamen existiert bereits' });
-    }
-
-    // Gov ID gegen hochgeladene Daten prüfen
-    const govOk = governorIdExists(governorId);
-    if (!govOk) {
-      return res.status(400).json({
-        error: 'Die angegebene Gov ID wurde in den hochgeladenen Daten nicht gefunden.',
-      });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const userId = 'user-' + Date.now();
-
-    const stmt = db.prepare(`
-      INSERT INTO users (
-        id, email, username, password_hash, is_approved, role,
-        governor_id, can_access_honor, can_access_analytics, can_access_overview
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      userId,
-      email,
-      username,
-      passwordHash,
-      0,
-      'user',
-      String(governorId).trim(),
-      0,
-      0,
-      0
-    );
-
-    res.json({
-      message:
-        'Registrierung erfolgreich. Bitte warten Sie auf die Freigabe durch einen Administrator.',
-      user: {
-        id: userId,
-        email,
-        username,
-        isApproved: false,
-        role: 'user',
-        governorId: String(governorId).trim(),
-        canAccessHonor: false,
-        canAccessAnalytics: false,
-        canAccessOverview: false,
-      },
-    });
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ error: 'Registrierung fehlgeschlagen' });
-  }
-});
-
 // Login
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
     if (!username || !password) {
-      return res.status(400).json({ error: 'Benutzername und Passwort werden benötigt' });
+      return res
+        .status(400)
+        .json({ error: 'Benutzername und Passwort werden benötigt' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    const user = db
+      .prepare('SELECT * FROM users WHERE username = ?')
+      .get(username);
     if (!user) {
       return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
     }
@@ -663,7 +606,7 @@ app.get('/api/debug/users', (req, res) => {
   }
 });
 
-// Manuellen Admin Creation Endpoint
+// Manueller Admin-Creation Endpoint
 app.post('/api/admin/create-admin', (req, res) => {
   try {
     const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
@@ -693,7 +636,7 @@ app.post('/api/admin/create-admin', (req, res) => {
   }
 });
 
-// Alle Benutzer abrufen (nur Admin)
+// Alle Benutzer abrufen (nur Admin/R5)
 app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
   try {
     const stmt = db.prepare(`
@@ -725,150 +668,183 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-// Benutzer freigeben/sperren (Grund-Freigabe)
-app.post('/api/admin/users/approve', authenticateToken, requireAdmin, (req, res) => {
-  try {
-    const { userId, approved } = req.body;
+// Benutzer freigeben/sperren
+app.post(
+  '/api/admin/users/approve',
+  authenticateToken,
+  requireAdmin,
+  (req, res) => {
+    try {
+      const { userId, approved } = req.body;
 
-    if (!userId || typeof approved !== 'boolean') {
-      return res.status(400).json({
-        error: 'Ungültige Eingabe: userId und approved (boolean) werden benötigt',
+      if (!userId || typeof approved !== 'boolean') {
+        return res.status(400).json({
+          error:
+            'Ungültige Eingabe: userId und approved (boolean) werden benötigt',
+        });
+      }
+
+      const approvedValue = approved ? 1 : 0;
+      const stmt = db.prepare('UPDATE users SET is_approved = ? WHERE id = ?');
+      const result = stmt.run(approvedValue, userId);
+
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+      }
+
+      res.json({
+        success: true,
+        message: `Benutzer erfolgreich ${
+          approved ? 'freigegeben' : 'gesperrt'
+        }`,
+        changes: result.changes,
+      });
+    } catch (error) {
+      console.error('💥 CRITICAL ERROR in admin/approve:', error);
+      res.status(500).json({
+        error: 'Interner Server Fehler',
+        details: error.message,
       });
     }
-
-    const approvedValue = approved ? 1 : 0;
-    const stmt = db.prepare('UPDATE users SET is_approved = ? WHERE id = ?');
-    const result = stmt.run(approvedValue, userId);
-
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-    }
-
-    res.json({
-      success: true,
-      message: `Benutzer erfolgreich ${approved ? 'freigegeben' : 'gesperrt'}`,
-      changes: result.changes,
-    });
-  } catch (error) {
-    console.error('💥 CRITICAL ERROR in admin/approve:', error);
-    res.status(500).json({
-      error: 'Interner Server Fehler',
-      details: error.message,
-    });
   }
-});
+);
 
 // Benutzer Zugriffsrechte setzen (Honor / Analytics / Overview)
-app.post('/api/admin/users/access', authenticateToken, requireAdmin, (req, res) => {
-  try {
-    const { userId, canAccessHonor, canAccessAnalytics, canAccessOverview } = req.body;
+app.post(
+  '/api/admin/users/access',
+  authenticateToken,
+  requireAdmin,
+  (req, res) => {
+    try {
+      const { userId, canAccessHonor, canAccessAnalytics, canAccessOverview } =
+        req.body;
 
-    if (!userId) {
-      return res.status(400).json({ error: 'userId wird benötigt' });
+      if (!userId) {
+        return res.status(400).json({ error: 'userId wird benötigt' });
+      }
+
+      const stmt = db.prepare(`
+        UPDATE users
+        SET
+          can_access_honor = ?,
+          can_access_analytics = ?,
+          can_access_overview = ?
+        WHERE id = ?
+      `);
+
+      const result = stmt.run(
+        canAccessHonor ? 1 : 0,
+        canAccessAnalytics ? 1 : 0,
+        canAccessOverview ? 1 : 0,
+        userId
+      );
+
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+      }
+
+      res.json({
+        success: true,
+        message: 'Zugriffsrechte aktualisiert',
+        changes: result.changes,
+      });
+    } catch (error) {
+      console.error('💥 Error updating user access:', error);
+      res
+        .status(500)
+        .json({ error: 'Zugriffsrechte konnten nicht aktualisiert werden.' });
     }
-
-    const stmt = db.prepare(`
-      UPDATE users
-      SET
-        can_access_honor = ?,
-        can_access_analytics = ?,
-        can_access_overview = ?
-      WHERE id = ?
-    `);
-
-    const result = stmt.run(
-      canAccessHonor ? 1 : 0,
-      canAccessAnalytics ? 1 : 0,
-      canAccessOverview ? 1 : 0,
-      userId
-    );
-
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-    }
-
-    res.json({
-      success: true,
-      message: 'Zugriffsrechte aktualisiert',
-      changes: result.changes,
-    });
-  } catch (error) {
-    console.error('💥 Error updating user access:', error);
-    res.status(500).json({ error: 'Zugriffsrechte konnten nicht aktualisiert werden.' });
   }
-});
+);
 
-// Change user role (user / r4 / r5, admin only via code or DB)
-app.post('/api/admin/users/role', authenticateToken, requireAdmin, (req, res) => {
-  try {
-    const { userId, role } = req.body;
+// Change user role (user / r4 / r5, admin only via UI)
+app.post(
+  '/api/admin/users/role',
+  authenticateToken,
+  requireAdmin,
+  (req, res) => {
+    try {
+      const { userId, role } = req.body;
 
-    if (!userId || !role) {
-      return res.status(400).json({ error: 'userId and role are required' });
+      if (!userId || !role) {
+        return res.status(400).json({ error: 'userId and role are required' });
+      }
+
+      // Only allow these roles to be set from UI
+      const allowedRoles = ['user', 'r4', 'r5'];
+      if (!allowedRoles.includes(role)) {
+        return res.status(400).json({ error: 'Invalid role' });
+      }
+
+      // Prevent changing own role via UI
+      if (req.user.id === userId) {
+        return res
+          .status(400)
+          .json({ error: 'You cannot change your own role.' });
+      }
+
+      const stmt = db.prepare('UPDATE users SET role = ? WHERE id = ?');
+      const result = stmt.run(role, userId);
+
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      res.json({
+        success: true,
+        message: `Role updated to "${role}"`,
+      });
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      res.status(500).json({ error: 'Could not update role' });
     }
-
-    // Only allow these roles to be set from UI
-    const allowedRoles = ['user', 'r4', 'r5'];
-    if (!allowedRoles.includes(role)) {
-      return res.status(400).json({ error: 'Invalid role' });
-    }
-
-    // Prevent changing own role via UI
-    if (req.user.id === userId) {
-      return res.status(400).json({ error: 'You cannot change your own role.' });
-    }
-
-    const stmt = db.prepare('UPDATE users SET role = ? WHERE id = ?');
-    const result = stmt.run(role, userId);
-
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({
-      success: true,
-      message: `Role updated to "${role}"`,
-    });
-  } catch (error) {
-    console.error('Error updating user role:', error);
-    res.status(500).json({ error: 'Could not update role' });
   }
-});
-
+);
 
 // Benutzer löschen (nicht Admin, nicht eigener Account)
-app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
-  try {
-    const userId = req.params.id;
+app.delete(
+  '/api/admin/users/:id',
+  authenticateToken,
+  requireAdmin,
+  (req, res) => {
+    try {
+      const userId = req.params.id;
 
-    const user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+      const user = db
+        .prepare('SELECT id, username, role FROM users WHERE id = ?')
+        .get(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+      }
+
+      if (user.role === 'admin') {
+        return res
+          .status(400)
+          .json({ error: 'Admin-Konten können nicht gelöscht werden.' });
+      }
+
+      const deleteStmt = db.prepare('DELETE FROM users WHERE id = ?');
+      const result = deleteStmt.run(userId);
+
+      res.json({
+        success: true,
+        message: `Benutzer "${user.username}" wurde dauerhaft gelöscht.`,
+        changes: result.changes,
+      });
+    } catch (error) {
+      console.error('💥 Error deleting user:', error);
+      res.status(500).json({ error: 'Benutzer konnte nicht gelöscht werden.' });
     }
-
-    if (user.role === 'admin') {
-      return res.status(400).json({ error: 'Admin-Konten können nicht gelöscht werden.' });
-    }
-
-    const deleteStmt = db.prepare('DELETE FROM users WHERE id = ?');
-    const result = deleteStmt.run(userId);
-
-    res.json({
-      success: true,
-      message: `Benutzer "${user.username}" wurde dauerhaft gelöscht.`,
-      changes: result.changes,
-    });
-  } catch (error) {
-    console.error('💥 Error deleting user:', error);
-    res.status(500).json({ error: 'Benutzer konnte nicht gelöscht werden.' });
   }
-});
+);
 
 // ==================== OVERVIEW ENDPOINTS ====================
 
 app.get('/overview/files-data', (req, res) => {
   try {
-    const stmt = db.prepare('SELECT * FROM overview_files ORDER BY fileOrder, uploadDate');
+    const stmt = db.prepare(
+      'SELECT * FROM overview_files ORDER BY fileOrder, uploadDate'
+    );
     const rows = stmt.all();
 
     const files = rows.map((row) => ({
@@ -890,7 +866,10 @@ app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => 
       return res.status(400).json({ error: 'Keine Datei hochgeladen' });
     }
 
-    const parsedData = await parseFile(req.file.path, req.file.originalname);
+    const parsedData = await parseFile(
+      req.file.path,
+      req.file.originalname
+    );
 
     const newFile = {
       id: Date.now().toString(),
@@ -975,7 +954,9 @@ app.post('/overview/files/reorder', (req, res) => {
       return res.status(400).json({ error: 'Ungültige Reihenfolge' });
     }
 
-    const updateStmt = db.prepare('UPDATE overview_files SET fileOrder = ? WHERE id = ?');
+    const updateStmt = db.prepare(
+      'UPDATE overview_files SET fileOrder = ? WHERE id = ?'
+    );
 
     order.forEach((id, index) => {
       updateStmt.run(index, id);
@@ -984,7 +965,9 @@ app.post('/overview/files/reorder', (req, res) => {
     res.json({ message: 'Reihenfolge aktualisiert' });
   } catch (error) {
     console.error('Reorder error:', error);
-    res.status(500).json({ error: 'Reihenfolge konnte nicht aktualisiert werden' });
+    res
+      .status(500)
+      .json({ error: 'Reihenfolge konnte nicht aktualisiert werden' });
   }
 });
 
@@ -992,7 +975,9 @@ app.post('/overview/files/reorder', (req, res) => {
 
 app.get('/honor/files-data', (req, res) => {
   try {
-    const stmt = db.prepare('SELECT * FROM honor_files ORDER BY fileOrder, uploadDate');
+    const stmt = db.prepare(
+      'SELECT * FROM honor_files ORDER BY fileOrder, uploadDate'
+    );
     const rows = stmt.all();
 
     const files = rows.map((row) => ({
@@ -1014,7 +999,10 @@ app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'Keine Datei hochgeladen' });
     }
 
-    const parsedData = await parseFile(req.file.path, req.file.originalname);
+    const parsedData = await parseFile(
+      req.file.path,
+      req.file.originalname
+    );
 
     const newFile = {
       id: Date.now().toString(),
@@ -1099,7 +1087,9 @@ app.post('/honor/files/reorder', (req, res) => {
       return res.status(400).json({ error: 'Ungültige Reihenfolge' });
     }
 
-    const updateStmt = db.prepare('UPDATE honor_files SET fileOrder = ? WHERE id = ?');
+    const updateStmt = db.prepare(
+      'UPDATE honor_files SET fileOrder = ? WHERE id = ?'
+    );
 
     order.forEach((id, index) => {
       updateStmt.run(index, id);
@@ -1108,7 +1098,9 @@ app.post('/honor/files/reorder', (req, res) => {
     res.json({ message: 'Reihenfolge aktualisiert' });
   } catch (error) {
     console.error('Reorder error:', error);
-    res.status(500).json({ error: 'Reihenfolge konnte nicht aktualisiert werden' });
+    res
+      .status(500)
+      .json({ error: 'Reihenfolge konnte nicht aktualisiert werden' });
   }
 });
 
@@ -1139,6 +1131,7 @@ app.get('/', (req, res) => {
         'GET /api/admin/users',
         'POST /api/admin/users/approve',
         'POST /api/admin/users/access',
+        'POST /api/admin/users/role',
         'DELETE /api/admin/users/:id',
         'POST /api/admin/create-admin',
       ],
