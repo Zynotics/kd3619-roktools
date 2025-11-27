@@ -153,12 +153,16 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
       const power = getNumber(row, ['power', 'macht']);
       const troopsPower = getNumber(row, ['troopspower', 'troops power']);
+
+      // ⭐ WICHTIG: Hier jetzt auch "total kill points" als mögliche Spaltenbezeichnung
       const totalKillPoints = getNumber(row, [
+        'total kill points',
         'killpoints',
         'kill points',
         'kills',
         'kp',
       ]);
+
       const deadTroops = getNumber(row, ['deadtroops', 'dead troops', 'dead']);
 
       const t1Kills = getNumber(row, ['t1', 't1 kills']);
