@@ -61,7 +61,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       setUploadedFiles(data || []);
 
       if (data.length >= 2) {
-        // Reihenfolge kommt bereits sortiert aus dem Backend (fileOrder, uploadDate)
+        // Backend liefert bereits in fileOrder, uploadDate sortiert
         const last = data[data.length - 1];
         const secondLast = data[data.length - 2];
         setStartFileId(secondLast.id);
@@ -121,8 +121,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   };
 
   // ---------------------------------------------------
-  // Hilfsfunktion: Datei -> PlayerInfo[]
-  // arbeitet direkt mit headers + data aus der DB
+  // Hilfsfunktion: Datei -> PlayerInfo[] (arbeitet mit headers + data)
   // ---------------------------------------------------
   const parseFileToPlayers = (file: UploadedFile): PlayerInfo[] => {
     if (!file || !file.headers || !file.data) return [];
@@ -154,14 +153,8 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       const power = getNumber(row, ['power', 'macht']);
       const troopsPower = getNumber(row, ['troopspower', 'troops power']);
 
-      // ⭐ WICHTIG: Hier jetzt auch "total kill points" als mögliche Spaltenbezeichnung
-      const totalKillPoints = getNumber(row, [
-        'total kill points',
-        'killpoints',
-        'kill points',
-        'kills',
-        'kp',
-      ]);
+      // ❗ FIX: Kill Points nur aus der Spalte "Total Kill Points" lesen
+      const totalKillPoints = getNumber(row, ['total kill points']);
 
       const deadTroops = getNumber(row, ['deadtroops', 'dead troops', 'dead']);
 
@@ -179,8 +172,8 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         'commander power',
       ]);
 
+      // offensichtliche leere/summen Zeilen überspringen
       if (!id && !name && power === 0 && troopsPower === 0) {
-        // offensichtlich leere/summe Zeile
         return;
       }
 
@@ -346,7 +339,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   }, [startFileId, endFileId, uploadedFiles, handleCompare]);
 
   // ---------------------------------------------------
-  // Suche nach Spielern (arbeitet direkt auf playerStatChanges)
+  // Suche nach Spielern (arbeitet auf playerStatChanges)
   // ---------------------------------------------------
   const handleSearch = () => {
     if (!searchQuery.trim() || !comparisonStats?.playerStatChanges) {
