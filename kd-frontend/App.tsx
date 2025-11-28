@@ -72,7 +72,7 @@ const AppContent: React.FC = () => {
                 </>
               ) : (
                 <span className="text-xs text-gray-400">
-                  Please sign in or register to access the dashboards.
+                  Please sign in or register.
                 </span>
               )}
             </div>
