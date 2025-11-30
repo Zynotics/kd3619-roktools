@@ -4,8 +4,8 @@
   "main": "server.js",
   "license": "MIT",
   "scripts": {
-    "start": "node init-db.js && node server.js",
-    "dev": "node --watch server.js",
+    "start": "node init-pg.js && node server.js",
+    "dev": "NODE_ENV=development node server.js",
     "build": "npm install"
   },
   "dependencies": {

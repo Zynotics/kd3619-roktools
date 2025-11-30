@@ -1,13 +1,15 @@
-// server.js - Backend mit Admin, Uploads, Gov-ID-Validierung & Feature-Rechten
+// server.js - Backend mit Admin, Uploads, Gov-ID-Validierung & Feature-Rechten (Postgres-Version)
+
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const Database = require('better-sqlite3');
 const XLSX = require('xlsx');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+
+const { query, get, all } = require('./db-pg');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -50,204 +52,93 @@ const uploadsHonorDir = path.join(__dirname, 'uploads', 'honor');
   }
 });
 
-// SQLite Datenbank Setup
-const dbPath = path.join(__dirname, 'uploads.db');
-console.log('Database path:', dbPath);
+// Hilfsfunktion: Excel / CSV einlesen
+function parseExcel(filePath) {
+  return new Promise((resolve, reject) => {
+    try {
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext === '.csv') {
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+        const rows = fileContent
+          .split(/\r?\n/)
+          .map((line) => line.split(';').map((v) => v.trim()))
+          .filter((row) => row.length > 1);
+        if (rows.length === 0) {
+          return resolve({ headers: [], data: [] });
+        }
+        const headers = rows[0].map((h) => (h ? h.toString() : ''));
+        const data = rows.slice(1).filter((row) => row.length > 0);
+        return resolve({ headers, data });
+      } else {
+        const workbook = XLSX.readFile(filePath);
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-// Database connection
-let db;
-try {
-  db = new Database(dbPath);
-  console.log('✅ Database connected successfully');
-} catch (error) {
-  console.error('❌ Database connection failed:', error);
-  process.exit(1);
+        if (!jsonData || jsonData.length === 0) {
+          return resolve({ headers: [], data: [] });
+        }
+
+        const headers = jsonData[0].map((h) => (h ? h.toString() : ''));
+        const data = jsonData.slice(1).filter((row) => row.length > 0);
+
+        resolve({ headers, data });
+      }
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
-// Tabellen erstellen falls nicht vorhanden
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    is_approved INTEGER DEFAULT 0,
-    role TEXT DEFAULT 'user',
-    governor_id TEXT,
-    can_access_honor INTEGER DEFAULT 0,
-    can_access_analytics INTEGER DEFAULT 0,
-    can_access_overview INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-  )
-`);
+// ==================== AUTH-MIDDLEWARES ====================
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS overview_files (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    filename TEXT,
-    path TEXT,
-    size INTEGER,
-    uploadDate TEXT,
-    fileOrder INTEGER DEFAULT 0,
-    headers TEXT,
-    data TEXT
-  )
-`);
+function authenticateToken(req, res, next) {
+  const header = req.headers['authorization'];
+  const token = header && header.split(' ')[1];
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS honor_files (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    filename TEXT,
-    path TEXT,
-    size INTEGER,
-    uploadDate TEXT,
-    fileOrder INTEGER DEFAULT 0,
-    headers TEXT,
-    data TEXT
-  )
-`);
-
-// ggf. Spalten für ältere DBs nachziehen
-const addColumnIfNotExists = (table, column, def) => {
-  try {
-    db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`).run();
-    console.log(`✅ Column ${column} added to ${table}`);
-  } catch (e) {
-    console.log(`ℹ️ Column ${column} already exists on ${table}, skipping`);
-  }
-};
-
-addColumnIfNotExists('users', 'governor_id', 'TEXT');
-addColumnIfNotExists('users', 'can_access_honor', 'INTEGER DEFAULT 0');
-addColumnIfNotExists('users', 'can_access_analytics', 'INTEGER DEFAULT 0');
-addColumnIfNotExists('users', 'can_access_overview', 'INTEGER DEFAULT 0');
-
-// Admin-Benutzer erstellen/verifizieren
-try {
-  const existingAdmin = db
-    .prepare('SELECT * FROM users WHERE username = ?')
-    .get('Stadmin');
-
-  if (!existingAdmin) {
-    const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
-    const insertAdmin = db.prepare(`
-      INSERT INTO users (
-        id, email, username, password_hash, is_approved, role,
-        governor_id, can_access_honor, can_access_analytics, can_access_overview
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    insertAdmin.run(
-      'admin-001',
-      'admin@kd3619.com',
-      'Stadmin',
-      adminPasswordHash,
-      1,
-      'admin',
-      null,
-      1,
-      1,
-      1
-    );
-    console.log('✅ Admin user created successfully');
-  } else {
-    console.log('✅ Admin user already exists');
-    const updateAdmin = db.prepare(`
-      UPDATE users
-      SET is_approved = 1,
-          role = 'admin',
-          can_access_honor = 1,
-          can_access_analytics = 1,
-          can_access_overview = 1
-      WHERE username = ?
-    `);
-    updateAdmin.run('Stadmin');
-    console.log('✅ Admin user permissions verified');
-  }
-} catch (error) {
-  console.error('❌ Error creating/verifying admin user:', error);
-}
-
-// JWT Middleware
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
+  if (!token) return res.status(401).json({ error: 'Kein Token vorhanden' });
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid or expired token' });
-    }
+    if (err) return res.status(403).json({ error: 'Ungültiger Token' });
     req.user = user;
     next();
   });
-};
+}
 
-// Admin / R5 middleware (for user management & admin endpoints)
-const requireAdmin = (req, res, next) => {
+function requireAdmin(req, res, next) {
   if (!req.user) {
-    return res.status(401).json({ error: 'Not authenticated' });
+    return res.status(401).json({ error: 'Nicht authentifiziert' });
   }
-
-  try {
-    // Rolle IMMER aus der Datenbank holen (aktuellster Stand)
-    const stmt = db.prepare('SELECT role FROM users WHERE id = ?');
-    const dbUser = stmt.get(req.user.id);
-
-    if (!dbUser) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const role = dbUser.role;
-
-    // Nur admin & r5 dürfen Admin-Endpunkte aufrufen
-    if (role !== 'admin' && role !== 'r5') {
-      return res
-        .status(403)
-        .json({ error: 'Admin or R5 privileges required' });
-    }
-
-    // Rolle am Request-Objekt aktualisieren (falls sich was geändert hat)
-    req.user.role = role;
-
-    next();
-  } catch (error) {
-    console.error('Error checking admin privileges:', error);
-    return res
-      .status(500)
-      .json({ error: 'Failed to verify admin privileges' });
+  if (req.user.role !== 'admin' && req.user.role !== 'r5') {
+    return res.status(403).json({ error: 'Keine Admin-Rechte' });
   }
-};
+  next();
+}
 
-// Hilfsfunktion zum Finden von Spalten-Index (case-insensitive)
+// ==================== GOV-ID-HELPER (Postgres) ====================
+
 function findColumnIndex(headers, possibleNames) {
   if (!Array.isArray(headers)) return undefined;
-  const lowerHeaders = headers.map((h) =>
-    h ? String(h).toLowerCase().trim() : ''
+  const normalizedHeaders = headers.map((h) =>
+    h ? h.toString().trim().toLowerCase() : ''
   );
   for (const name of possibleNames) {
-    const target = String(name).toLowerCase().trim();
-    const idx = lowerHeaders.indexOf(target);
+    const idx = normalizedHeaders.indexOf(name.toLowerCase());
     if (idx !== -1) return idx;
   }
   return undefined;
 }
 
-// Hilfsfunktion: Gov-ID in der USERS-Tabelle prüfen
-function userGovIdExists(governorIdRaw) {
+async function userGovIdExists(governorIdRaw) {
   if (!governorIdRaw) return false;
   const governorId = String(governorIdRaw).trim();
   if (!governorId) return false;
 
   try {
-    const row = db
-      .prepare('SELECT id FROM users WHERE governor_id = ? LIMIT 1')
-      .get(governorId);
+    const row = await get(
+      'SELECT id FROM users WHERE governor_id = $1 LIMIT 1',
+      [governorId]
+    );
     return !!row;
   } catch (error) {
     console.error('Error checking governor_id in users table:', error);
@@ -255,8 +146,7 @@ function userGovIdExists(governorIdRaw) {
   }
 }
 
-// Hilfsfunktion: Gov-ID in hochgeladenen Dateien suchen
-function governorIdExists(governorIdRaw) {
+async function governorIdExists(governorIdRaw) {
   if (!governorIdRaw) return false;
   const governorId = String(governorIdRaw).trim();
   if (!governorId) return false;
@@ -266,7 +156,7 @@ function governorIdExists(governorIdRaw) {
 
   try {
     for (const table of tables) {
-      const rows = db.prepare(`SELECT headers, data FROM ${table}`).all();
+      const rows = await all(`SELECT headers, data FROM ${table}`);
       for (const row of rows) {
         const headers = JSON.parse(row.headers || '[]');
         const data = JSON.parse(row.data || '[]');
@@ -294,43 +184,8 @@ function governorIdExists(governorIdRaw) {
   return false;
 }
 
-// Datei parsen (Excel oder CSV)
-function parseFile(filePath, originalName) {
-  return new Promise((resolve, reject) => {
-    try {
-      if (filePath.endsWith('.csv')) {
-        const csvData = fs.readFileSync(filePath, 'utf8');
-        const lines = csvData.split('\n').filter((line) => line.trim());
-        const headers = lines[0].split(',').map((h) => h.trim());
-        const data = lines.slice(1).map((line) => {
-          const values = line.split(',').map((v) => v.trim());
-          return values;
-        });
+// ==================== MULTER-CONFIG ====================
 
-        resolve({ headers, data });
-      } else {
-        const workbook = XLSX.readFile(filePath);
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        if (jsonData.length === 0) {
-          reject(new Error('Excel file is empty'));
-          return;
-        }
-
-        const headers = jsonData[0].map((h) => (h ? h.toString() : ''));
-        const data = jsonData.slice(1).filter((row) => row.length > 0);
-
-        resolve({ headers, data });
-      }
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
-// Multer Konfiguration für Overview
 const overviewStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsOverviewDir);
@@ -345,7 +200,6 @@ const overviewStorage = multer.diskStorage({
   },
 });
 
-// Multer Konfiguration für Honor
 const honorStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsHonorDir);
@@ -395,27 +249,31 @@ const honorUpload = multer({
 // ==================== AUTH ENDPOINTS ====================
 
 // Gov ID Check für Live-Validierung im Frontend
-app.post('/api/auth/check-gov-id', (req, res) => {
-  const { governorId } = req.body;
+app.post('/api/auth/check-gov-id', async (req, res) => {
+  try {
+    const { governorId } = req.body;
 
-  if (!governorId || !String(governorId).trim()) {
-    return res
-      .status(400)
-      .json({ exists: false, error: 'Gov ID wird benötigt' });
+    if (!governorId || !String(governorId).trim()) {
+      return res
+        .status(400)
+        .json({ exists: false, error: 'Gov ID wird benötigt' });
+    }
+
+    const existsInUsers = await userGovIdExists(governorId);
+    const existsInFiles = await governorIdExists(governorId);
+
+    res.json({
+      exists: existsInUsers || existsInFiles,
+      existsInUsers,
+      existsInFiles,
+    });
+  } catch (err) {
+    console.error('check-gov-id error:', err);
+    res.status(500).json({ error: 'Gov ID check failed' });
   }
-
-  const existsInUsers = userGovIdExists(governorId);
-  const existsInFiles = governorIdExists(governorId);
-
-  // "exists" bleibt wie bisher für dein Frontend
-  res.json({
-    exists: existsInUsers || existsInFiles,
-    existsInUsers,
-    existsInFiles,
-  });
 });
 
-// Registrierung mit Gov-ID-Check und "nur eine Gov-ID pro Account"
+// Registrierung mit Gov-ID-Check
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, username, password, governorId } = req.body;
@@ -435,16 +293,17 @@ app.post('/api/auth/register', async (req, res) => {
     const normalizedGovId = String(governorId).trim();
 
     // 1) Prüfen, ob es schon einen Account mit dieser Gov ID gibt
-    if (userGovIdExists(normalizedGovId)) {
+    if (await userGovIdExists(normalizedGovId)) {
       return res.status(400).json({
         error: 'Für diese Gov ID existiert bereits ein Account.',
       });
     }
 
     // 2) Prüfen, ob Email oder Username bereits vergeben sind
-    const existingUser = db
-      .prepare('SELECT id FROM users WHERE email = ? OR username = ? LIMIT 1')
-      .get(email, username);
+    const existingUser = await get(
+      'SELECT id FROM users WHERE email = $1 OR username = $2 LIMIT 1',
+      [email, username]
+    );
 
     if (existingUser) {
       return res.status(400).json({
@@ -452,18 +311,12 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    // OPTIONAL: nur erlauben, wenn Gov ID in den Upload-Dateien existiert
-    // if (!governorIdExists(normalizedGovId)) {
-    //   return res.status(400).json({
-    //     error: 'Diese Gov ID wurde in den Uploads nicht gefunden',
-    //   });
-    // }
-
     // 3) Passwort hashen
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = 'user-' + Date.now();
 
-    const stmt = db.prepare(`
+    await query(
+      `
       INSERT INTO users (
         id,
         email,
@@ -476,20 +329,20 @@ app.post('/api/auth/register', async (req, res) => {
         can_access_analytics,
         can_access_overview
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      userId,
-      email,
-      username,
-      passwordHash,
-      0, // is_approved
-      'user', // role
-      normalizedGovId,
-      0, // can_access_honor
-      0, // can_access_analytics
-      0 // can_access_overview
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `,
+      [
+        userId,
+        email,
+        username,
+        passwordHash,
+        false, // is_approved
+        'user', // role
+        normalizedGovId,
+        false, // can_access_honor
+        false, // can_access_analytics
+        false, // can_access_overview
+      ]
     );
 
     return res.json({
@@ -524,9 +377,10 @@ app.post('/api/auth/login', async (req, res) => {
         .json({ error: 'Benutzername und Passwort werden benötigt' });
     }
 
-    const user = db
-      .prepare('SELECT * FROM users WHERE username = ?')
-      .get(username);
+    const user = await get('SELECT * FROM users WHERE username = $1', [
+      username,
+    ]);
+
     if (!user) {
       return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
     }
@@ -570,35 +424,39 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Token Validierung
-app.get('/api/auth/validate', authenticateToken, (req, res) => {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+app.get('/api/auth/validate', authenticateToken, async (req, res) => {
+  try {
+    const user = await get('SELECT * FROM users WHERE id = $1', [req.user.id]);
 
-  if (!user) {
-    return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    if (!user) {
+      return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    }
+
+    res.json({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      isApproved: !!user.is_approved,
+      role: user.role,
+      governorId: user.governor_id || null,
+      canAccessHonor: !!user.can_access_honor,
+      canAccessAnalytics: !!user.can_access_analytics,
+      canAccessOverview: !!user.can_access_overview,
+    });
+  } catch (err) {
+    console.error('validate error:', err);
+    res.status(500).json({ error: 'Token-Validierung fehlgeschlagen' });
   }
-
-  res.json({
-    id: user.id,
-    email: user.email,
-    username: user.username,
-    isApproved: !!user.is_approved,
-    role: user.role,
-    governorId: user.governor_id || null,
-    canAccessHonor: !!user.can_access_honor,
-    canAccessAnalytics: !!user.can_access_analytics,
-    canAccessOverview: !!user.can_access_overview,
-  });
 });
 
 // ==================== ADMIN ENDPOINTS ====================
 
 // Debug Endpoint zum Überprüfen aller Benutzer
-app.get('/api/debug/users', (req, res) => {
+app.get('/api/debug/users', async (req, res) => {
   try {
-    const stmt = db.prepare(
+    const users = await all(
       'SELECT id, username, email, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview FROM users'
     );
-    const users = stmt.all();
     res.json(users);
   } catch (error) {
     console.error('Debug users error:', error);
@@ -607,27 +465,39 @@ app.get('/api/debug/users', (req, res) => {
 });
 
 // Manueller Admin-Creation Endpoint
-app.post('/api/admin/create-admin', (req, res) => {
+app.post('/api/admin/create-admin', async (req, res) => {
   try {
     const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
-    const insertAdmin = db.prepare(`
-      INSERT OR REPLACE INTO users (
+    await query(
+      `
+      INSERT INTO users (
         id, email, username, password_hash, is_approved, role,
         governor_id, can_access_honor, can_access_analytics, can_access_overview
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    insertAdmin.run(
-      'admin-001',
-      'admin@kd3619.com',
-      'Stadmin',
-      adminPasswordHash,
-      1,
-      'admin',
-      null,
-      1,
-      1,
-      1
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        username = EXCLUDED.username,
+        password_hash = EXCLUDED.password_hash,
+        is_approved = EXCLUDED.is_approved,
+        role = EXCLUDED.role,
+        governor_id = EXCLUDED.governor_id,
+        can_access_honor = EXCLUDED.can_access_honor,
+        can_access_analytics = EXCLUDED.can_access_analytics,
+        can_access_overview = EXCLUDED.can_access_overview
+    `,
+      [
+        'admin-001',
+        'admin@kd3619.com',
+        'Stadmin',
+        adminPasswordHash,
+        true,
+        'admin',
+        null,
+        true,
+        true,
+        true,
+      ]
     );
     res.json({ message: 'Admin user created successfully' });
   } catch (error) {
@@ -637,16 +507,17 @@ app.post('/api/admin/create-admin', (req, res) => {
 });
 
 // Alle Benutzer abrufen (nur Admin/R5)
-app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const stmt = db.prepare(`
+    const users = await all(
+      `
       SELECT
         id, email, username, is_approved, role, created_at,
         governor_id, can_access_honor, can_access_analytics, can_access_overview
       FROM users
       ORDER BY created_at DESC
-    `);
-    const users = stmt.all();
+    `
+    );
 
     res.json(
       users.map((user) => ({
@@ -673,7 +544,7 @@ app.post(
   '/api/admin/users/approve',
   authenticateToken,
   requireAdmin,
-  (req, res) => {
+  async (req, res) => {
     try {
       const { userId, approved } = req.body;
 
@@ -684,20 +555,19 @@ app.post(
         });
       }
 
-      const approvedValue = approved ? 1 : 0;
-      const stmt = db.prepare('UPDATE users SET is_approved = ? WHERE id = ?');
-      const result = stmt.run(approvedValue, userId);
+      const result = await query(
+        'UPDATE users SET is_approved = $1 WHERE id = $2',
+        [approved, userId]
+      );
 
-      if (result.changes === 0) {
+      if (result.rowCount === 0) {
         return res.status(404).json({ error: 'Benutzer nicht gefunden' });
       }
 
       res.json({
         success: true,
-        message: `Benutzer erfolgreich ${
-          approved ? 'freigegeben' : 'gesperrt'
-        }`,
-        changes: result.changes,
+        message: `Benutzer erfolgreich ${approved ? 'freigegeben' : 'gesperrt'}`,
+        changes: result.rowCount,
       });
     } catch (error) {
       console.error('💥 CRITICAL ERROR in admin/approve:', error);
@@ -714,7 +584,7 @@ app.post(
   '/api/admin/users/access',
   authenticateToken,
   requireAdmin,
-  (req, res) => {
+  async (req, res) => {
     try {
       const { userId, canAccessHonor, canAccessAnalytics, canAccessOverview } =
         req.body;
@@ -723,129 +593,98 @@ app.post(
         return res.status(400).json({ error: 'userId wird benötigt' });
       }
 
-      const stmt = db.prepare(`
+      const result = await query(
+        `
         UPDATE users
         SET
-          can_access_honor = ?,
-          can_access_analytics = ?,
-          can_access_overview = ?
-        WHERE id = ?
-      `);
-
-      const result = stmt.run(
-        canAccessHonor ? 1 : 0,
-        canAccessAnalytics ? 1 : 0,
-        canAccessOverview ? 1 : 0,
-        userId
+          can_access_honor = $1,
+          can_access_analytics = $2,
+          can_access_overview = $3
+        WHERE id = $4
+      `,
+        [!!canAccessHonor, !!canAccessAnalytics, !!canAccessOverview, userId]
       );
 
-      if (result.changes === 0) {
+      if (result.rowCount === 0) {
         return res.status(404).json({ error: 'Benutzer nicht gefunden' });
       }
 
       res.json({
         success: true,
-        message: 'Zugriffsrechte aktualisiert',
-        changes: result.changes,
+        message: 'Zugriffsrechte erfolgreich aktualisiert',
       });
     } catch (error) {
-      console.error('💥 Error updating user access:', error);
-      res
-        .status(500)
-        .json({ error: 'Zugriffsrechte konnten nicht aktualisiert werden.' });
+      console.error('Error in admin/users/access:', error);
+      res.status(500).json({ error: 'Interner Server Fehler' });
     }
   }
 );
 
-// Change user role (user / r4 / r5, admin only via UI)
+// Benutzerrolle setzen
 app.post(
   '/api/admin/users/role',
   authenticateToken,
   requireAdmin,
-  (req, res) => {
+  async (req, res) => {
     try {
       const { userId, role } = req.body;
 
       if (!userId || !role) {
-        return res.status(400).json({ error: 'userId and role are required' });
+        return res.status(400).json({
+          error: 'userId und role werden benötigt',
+        });
       }
 
-      // Only allow these roles to be set from UI
-      const allowedRoles = ['user', 'r4', 'r5'];
-      if (!allowedRoles.includes(role)) {
-        return res.status(400).json({ error: 'Invalid role' });
-      }
+      const result = await query('UPDATE users SET role = $1 WHERE id = $2', [
+        role,
+        userId,
+      ]);
 
-      // Prevent changing own role via UI
-      if (req.user.id === userId) {
-        return res
-          .status(400)
-          .json({ error: 'You cannot change your own role.' });
-      }
-
-      const stmt = db.prepare('UPDATE users SET role = ? WHERE id = ?');
-      const result = stmt.run(role, userId);
-
-      if (result.changes === 0) {
-        return res.status(404).json({ error: 'User not found' });
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: 'Benutzer nicht gefunden' });
       }
 
       res.json({
         success: true,
-        message: `Role updated to "${role}"`,
+        message: 'Rolle erfolgreich aktualisiert',
       });
     } catch (error) {
-      console.error('Error updating user role:', error);
-      res.status(500).json({ error: 'Could not update role' });
+      console.error('Error in admin/users/role:', error);
+      res.status(500).json({ error: 'Interner Server Fehler' });
     }
   }
 );
 
-// Benutzer löschen (nicht Admin, nicht eigener Account)
+// Benutzer löschen
 app.delete(
   '/api/admin/users/:id',
   authenticateToken,
   requireAdmin,
-  (req, res) => {
+  async (req, res) => {
     try {
       const userId = req.params.id;
 
-      const user = db
-        .prepare('SELECT id, username, role FROM users WHERE id = ?')
-        .get(userId);
-      if (!user) {
+      const result = await query('DELETE FROM users WHERE id = $1', [userId]);
+
+      if (result.rowCount === 0) {
         return res.status(404).json({ error: 'Benutzer nicht gefunden' });
       }
 
-      if (user.role === 'admin') {
-        return res
-          .status(400)
-          .json({ error: 'Admin-Konten können nicht gelöscht werden.' });
-      }
-
-      const deleteStmt = db.prepare('DELETE FROM users WHERE id = ?');
-      const result = deleteStmt.run(userId);
-
-      res.json({
-        success: true,
-        message: `Benutzer "${user.username}" wurde dauerhaft gelöscht.`,
-        changes: result.changes,
-      });
+      res.json({ success: true, message: 'Benutzer erfolgreich gelöscht' });
     } catch (error) {
-      console.error('💥 Error deleting user:', error);
-      res.status(500).json({ error: 'Benutzer konnte nicht gelöscht werden.' });
+      console.error('Error in admin/users delete:', error);
+      res.status(500).json({ error: 'Interner Server Fehler' });
     }
   }
 );
 
-// ==================== OVERVIEW ENDPOINTS ====================
+// ==================== OVERVIEW FILES ====================
 
-app.get('/overview/files-data', (req, res) => {
+app.get('/overview/files-data', async (req, res) => {
   try {
-    const stmt = db.prepare(
+    const rows = await all(
       'SELECT * FROM overview_files ORDER BY fileOrder, uploadDate'
     );
-    const rows = stmt.all();
 
     const files = rows.map((row) => ({
       ...row,
@@ -854,8 +693,8 @@ app.get('/overview/files-data', (req, res) => {
     }));
 
     res.json(files);
-  } catch (err) {
-    console.error('Error fetching overview files:', err);
+  } catch (error) {
+    console.error('Error fetching overview files:', error);
     res.status(500).json({ error: 'Failed to fetch files' });
   }
 });
@@ -866,51 +705,46 @@ app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => 
       return res.status(400).json({ error: 'Keine Datei hochgeladen' });
     }
 
-    const parsedData = await parseFile(
-      req.file.path,
-      req.file.originalname
-    );
+    const { headers, data } = await parseExcel(req.file.path);
+
+    const id = 'ov-' + Date.now();
+    const uploadDate = new Date().toISOString();
 
     const newFile = {
-      id: Date.now().toString(),
+      id,
       name: req.file.originalname,
       filename: req.file.filename,
       path: req.file.path,
       size: req.file.size,
-      uploadDate: new Date().toISOString(),
-      headers: JSON.stringify(parsedData.headers),
-      data: JSON.stringify(parsedData.data),
+      uploadDate,
+      headers: JSON.stringify(headers),
+      data: JSON.stringify(data),
     };
 
-    const stmt = db.prepare(
+    await query(
       `
-      INSERT INTO overview_files (id, name, filename, path, size, uploadDate, headers, data)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `
-    );
-
-    stmt.run(
-      newFile.id,
-      newFile.name,
-      newFile.filename,
-      newFile.path,
-      newFile.size,
-      newFile.uploadDate,
-      newFile.headers,
-      newFile.data
+      INSERT INTO overview_files
+        (id, name, filename, path, size, uploadDate, headers, data)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    `,
+      [
+        newFile.id,
+        newFile.name,
+        newFile.filename,
+        newFile.path,
+        newFile.size,
+        newFile.uploadDate,
+        newFile.headers,
+        newFile.data,
+      ]
     );
 
     res.json({
-      message: 'Datei erfolgreich hochgeladen und verarbeitet',
+      message: 'Datei erfolgreich hochgeladen',
       file: {
-        id: newFile.id,
-        name: newFile.name,
-        filename: newFile.filename,
-        path: newFile.path,
-        size: newFile.size,
-        uploadDate: newFile.uploadDate,
-        headers: parsedData.headers,
-        data: parsedData.data,
+        ...newFile,
+        headers,
+        data,
       },
     });
   } catch (error) {
@@ -922,23 +756,30 @@ app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => 
   }
 });
 
-app.delete('/overview/files/:id', (req, res) => {
+app.delete('/overview/files/:id', async (req, res) => {
   try {
     const fileId = req.params.id;
 
-    const stmt = db.prepare('SELECT * FROM overview_files WHERE id = ?');
-    const file = stmt.get(fileId);
+    const file = await get(
+      'SELECT * FROM overview_files WHERE id = $1',
+      [fileId]
+    );
 
     if (!file) {
       return res.status(404).json({ error: 'Datei nicht gefunden' });
     }
 
-    if (fs.existsSync(file.path)) {
+    if (file.path && fs.existsSync(file.path)) {
       fs.unlinkSync(file.path);
     }
 
-    const deleteStmt = db.prepare('DELETE FROM overview_files WHERE id = ?');
-    deleteStmt.run(fileId);
+    const result = await query('DELETE FROM overview_files WHERE id = $1', [
+      fileId,
+    ]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Datei nicht gefunden' });
+    }
 
     res.json({ message: 'Datei erfolgreich gelöscht' });
   } catch (error) {
@@ -947,20 +788,20 @@ app.delete('/overview/files/:id', (req, res) => {
   }
 });
 
-app.post('/overview/files/reorder', (req, res) => {
+app.post('/overview/files/reorder', async (req, res) => {
   try {
     const { order } = req.body;
     if (!order || !Array.isArray(order)) {
       return res.status(400).json({ error: 'Ungültige Reihenfolge' });
     }
 
-    const updateStmt = db.prepare(
-      'UPDATE overview_files SET fileOrder = ? WHERE id = ?'
-    );
-
-    order.forEach((id, index) => {
-      updateStmt.run(index, id);
-    });
+    for (let index = 0; index < order.length; index++) {
+      const id = order[index];
+      await query(
+        'UPDATE overview_files SET fileOrder = $1 WHERE id = $2',
+        [index, id]
+      );
+    }
 
     res.json({ message: 'Reihenfolge aktualisiert' });
   } catch (error) {
@@ -971,14 +812,13 @@ app.post('/overview/files/reorder', (req, res) => {
   }
 });
 
-// ==================== HONOR ENDPOINTS ====================
+// ==================== HONOR FILES ====================
 
-app.get('/honor/files-data', (req, res) => {
+app.get('/honor/files-data', async (req, res) => {
   try {
-    const stmt = db.prepare(
+    const rows = await all(
       'SELECT * FROM honor_files ORDER BY fileOrder, uploadDate'
     );
-    const rows = stmt.all();
 
     const files = rows.map((row) => ({
       ...row,
@@ -987,8 +827,8 @@ app.get('/honor/files-data', (req, res) => {
     }));
 
     res.json(files);
-  } catch (err) {
-    console.error('Error fetching honor files:', err);
+  } catch (error) {
+    console.error('Error fetching honor files:', error);
     res.status(500).json({ error: 'Failed to fetch files' });
   }
 });
@@ -999,51 +839,46 @@ app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'Keine Datei hochgeladen' });
     }
 
-    const parsedData = await parseFile(
-      req.file.path,
-      req.file.originalname
-    );
+    const { headers, data } = await parseExcel(req.file.path);
+
+    const id = 'hon-' + Date.now();
+    const uploadDate = new Date().toISOString();
 
     const newFile = {
-      id: Date.now().toString(),
+      id,
       name: req.file.originalname,
       filename: req.file.filename,
       path: req.file.path,
       size: req.file.size,
-      uploadDate: new Date().toISOString(),
-      headers: JSON.stringify(parsedData.headers),
-      data: JSON.stringify(parsedData.data),
+      uploadDate,
+      headers: JSON.stringify(headers),
+      data: JSON.stringify(data),
     };
 
-    const stmt = db.prepare(
+    await query(
       `
-      INSERT INTO honor_files (id, name, filename, path, size, uploadDate, headers, data)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `
-    );
-
-    stmt.run(
-      newFile.id,
-      newFile.name,
-      newFile.filename,
-      newFile.path,
-      newFile.size,
-      newFile.uploadDate,
-      newFile.headers,
-      newFile.data
+      INSERT INTO honor_files
+        (id, name, filename, path, size, uploadDate, headers, data)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    `,
+      [
+        newFile.id,
+        newFile.name,
+        newFile.filename,
+        newFile.path,
+        newFile.size,
+        newFile.uploadDate,
+        newFile.headers,
+        newFile.data,
+      ]
     );
 
     res.json({
-      message: 'Datei erfolgreich hochgeladen und verarbeitet',
+      message: 'Datei erfolgreich hochgeladen',
       file: {
-        id: newFile.id,
-        name: newFile.name,
-        filename: newFile.filename,
-        path: newFile.path,
-        size: newFile.size,
-        uploadDate: newFile.uploadDate,
-        headers: parsedData.headers,
-        data: parsedData.data,
+        ...newFile,
+        headers,
+        data,
       },
     });
   } catch (error) {
@@ -1055,23 +890,27 @@ app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
   }
 });
 
-app.delete('/honor/files/:id', (req, res) => {
+app.delete('/honor/files/:id', async (req, res) => {
   try {
     const fileId = req.params.id;
 
-    const stmt = db.prepare('SELECT * FROM honor_files WHERE id = ?');
-    const file = stmt.get(fileId);
+    const file = await get('SELECT * FROM honor_files WHERE id = $1', [fileId]);
 
     if (!file) {
       return res.status(404).json({ error: 'Datei nicht gefunden' });
     }
 
-    if (fs.existsSync(file.path)) {
+    if (file.path && fs.existsSync(file.path)) {
       fs.unlinkSync(file.path);
     }
 
-    const deleteStmt = db.prepare('DELETE FROM honor_files WHERE id = ?');
-    deleteStmt.run(fileId);
+    const result = await query('DELETE FROM honor_files WHERE id = $1', [
+      fileId,
+    ]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Datei nicht gefunden' });
+    }
 
     res.json({ message: 'Datei erfolgreich gelöscht' });
   } catch (error) {
@@ -1080,20 +919,20 @@ app.delete('/honor/files/:id', (req, res) => {
   }
 });
 
-app.post('/honor/files/reorder', (req, res) => {
+app.post('/honor/files/reorder', async (req, res) => {
   try {
     const { order } = req.body;
     if (!order || !Array.isArray(order)) {
       return res.status(400).json({ error: 'Ungültige Reihenfolge' });
     }
 
-    const updateStmt = db.prepare(
-      'UPDATE honor_files SET fileOrder = ? WHERE id = ?'
-    );
-
-    order.forEach((id, index) => {
-      updateStmt.run(index, id);
-    });
+    for (let index = 0; index < order.length; index++) {
+      const id = order[index];
+      await query(
+        'UPDATE honor_files SET fileOrder = $1 WHERE id = $2',
+        [index, id]
+      );
+    }
 
     res.json({ message: 'Reihenfolge aktualisiert' });
   } catch (error) {
@@ -1104,21 +943,21 @@ app.post('/honor/files/reorder', (req, res) => {
   }
 });
 
-// Health Check
+// ==================== HEALTH & ROOT ====================
+
 app.get('/health', (req, res) => {
   res.json({
     status: 'Backend läuft',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    database: dbPath,
+    database: 'Postgres via DATABASE_URL',
   });
 });
 
-// Root Route
 app.get('/', (req, res) => {
   res.json({
     message: 'KD3619 Backend API',
-    version: '1.3.0',
+    version: '2.0.0-pg',
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
       auth: [
@@ -1153,10 +992,11 @@ app.get('/', (req, res) => {
   });
 });
 
-// Server starten
+// ==================== SERVER START ====================
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Backend Server läuft auf Port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`💾 Datenbank: ${dbPath}`);
+  console.log(`💾 Datenbank: Postgres via DATABASE_URL`);
   console.log(`🔐 JWT Secret: ${JWT_SECRET.substring(0, 10)}...`);
 });
