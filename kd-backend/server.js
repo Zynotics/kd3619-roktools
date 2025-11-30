@@ -105,14 +105,42 @@ function authenticateToken(req, res, next) {
   });
 }
 
-function requireAdmin(req, res, next) {
+// 🔐 Admin / R5 middleware (for user management & admin endpoints)
+async function requireAdmin(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ error: 'Nicht authentifiziert' });
   }
-  if (req.user.role !== 'admin' && req.user.role !== 'r5') {
-    return res.status(403).json({ error: 'Keine Admin-Rechte' });
+
+  try {
+    // Rolle IMMER frisch aus der DB holen
+    const dbUser = await get(
+      'SELECT role FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    if (!dbUser) {
+      return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    }
+
+    const role = dbUser.role;
+
+    // Nur admin & r5 dürfen Admin-Endpunkte aufrufen
+    if (role !== 'admin' && role !== 'r5') {
+      return res
+        .status(403)
+        .json({ error: 'Admin oder R5 Rechte erforderlich' });
+    }
+
+    // Rolle am Request-Objekt aktualisieren (falls sich was geändert hat)
+    req.user.role = role;
+
+    next();
+  } catch (error) {
+    console.error('Error checking admin privileges:', error);
+    return res
+      .status(500)
+      .json({ error: 'Fehler bei der Admin-/R5-Rechteprüfung' });
   }
-  next();
 }
 
 // ==================== GOV-ID-HELPER (Postgres) ====================
