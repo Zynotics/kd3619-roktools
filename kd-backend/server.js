@@ -19,7 +19,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'kd3619-secret-key-change-in-produc
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
-  'https://kd3619-frontend.onrender.com',
+  'https://rise-of-stats.com',
+    'https://kd3619-frontend.onrender.com',
 ];
 
 app.use(
