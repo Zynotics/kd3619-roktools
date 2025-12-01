@@ -54,7 +54,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   );
 
   // ---------------------------------------------------
-  // Dateien laden (KORRIGIERT: Logik für Public/Private)
+  // Dateien laden (KORRIGIERT: Abhängigkeiten im useCallback)
   // ---------------------------------------------------
   const fetchFiles = useCallback(async () => {
     // Wenn öffentlicher View und kein Slug vorhanden, breche ab
@@ -123,7 +123,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [backendUrl, isPublicView, publicSlug, user]);
+  }, [backendUrl, publicSlug, user]); // <<< isPublicView entfernt
 
   useEffect(() => {
     fetchFiles();
