@@ -294,7 +294,7 @@ app.post('/api/auth/check-gov-id', async (req, res) => {
     }
 
     const existsInUsers = await userGovIdExists(governorId);
-    const existsInFiles = await governorIdExists(goverctorId);
+    const existsInFiles = await governorIdExists(governorId);
 
     res.json({
       exists: existsInUsers || existsInFiles,
@@ -544,14 +544,14 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
     let whereClause = '';
     const params = [];
     
-    const userKingdomId = getKingdomId(req);
+    const userKingdomId = getKingdomId(req); // Gibt NULL für Admin zurück
     
-    // Wenn es kein Superadmin ist (Rolle != 'admin'), filtere nach seiner Kingdom ID
+    // Wenn es kein Superadmin ist (userKingdomId is NOT null), filtere nach seiner Kingdom ID
     if (userKingdomId) {
         whereClause = 'WHERE kingdom_id = $1';
         params.push(userKingdomId);
     }
-    // Superadmins (`admin` role) sehen alle Benutzer
+    // Superadmins (`admin` role) sehen alle Benutzer (leere WHERE-Klausel)
     
     const users = await all(
       `
@@ -730,34 +730,19 @@ app.post(
         }
       }
 
-      // Beim Setzen auf 'r5' MUSS das Kingdom_id des Users gesetzt werden.
-      // Da diese Route von R5 aufgerufen werden kann und R5 immer eine kingdom_id hat,
-      // und der Scoping-Check bestanden wurde, brauchen wir nur das Update:
       let updateSql = 'UPDATE users SET role = $1 WHERE id = $2';
       let params = [role, userId];
       
-      if (role === 'r5' && currentUserRole !== 'admin') {
-          // Nur Superadmin darf R5 ohne vorheriges Kingdom-Setzen machen.
-          // Da R5 das macht: Update role und stelle sicher, dass kingdom_id nicht gelöscht wird.
-          // Der korrekte Prozess ist über /assign-r5, aber hier updaten wir nur die Rolle.
-          // WICHTIG: Die /assign-r5 Route sollte verwendet werden, um role=r5 UND kingdom_id zu setzen.
-          // Hier lassen wir es für R5 zu, wenn der User im Kingdom ist.
-          // Wenn die Rolle auf 'user' oder 'r4' gesetzt wird, behalte die Kingdom-ID bei.
+      // Beim Setzen der Rolle auf 'user' oder 'r4' behalten wir die Kingdom-ID des R5 bei
+      if (role === 'user' || role === 'r4' || (role === 'r5' && currentUserRole !== 'admin')) {
+          updateSql = 'UPDATE users SET role = $1, kingdom_id = $3 WHERE id = $2';
+          // Der Zielbenutzer bekommt die Kingdom ID des aktuellen R5/Admin zugewiesen
+          params = [role, userId, currentUserKingdomId || targetUser.kingdom_id]; 
       }
       
-      // Wenn Rolle auf 'user' gesetzt wird, entfernen wir die kingdom_id (optional, aber sinnvoll)
-      if (role === 'user' || role === 'r4') {
-          updateSql = 'UPDATE users SET role = $1, kingdom_id = $3 WHERE id = $2';
-          params = [role, userId, currentUserKingdomId];
-      }
+      // Beim Setzen von 'user' oder 'r4' durch einen Admin, der kein Kingdom hat, darf die Kingdom_id NICHT auf NULL gesetzt werden.
+      // Da die Scoping-Prüfung dies bereits handhabt und wir hier nur Role/KingdomId setzen, lassen wir es wie oben.
       
-      // Wenn die Rolle auf r5 gesetzt wird, setzen wir auch die Kingdom ID (falls R5/R4 die Rolle vergeben)
-      if (role === 'r5' && currentUserRole !== 'admin') {
-          updateSql = 'UPDATE users SET role = $1, kingdom_id = $3 WHERE id = $2';
-          params = [role, userId, currentUserKingdomId];
-      }
-
-
       const result = await query(updateSql, params);
 
       if (result.rowCount === 0) {
@@ -866,7 +851,7 @@ app.get(
   }
 );
 
-// ... (Restliche Kingdom-Admin-Routen: create, assign-r5, status, delete bleiben unverändert, da sie Superadmin-Privilegien erfordern)
+// ... (Restliche Kingdom-Admin-Routen: create, assign-r5, status, delete bleiben unverändert)
 
 // ==================== PUBLIC KINGDOM ENDPOINTS ====================
 
@@ -874,12 +859,16 @@ app.get(
 
 // ==================== AUTHENTIFIZIERTE DATEN-ENDPUNKTE ====================
 
-// 🚩 GEÄNDERT: Overview Files auf Basis von Kingdom ID
+// 🚩 GEÄNDERT: Overview Files auf Basis von Kingdom ID (Superadmin Fix)
 app.get('/overview/files-data', authenticateToken, async (req, res) => { 
   try {
-    const kingdomId = req.user.kingdomId;
+    const { role, kingdomId } = req.user;
     
-    if (!kingdomId) {
+    // FIX: Superadmin (role == 'admin' und kingdomId == null) sieht 'kdm-default' Daten.
+    const finalKingdomId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
+    
+    if (!finalKingdomId) {
+        // Fängt R5/R4/User ohne zugewiesenes Kingdom ab.
         return res.status(403).json({ error: 'Benutzer ist keinem Königreich zugewiesen.' });
     }
 
@@ -889,7 +878,7 @@ app.get('/overview/files-data', authenticateToken, async (req, res) => {
       WHERE kingdom_id = $1 
       ORDER BY fileOrder, uploadDate
       `,
-      [kingdomId] // Daten werden nach zugewiesener Kingdom ID gefiltert
+      [finalKingdomId] 
     );
 
     const files = rows.map((row) => ({
@@ -1070,22 +1059,25 @@ app.post('/overview/files/reorder', authenticateToken, async (req, res) => {
 
 // ==================== HONOR FILES ====================
 
-// 🚩 GEÄNDERT: Honor Files auf Basis von Kingdom ID
+// 🚩 GEÄNDERT: Honor Files auf Basis von Kingdom ID (Superadmin Fix)
 app.get('/honor/files-data', authenticateToken, async (req, res) => {
   try {
-    const kingdomId = req.user.kingdomId;
+    const { role, kingdomId } = req.user;
+
+    // FIX: Superadmin (role == 'admin' und kingdomId == null) sieht 'kdm-default' Daten.
+    const finalKingdomId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
     
-    if (!kingdomId) {
+    if (!finalKingdomId) {
         return res.status(403).json({ error: 'Benutzer ist keinem Königreich zugewiesen.' });
     }
-
+    
     const rows = await all(
       `
       SELECT * FROM honor_files
       WHERE kingdom_id = $1
       ORDER BY fileOrder, uploadDate
       `,
-      [kingdomId]
+      [finalKingdomId]
     );
 
     const files = rows.map((row) => ({
@@ -1275,7 +1267,7 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'KD3619 Backend API',
-    version: '2.4.2-pg-final-fix',
+    version: '2.4.3-admin-scoping-fix', // Version aktualisiert
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
       auth: [
@@ -1304,13 +1296,13 @@ app.get('/', (req, res) => {
       ],
       debug: ['GET /api/debug/users'],
       overview: [
-        'GET /overview/files-data (Requires Token, Scoped by Kingdom)',
+        'GET /overview/files-data (Requires Token, Scoped by Kingdom or Default for Admin)',
         'POST /overview/upload (R4/R5/Admin, Scoped)',
         'DELETE /overview/files/:id (R4/R5/Admin, Scoped)',
         'POST /overview/files/reorder (R4/R5/Admin, Scoped)',
       ],
       honor: [
-        'GET /honor/files-data (Requires Token, Scoped by Kingdom)',
+        'GET /honor/files-data (Requires Token, Scoped by Kingdom or Default for Admin)',
         'POST /honor/upload (R4/R5/Admin, Scoped)',
         'DELETE /honor/files/:id (R4/R5/Admin, Scoped)',
         'POST /honor/files/reorder (R4/R5/Admin, Scoped)',
