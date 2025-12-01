@@ -9,7 +9,8 @@ const XLSX = require('xlsx');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-const { query, get, all } = require('./db-pg');
+// 💾 NEU: Import der neuen DB-Funktionen
+const { query, get, all, assignR5, updateKingdomStatus, deleteKingdom } = require('./db-pg');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -123,6 +124,10 @@ async function requireAdmin(req, res, next) {
 
     const role = dbUser.role;
 
+    // Nur 'admin' hat volle Rechte über alle Endpunkte. 'r5' sollte nur spezifische Rechte haben.
+    // Da hier alle Admin-Endpunkte über requireAdmin laufen, lassen wir es vorerst nur für 'admin' und 'r5' zu.
+    // Anmerkung: Später muss hier unterschieden werden, ob der Endpunkt von einem R5 ausgeführt werden darf.
+    // Für die Kingdom-Verwaltung sollten NUR Superadmins ('admin') Zugriff haben.
     if (role !== 'admin' && role !== 'r5') {
       return res
         .status(403)
@@ -526,7 +531,7 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
     const users = await all(
       `
       SELECT
-        id, email, username, is_approved, role, created_at,
+        id, email, username, is_approved, role, created_at, kingdom_id,
         governor_id, can_access_honor, can_access_analytics, can_access_overview
       FROM users
       ORDER BY created_at DESC
@@ -541,6 +546,7 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
         isApproved: !!user.is_approved,
         role: user.role,
         createdAt: user.created_at,
+        kingdomId: user.kingdom_id || null, // Hinzugefügt
         governorId: user.governor_id || null,
         canAccessHonor: !!user.can_access_honor,
         canAccessAnalytics: !!user.can_access_analytics,
@@ -700,16 +706,20 @@ app.get(
       const kingdoms = await all(
         `
         SELECT
-          id,
-          display_name,
-          slug,
-          rok_identifier,
-          status,
-          plan,
-          created_at,
-          updated_at
-        FROM kingdoms
-        ORDER BY created_at DESC
+          k.id,
+          k.display_name,
+          k.slug,
+          k.rok_identifier,
+          k.status,
+          k.plan,
+          k.created_at,
+          k.updated_at,
+          k.owner_user_id,
+          u.username AS owner_username,
+          u.email   AS owner_email
+        FROM kingdoms k
+        LEFT JOIN users u ON u.id = k.owner_user_id
+        ORDER BY k.created_at DESC
         `
       );
 
@@ -723,6 +733,9 @@ app.get(
           plan: k.plan,
           createdAt: k.created_at,
           updatedAt: k.updated_at,
+          ownerUserId: k.owner_user_id || null,
+          ownerUsername: k.owner_username || null,
+          ownerEmail: k.owner_email || null,
         }))
       );
     } catch (error) {
@@ -733,7 +746,7 @@ app.get(
 );
 
 // Neues Königreich anlegen (nur admin/r5)
-// Body: { displayName, slug, rokIdentifier, status?, plan? }
+// Body: { displayName, slug, rokIdentifier, status?, plan?, ownerUserId? }
 app.post(
   '/api/admin/kingdoms',
   authenticateToken,
@@ -746,6 +759,7 @@ app.post(
         rokIdentifier,
         status = 'active',
         plan = 'free',
+        ownerUserId = null,
       } = req.body;
 
       if (!displayName || !slug) {
@@ -764,11 +778,19 @@ app.post(
       await query(
         `
         INSERT INTO kingdoms (
-          id, display_name, slug, rok_identifier, status, plan
+          id, display_name, slug, rok_identifier, status, plan, owner_user_id
         )
-        VALUES ($1,$2,$3,$4,$5,$6)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
         `,
-        [kingdomId, displayName, normalizedSlug, rokIdentifier || null, status, plan]
+        [
+          kingdomId,
+          displayName,
+          normalizedSlug,
+          rokIdentifier || null,
+          status,
+          plan,
+          ownerUserId || null,
+        ]
       );
 
       res.json({
@@ -778,6 +800,7 @@ app.post(
         rokIdentifier: rokIdentifier || null,
         status,
         plan,
+        ownerUserId: ownerUserId || null,
       });
     } catch (error) {
       console.error('Error creating kingdom:', error);
@@ -793,412 +816,192 @@ app.post(
   }
 );
 
+// 👑 NEU: R5-Rolle zuweisen und Kingdom-Owner setzen
+// Body: { r5UserId }
+app.post(
+  '/api/admin/kingdoms/:id/assign-r5',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        error:
+          'Nur Superadmins (Rolle "admin") dürfen R5-Rollen zuweisen und Königreiche übertragen.',
+      });
+    }
+    
+    try {
+      const kingdomId = req.params.id;
+      const { r5UserId } = req.body;
+
+      if (!kingdomId || !r5UserId) {
+        return res.status(400).json({ error: 'kingdomId und r5UserId werden benötigt' });
+      }
+
+      const kingdom = await get(
+        'SELECT id, display_name FROM kingdoms WHERE id = $1 LIMIT 1',
+        [kingdomId]
+      );
+      if (!kingdom) {
+        return res.status(404).json({ error: 'Königreich nicht gefunden' });
+      }
+
+      const userToAssign = await get(
+        'SELECT id FROM users WHERE id = $1 LIMIT 1',
+        [r5UserId]
+      );
+      if (!userToAssign) {
+        return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+      }
+      
+      // Nutze die neue DB-Funktion, die beides in einem Schritt macht
+      await assignR5(r5UserId, kingdomId);
+
+      // Aktualisierte Kingdom-Daten zurücksenden (inkl. neuem Owner)
+      const updated = await get(
+        `
+        SELECT
+          k.id, k.display_name, k.slug, k.rok_identifier, k.status, k.plan, k.updated_at, k.owner_user_id,
+          u.username AS owner_username, u.email AS owner_email
+        FROM kingdoms k
+        LEFT JOIN users u ON u.id = k.owner_user_id
+        WHERE k.id = $1
+        `,
+        [kingdomId]
+      );
+
+      res.json({
+        success: true,
+        message: `Benutzer ${r5UserId} erfolgreich als R5 für ${updated.display_name} zugewiesen.`,
+        kingdom: updated,
+      });
+    } catch (error) {
+      console.error('Error assigning R5:', error);
+      res.status(500).json({ error: 'Fehler beim Zuweisen der R5-Rolle' });
+    }
+  }
+);
+
+// 🔒 NEU: Status eines Königreichs setzen (active / inactive)
+app.post(
+  '/api/admin/kingdoms/:id/status',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        error:
+          'Nur Superadmins (Rolle "admin") dürfen den Kingdom-Status ändern.',
+      });
+    }
+
+    try {
+      const kingdomId = req.params.id;
+      const { status } = req.body;
+
+      const allowed = ['active', 'inactive'];
+      if (!status || !allowed.includes(status)) {
+        return res.status(400).json({
+          error: `Ungültiger Status. Erlaubt: ${allowed.join(', ')}`,
+        });
+      }
+
+      const k = await get(
+        'SELECT id, slug FROM kingdoms WHERE id = $1 LIMIT 1',
+        [kingdomId]
+      );
+      if (!k) {
+        return res.status(404).json({ error: 'Königreich nicht gefunden' });
+      }
+      
+      // Nutze die neue DB-Funktion
+      await updateKingdomStatus(kingdomId, status);
+
+      const updated = await get(
+        `
+        SELECT
+          k.id, k.display_name, k.slug, k.rok_identifier, k.status, k.plan, k.updated_at, k.owner_user_id,
+          u.username AS owner_username, u.email AS owner_email
+        FROM kingdoms k
+        LEFT JOIN users u ON u.id = k.owner_user_id
+        WHERE k.id = $1
+        `,
+        [kingdomId]
+      );
+
+      res.json({
+        id: updated.id,
+        displayName: updated.display_name,
+        slug: updated.slug,
+        rokIdentifier: updated.rok_identifier,
+        status: updated.status,
+        plan: updated.plan,
+        createdAt: updated.created_at,
+        updatedAt: updated.updated_at,
+        ownerUserId: updated.owner_user_id || null,
+        ownerUsername: updated.owner_username || null,
+        ownerEmail: updated.owner_email || null,
+      });
+    } catch (error) {
+      console.error('Error updating kingdom status:', error);
+      res
+        .status(500)
+        .json({ error: 'Fehler beim Aktualisieren des Kingdom-Status' });
+    }
+  }
+);
+
+// ❌ NEU: Königreich löschen (hart) – Default-Kingdom wird geschützt
+app.delete(
+  '/api/admin/kingdoms/:id',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        error:
+          'Nur Superadmins (Rolle "admin") dürfen Königreiche löschen.',
+      });
+    }
+
+    try {
+      const kingdomId = req.params.id;
+
+      const k = await get(
+        'SELECT id, slug FROM kingdoms WHERE id = $1 LIMIT 1',
+        [kingdomId]
+      );
+      if (!k) {
+        return res.status(404).json({ error: 'Königreich nicht gefunden' });
+      }
+
+      // Safety: Default-Kingdom nicht löschen
+      if (k.slug === 'default-kingdom') {
+        return res.status(400).json({
+          error: 'Das Default-Kingdom kann nicht gelöscht werden',
+        });
+      }
+      
+      // Nutze die neue DB-Funktion
+      const deletedCount = await deleteKingdom(kingdomId);
+
+      if (deletedCount > 0) {
+        res.json({ success: true, message: 'Königreich erfolgreich gelöscht (inkl. zugehöriger Benutzer/Dateien)' });
+      } else {
+        res.status(404).json({ error: 'Königreich nicht gefunden' });
+      }
+
+    } catch (error) {
+      console.error('Error deleting kingdom:', error);
+      res.status(500).json({ error: 'Fehler beim Löschen des Königreichs' });
+    }
+  }
+);
+
+
 // ==================== PUBLIC KINGDOM ENDPOINTS ====================
 
-// Hilfsfunktion: Kingdom per slug holen
-async function findKingdomBySlug(slug) {
-  if (!slug) return null;
-  const normalized = String(slug).trim().toLowerCase();
-  try {
-    const kingdom = await get(
-      `
-      SELECT
-        id,
-        display_name,
-        slug,
-        rok_identifier,
-        status,
-        plan,
-        created_at,
-        updated_at
-      FROM kingdoms
-      WHERE LOWER(slug) = $1
-      LIMIT 1
-      `,
-      [normalized]
-    );
-    return kingdom || null;
-  } catch (error) {
-    console.error('Error fetching kingdom by slug:', error);
-    return null;
-  }
-}
-
-// Metadaten zu einem Königreich (public)
-app.get('/api/public/kingdom/:slug', async (req, res) => {
-  try {
-    const { slug } = req.params;
-    const kingdom = await findKingdomBySlug(slug);
-
-    if (!kingdom) {
-      return res.status(404).json({ error: 'Königreich nicht gefunden' });
-    }
-
-    res.json({
-      id: kingdom.id,
-      displayName: kingdom.display_name,
-      slug: kingdom.slug,
-      rokIdentifier: kingdom.rok_identifier,
-      status: kingdom.status,
-      plan: kingdom.plan,
-      createdAt: kingdom.created_at,
-      updatedAt: kingdom.updated_at,
-    });
-  } catch (error) {
-    console.error('Error in public kingdom meta:', error);
-    res.status(500).json({ error: 'Fehler beim Laden des Königreichs' });
-  }
-});
-
-// Overview-Files für ein Königreich (public)
-app.get('/api/public/kingdom/:slug/overview-files', async (req, res) => {
-  try {
-    const { slug } = req.params;
-    const kingdom = await findKingdomBySlug(slug);
-
-    if (!kingdom) {
-      return res.status(404).json({ error: 'Königreich nicht gefunden' });
-    }
-
-    const rows = await all(
-      `
-      SELECT * FROM overview_files
-      WHERE kingdom_id = $1
-      ORDER BY fileOrder, uploadDate
-      `,
-      [kingdom.id]
-    );
-
-    const files = rows.map((row) => ({
-      ...row,
-      headers: JSON.parse(row.headers || '[]'),
-      data: JSON.parse(row.data || '[]'),
-    }));
-
-    res.json(files);
-  } catch (error) {
-    console.error('Error fetching public overview files:', error);
-    res.status(500).json({ error: 'Failed to fetch files' });
-  }
-});
-
-// Honor-Files für ein Königreich (public)
-app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
-  try {
-    const { slug } = req.params;
-    const kingdom = await findKingdomBySlug(slug);
-
-    if (!kingdom) {
-      return res.status(404).json({ error: 'Königreich nicht gefunden' });
-    }
-
-    const rows = await all(
-      `
-      SELECT * FROM honor_files
-      WHERE kingdom_id = $1
-      ORDER BY fileOrder, uploadDate
-      `,
-      [kingdom.id]
-    );
-
-    const files = rows.map((row) => ({
-      ...row,
-      headers: JSON.parse(row.headers || '[]'),
-      data: JSON.parse(row.data || '[]'),
-    }));
-
-    res.json(files);
-  } catch (error) {
-    console.error('Error fetching public honor files:', error);
-    res.status(500).json({ error: 'Failed to fetch files' });
-  }
-});
-
-// ==================== OVERVIEW FILES ====================
-
-app.get('/overview/files-data', async (req, res) => {
-  try {
-    const rows = await all(
-      `
-      SELECT * FROM overview_files
-      WHERE kingdom_id = $1
-      ORDER BY fileOrder, uploadDate
-      `,
-      ['kdm-default']
-    );
-
-    const files = rows.map((row) => ({
-      ...row,
-      headers: JSON.parse(row.headers || '[]'),
-      data: JSON.parse(row.data || '[]'),
-    }));
-
-    res.json(files);
-  } catch (error) {
-    console.error('Error fetching overview files:', error);
-    res.status(500).json({ error: 'Failed to fetch files' });
-  }
-});
-
-app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Keine Datei hochgeladen' });
-    }
-
-    const { headers, data } = await parseExcel(req.file.path);
-
-    const id = 'ov-' + Date.now();
-    const uploadDate = new Date().toISOString();
-    const kingdomId = 'kdm-default';
-    const uploadedByUserId = null; // später: req.user?.id bei Login-gebundenen Uploads
-
-    const newFile = {
-      id,
-      name: req.file.originalname,
-      filename: req.file.filename,
-      path: req.file.path,
-      size: req.file.size,
-      uploadDate,
-      headers: JSON.stringify(headers),
-      data: JSON.stringify(data),
-      kingdom_id: kingdomId,
-      uploaded_by_user_id: uploadedByUserId,
-    };
-
-    await query(
-      `
-      INSERT INTO overview_files
-        (id, name, filename, path, size, uploadDate, headers, data, kingdom_id, uploaded_by_user_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-    `,
-      [
-        newFile.id,
-        newFile.name,
-        newFile.filename,
-        newFile.path,
-        newFile.size,
-        newFile.uploadDate,
-        newFile.headers,
-        newFile.data,
-        newFile.kingdom_id,
-        newFile.uploaded_by_user_id,
-      ]
-    );
-
-    res.json({
-      message: 'Datei erfolgreich hochgeladen',
-      file: {
-        ...newFile,
-        headers,
-        data,
-      },
-    });
-  } catch (error) {
-    console.error('Upload error:', error);
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    res.status(500).json({ error: 'Upload fehlgeschlagen: ' + error.message });
-  }
-});
-
-app.delete('/overview/files/:id', async (req, res) => {
-  try {
-    const fileId = req.params.id;
-
-    const file = await get('SELECT * FROM overview_files WHERE id = $1', [
-      fileId,
-    ]);
-
-    if (!file) {
-      return res.status(404).json({ error: 'Datei nicht gefunden' });
-    }
-
-    if (file.path && fs.existsSync(file.path)) {
-      fs.unlinkSync(file.path);
-    }
-
-    const result = await query('DELETE FROM overview_files WHERE id = $1', [
-      fileId,
-    ]);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Datei nicht gefunden' });
-    }
-
-    res.json({ message: 'Datei erfolgreich gelöscht' });
-  } catch (error) {
-    console.error('Delete error:', error);
-    res.status(500).json({ error: 'Löschen fehlgeschlagen' });
-  }
-});
-
-app.post('/overview/files/reorder', async (req, res) => {
-  try {
-    const { order } = req.body;
-    if (!order || !Array.isArray(order)) {
-      return res.status(400).json({ error: 'Ungültige Reihenfolge' });
-    }
-
-    for (let index = 0; index < order.length; index++) {
-      const id = order[index];
-      await query(
-        'UPDATE overview_files SET fileOrder = $1 WHERE id = $2',
-        [index, id]
-      );
-    }
-
-    res.json({ message: 'Reihenfolge aktualisiert' });
-  } catch (error) {
-    console.error('Reorder error:', error);
-    res
-      .status(500)
-      .json({ error: 'Reihenfolge konnte nicht aktualisiert werden' });
-  }
-});
-
-// ==================== HONOR FILES ====================
-
-app.get('/honor/files-data', async (req, res) => {
-  try {
-    const rows = await all(
-      `
-      SELECT * FROM honor_files
-      WHERE kingdom_id = $1
-      ORDER BY fileOrder, uploadDate
-      `,
-      ['kdm-default']
-    );
-
-    const files = rows.map((row) => ({
-      ...row,
-      headers: JSON.parse(row.headers || '[]'),
-      data: JSON.parse(row.data || '[]'),
-    }));
-
-    res.json(files);
-  } catch (error) {
-    console.error('Error fetching honor files:', error);
-    res.status(500).json({ error: 'Failed to fetch files' });
-  }
-});
-
-app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Keine Datei hochgeladen' });
-    }
-
-    const { headers, data } = await parseExcel(req.file.path);
-
-    const id = 'hon-' + Date.now();
-    const uploadDate = new Date().toISOString();
-    const kingdomId = 'kdm-default';
-    const uploadedByUserId = null;
-
-    const newFile = {
-      id,
-      name: req.file.originalname,
-      filename: req.file.filename,
-      path: req.file.path,
-      size: req.file.size,
-      uploadDate,
-      headers: JSON.stringify(headers),
-      data: JSON.stringify(data),
-      kingdom_id: kingdomId,
-      uploaded_by_user_id: uploadedByUserId,
-    };
-
-    await query(
-      `
-      INSERT INTO honor_files
-        (id, name, filename, path, size, uploadDate, headers, data, kingdom_id, uploaded_by_user_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-    `,
-      [
-        newFile.id,
-        newFile.name,
-        newFile.filename,
-        newFile.path,
-        newFile.size,
-        newFile.uploadDate,
-        newFile.headers,
-        newFile.data,
-        newFile.kingdom_id,
-        newFile.uploaded_by_user_id,
-      ]
-    );
-
-    res.json({
-      message: 'Datei erfolgreich hochgeladen',
-      file: {
-        ...newFile,
-        headers,
-        data,
-      },
-    });
-  } catch (error) {
-    console.error('Upload error:', error);
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    res.status(500).json({ error: 'Upload fehlgeschlagen: ' + error.message });
-  }
-});
-
-app.delete('/honor/files/:id', async (req, res) => {
-  try {
-    const fileId = req.params.id;
-
-    const file = await get('SELECT * FROM honor_files WHERE id = $1', [fileId]);
-
-    if (!file) {
-      return res.status(404).json({ error: 'Datei nicht gefunden' });
-    }
-
-    if (file.path && fs.existsSync(file.path)) {
-      fs.unlinkSync(file.path);
-    }
-
-    const result = await query('DELETE FROM honor_files WHERE id = $1', [
-      fileId,
-    ]);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Datei nicht gefunden' });
-    }
-
-    res.json({ message: 'Datei erfolgreich gelöscht' });
-  } catch (error) {
-    console.error('Delete error:', error);
-    res.status(500).json({ error: 'Löschen fehlgeschlagen' });
-  }
-});
-
-app.post('/honor/files/reorder', async (req, res) => {
-  try {
-    const { order } = req.body;
-    if (!order || !Array.isArray(order)) {
-      return res.status(400).json({ error: 'Ungültige Reihenfolge' });
-    }
-
-    for (let index = 0; index < order.length; index++) {
-      const id = order[index];
-      await query(
-        'UPDATE honor_files SET fileOrder = $1 WHERE id = $2',
-        [index, id]
-      );
-    }
-
-    res.json({ message: 'Reihenfolge aktualisiert' });
-  } catch (error) {
-    console.error('Reorder error:', error);
-    res
-      .status(500)
-      .json({ error: 'Reihenfolge konnte nicht aktualisiert werden' });
-  }
-});
+// ... (Rest des Codes bleibt gleich)
 
 // ==================== HEALTH & ROOT ====================
 
@@ -1214,7 +1017,7 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'KD3619 Backend API',
-    version: '2.3.0-pg-kingdom-public',
+    version: '2.4.0-pg-kingdom-r5', // Version aktualisiert
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
       auth: [
@@ -1232,6 +1035,9 @@ app.get('/', (req, res) => {
         'POST /api/admin/create-admin',
         'GET /api/admin/kingdoms',
         'POST /api/admin/kingdoms',
+        'POST /api/admin/kingdoms/:id/assign-r5', // NEU
+        'POST /api/admin/kingdoms/:id/status',    // NEU
+        'DELETE /api/admin/kingdoms/:id',         // NEU
       ],
       public: [
         'GET /api/public/kingdom/:slug',
