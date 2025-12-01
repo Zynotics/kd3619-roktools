@@ -51,8 +51,24 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch(`${backendUrl}/honor/files-data`);
-      if (!response.ok) throw new Error('Failed to fetch files from server.');
+      
+      // 🔑 NEU: Token aus dem localStorage holen und Header hinzufügen
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('Authentication token not found. Please log in.');
+      }
+
+      const response = await fetch(`${backendUrl}/honor/files-data`, {
+        headers: {
+          Authorization: `Bearer ${token}`, // <-- HINZUGEFÜGT
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch files from server.');
+      }
+      
       const data = await response.json();
       setUploadedFiles(data || []);
 
@@ -69,13 +85,13 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
         setStartFileId(data[0].id);
         setEndFileId(data[0].id);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError('Error loading files from server.');
+      setError(err.message || 'Error loading files from server.');
     } finally {
       setIsLoading(false);
     }
-  }, [backendUrl]);
+  }, [backendUrl]); // backendUrl ist jetzt korrekt
 
   useEffect(() => {
     fetchFiles();
@@ -87,8 +103,15 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
 
   const handleDeleteFile = async (id: string) => {
     try {
+      // 🔑 NEU: Token-Header auch beim Löschen hinzufügen
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error('Authentication token missing.');
+      
       const response = await fetch(`${backendUrl}/honor/files/${id}`, {
         method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
       if (!response.ok) throw new Error('Failed to delete file on server.');
       setUploadedFiles((prev) => (prev || []).filter((f) => f.id !== id));
@@ -101,10 +124,17 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
   const handleReorderFiles = async (reorderedFiles: UploadedFile[]) => {
     setUploadedFiles(reorderedFiles);
     try {
+      // 🔑 NEU: Token-Header auch beim Reorder hinzufügen
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error('Authentication token missing.');
+
       const order = reorderedFiles.map((f) => f.id);
       await fetch(`${backendUrl}/honor/files/reorder`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ order }),
       });
     } catch (err) {
@@ -114,7 +144,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
 
   // ----------------------------------------------------
   // Helfer: UploadedFile -> HonorPlayerInfo[]
-  // (arbeitet mit headers + data)
+  // ... (Rest der Logik unverändert)
   // ----------------------------------------------------
   const extractHonorPlayersFromFile = useCallback(
     (file: UploadedFile): HonorPlayerInfo[] => {

@@ -6,7 +6,7 @@ type GovIdStatus = 'idle' | 'checking' | 'valid' | 'invalid';
 
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
-    ? 'https://kd3619-backend.onrender.com'
+    ? 'https://api.rise-of-stats.com'
     : 'http://localhost:4000';
 
 const LoginPrompt: React.FC = () => {

@@ -10,7 +10,7 @@ import PowerHistoryChart from './components/PowerHistoryChart';
 
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
-    ? 'https://kd3619-backend.onrender.com'
+    ? 'https://api.rise-of-stats.com' // <-- KORREKTE PRODUKTIONS-URL
     : 'http://localhost:4000';
 
 type ActiveView = 'overview' | 'honor' | 'analytics' | 'admin';
