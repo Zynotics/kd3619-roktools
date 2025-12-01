@@ -17,15 +17,23 @@ import type {
 interface HonorDashboardProps {
   isAdmin: boolean;
   backendUrl: string;
+  publicSlug: string | null; // FÜR ÖFFENTLICHEN ZUGRIFF
 }
 
 const HonorDashboard: React.FC<HonorDashboardProps> = ({
   isAdmin,
   backendUrl,
+  publicSlug,
 }) => {
   const { user } = useAuth();
   const role = user?.role;
-  const canManageFiles = isAdmin || role === 'r4' || role === 'r5';
+  const isBasicUser = role === 'user';
+  
+  // Logik: isPublicView ist true, wenn Slug da und kein User eingeloggt ist
+  const isPublicView = !!publicSlug && !user; 
+  // Logik: canManageFiles nur für eingeloggte Admin/R5/R4
+  const canManageFiles = !isPublicView && (isAdmin || role === 'r4' || role === 'r5'); 
+  const isMinimalView = isPublicView || isBasicUser; // Zeigt nur Chart/kein Management
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -43,30 +51,50 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
   >(null);
   const [selectedPlayerHistory, setSelectedPlayerHistory] =
     useState<PlayerHonorHistory | null>(null);
+    
+  // 🔑 NEU: Verwende atomare Werte aus dem user-Objekt für die Abhängigkeiten
+  const userLoggedIn = !!user;
+
 
   // ----------------------------------------------------
-  // Dateien laden
+  // Dateien laden (Logik für Public/Private)
   // ----------------------------------------------------
   const fetchFiles = useCallback(async () => {
+    if (isPublicView && !publicSlug) {
+        setError('Public access requires a Kingdom slug.');
+        setIsLoading(false);
+        return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
+      let response: Response;
       
-      // 🔑 NEU: Token aus dem localStorage holen und Header hinzufügen
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('Authentication token not found. Please log in.');
+      if (isPublicView && publicSlug) {
+        // 1. Öffentlicher Modus: Nutze public API mit Slug
+        const publicUrl = `${backendUrl}/api/public/kingdom/${publicSlug}/honor-files`;
+        response = await fetch(publicUrl);
+        
+      } else {
+        // 2. Privater Modus (eingeloggter User): Nutze geschützten Token-Endpunkt
+        const token = localStorage.getItem('authToken');
+        
+        if (!token) {
+          throw new Error('Authentication token not found. Please log in.');
+        }
+        
+        response = await fetch(`${backendUrl}/honor/files-data`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
       }
 
-      const response = await fetch(`${backendUrl}/honor/files-data`, {
-        headers: {
-          Authorization: `Bearer ${token}`, // <-- HINZUGEFÜGT
-        },
-      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to fetch files from server.');
+        throw new Error(errorData.error || `Failed to fetch files from server (${response.status}).`);
       }
       
       const data = await response.json();
@@ -87,14 +115,23 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Error loading files from server.');
+      const message = err.message || 'Error loading files from server.';
+      if (isPublicView && (message.includes('403') || message.includes('404') || message.includes('No data found'))) {
+          setError('No data found for this Kingdom slug.');
+      } else {
+          setError(message);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [backendUrl]); // backendUrl ist jetzt korrekt
+  }, [backendUrl, publicSlug, userLoggedIn]); // <<< userLoggedIn für Stabilität
 
   useEffect(() => {
     fetchFiles();
+    // Re-Compare, wenn Dateien geladen wurden
+    if (uploadedFiles.length > 0) {
+        handleCompare();
+    }
   }, [fetchFiles]);
 
   const handleUploadComplete = () => {
@@ -102,8 +139,10 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
   };
 
   const handleDeleteFile = async (id: string) => {
+    // ⚠️ Delete ist nur im privaten Modus erlaubt und muss Token senden
+    if (isPublicView) return; 
+
     try {
-      // 🔑 NEU: Token-Header auch beim Löschen hinzufügen
       const token = localStorage.getItem('authToken');
       if (!token) throw new Error('Authentication token missing.');
       
@@ -122,9 +161,11 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
   };
 
   const handleReorderFiles = async (reorderedFiles: UploadedFile[]) => {
+    // ⚠️ Reorder ist nur im privaten Modus erlaubt
+    if (isPublicView) return; 
+    
     setUploadedFiles(reorderedFiles);
     try {
-      // 🔑 NEU: Token-Header auch beim Reorder hinzufügen
       const token = localStorage.getItem('authToken');
       if (!token) throw new Error('Authentication token missing.');
 
@@ -143,11 +184,11 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
   };
 
   // ----------------------------------------------------
-  // Helfer: UploadedFile -> HonorPlayerInfo[]
-  // ... (Rest der Logik unverändert)
+  // Helfer: UploadedFile -> HonorPlayerInfo[] (unverändert)
   // ----------------------------------------------------
   const extractHonorPlayersFromFile = useCallback(
     (file: UploadedFile): HonorPlayerInfo[] => {
+      // ... (Logik wie vorher)
       if (!file || !file.headers || !file.data) return [];
 
       const headers = (file.headers || []).map((h) => String(h));
@@ -391,9 +432,43 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
       </div>
     );
   }
-
+  
+  // ----------------------------------------------------
+  // RENDER LOGIC
+  // ----------------------------------------------------
+  
   const startFileName = uploadedFiles.find((f) => f.id === startFileId)?.name;
   const endFileName = uploadedFiles.find((f) => f.id === endFileId)?.name;
+
+  if (isMinimalView) {
+      return (
+          <div className="space-y-8">
+              {/* Chart ist Teil der Minimal View */}
+              <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+                  <HonorHistoryChart files={uploadedFiles || []} />
+              </div>
+              {/* Suche ist Teil der Minimal View */}
+              <HonorPlayerSearch
+                  query={searchQuery}
+                  setQuery={setSearchQuery}
+                  onSearch={handleSearch}
+                  onClear={handleClearSearch}
+                  results={searchResults}
+                  selectedPlayerHistory={selectedPlayerHistory}
+                  onSelectPlayer={handleSelectPlayer}
+                  isDataLoaded={isSearchDataLoaded}
+              />
+              {/* HINWEIS, falls keine Daten vorhanden sind */}
+              {!error && uploadedFiles.length === 0 && (
+                  <div className="text-center p-8 text-yellow-400 bg-gray-800 rounded-xl">
+                      <h3 className="text-xl font-bold mb-2">No Data Available</h3>
+                      <p>The selected Kingdom has not uploaded any files yet.</p>
+                  </div>
+              )}
+          </div>
+      );
+  }
+
 
   return (
     <div className="space-y-8">
