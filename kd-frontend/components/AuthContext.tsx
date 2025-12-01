@@ -40,10 +40,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// 🌐 NEU: BACKEND_URL auf die neue API-Domain aktualisieren
+// 🌐 BACKEND_URL auf die neue API-Domain aktualisiert
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
-    ? 'https://api.rise-of-stats.com' // <-- HIER IST DIE WICHTIGE ÄNDERUNG
+    ? 'https://api.rise-of-stats.com' // <-- KORRIGIERT
     : 'http://localhost:4000';
 
 interface AuthProviderProps {

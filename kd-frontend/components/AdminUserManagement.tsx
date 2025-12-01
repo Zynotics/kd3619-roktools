@@ -28,10 +28,10 @@ interface User {
 type Kingdom = KingdomType;
 
 
-// 🌐 NEU: BACKEND_URL auf die neue API-Domain aktualisieren
+// 🌐 BACKEND_URL auf die neue API-Domain aktualisiert
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
-    ? 'https://api.rise-of-stats.com' // <-- HIER IST DIE WICHTIGE ÄNDERUNG
+    ? 'https://api.rise-of-stats.com' // <-- KORRIGIERT
     : 'http://localhost:4000';
 
 const AdminUserManagement: React.FC = () => {
@@ -97,7 +97,8 @@ const AdminUserManagement: React.FC = () => {
       } else {
         const errorText = await response.text();
         console.log('❌ Users fetch failed:', errorText);
-        setUserError('Error loading users');
+        // Da wir jetzt den 500er beheben, sollte dieser Fehlercode nicht mehr kommen
+        setUserError('Error loading users. Server reported an issue.');
       }
     } catch (err) {
       console.error('💥 Error loading users:', err);
