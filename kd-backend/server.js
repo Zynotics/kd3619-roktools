@@ -113,10 +113,9 @@ async function requireAdmin(req, res, next) {
   }
 
   try {
-    const dbUser = await get(
-      'SELECT role FROM users WHERE id = $1',
-      [req.user.id]
-    );
+    const dbUser = await get('SELECT role FROM users WHERE id = $1', [
+      req.user.id,
+    ]);
 
     if (!dbUser) {
       return res.status(404).json({ error: 'Benutzer nicht gefunden' });
@@ -124,7 +123,6 @@ async function requireAdmin(req, res, next) {
 
     const role = dbUser.role;
 
-    // Nur admin & r5 dürfen Admin-Endpunkte aufrufen
     if (role !== 'admin' && role !== 'r5') {
       return res
         .status(403)
@@ -274,7 +272,6 @@ const honorUpload = multer({
 
 // ==================== AUTH ENDPOINTS ====================
 
-// Gov ID Check für Live-Validierung im Frontend
 app.post('/api/auth/check-gov-id', async (req, res) => {
   try {
     const { governorId } = req.body;
@@ -299,7 +296,6 @@ app.post('/api/auth/check-gov-id', async (req, res) => {
   }
 });
 
-// Registrierung mit Gov-ID-Check
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, username, password, governorId } = req.body;
@@ -389,7 +385,6 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// Login
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -446,7 +441,6 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Token Validierung
 app.get('/api/auth/validate', authenticateToken, async (req, res) => {
   try {
     const user = await get('SELECT * FROM users WHERE id = $1', [req.user.id]);
@@ -474,7 +468,6 @@ app.get('/api/auth/validate', authenticateToken, async (req, res) => {
 
 // ==================== ADMIN ENDPOINTS ====================
 
-// Debug Endpoint zum Überprüfen aller Benutzer
 app.get('/api/debug/users', async (req, res) => {
   try {
     const users = await all(
@@ -487,7 +480,6 @@ app.get('/api/debug/users', async (req, res) => {
   }
 });
 
-// Manueller Admin-Creation Endpoint
 app.post('/api/admin/create-admin', async (req, res) => {
   try {
     const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
@@ -529,7 +521,6 @@ app.post('/api/admin/create-admin', async (req, res) => {
   }
 });
 
-// Alle Benutzer abrufen (nur Admin/R5)
 app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const users = await all(
@@ -562,7 +553,6 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
   }
 });
 
-// Benutzer freigeben/sperren
 app.post(
   '/api/admin/users/approve',
   authenticateToken,
@@ -602,7 +592,6 @@ app.post(
   }
 );
 
-// Benutzer Zugriffsrechte setzen (Honor / Analytics / Overview)
 app.post(
   '/api/admin/users/access',
   authenticateToken,
@@ -643,7 +632,6 @@ app.post(
   }
 );
 
-// Benutzerrolle setzen
 app.post(
   '/api/admin/users/role',
   authenticateToken,
@@ -678,7 +666,6 @@ app.post(
   }
 );
 
-// Benutzer löschen
 app.delete(
   '/api/admin/users/:id',
   authenticateToken,
@@ -705,8 +692,14 @@ app.delete(
 
 app.get('/overview/files-data', async (req, res) => {
   try {
+    // 🔹 neu: explizit nur Files des Default-Kingdoms holen
     const rows = await all(
-      'SELECT * FROM overview_files ORDER BY fileOrder, uploadDate'
+      `
+      SELECT * FROM overview_files
+      WHERE kingdom_id = $1
+      ORDER BY fileOrder, uploadDate
+      `,
+      ['kdm-default']
     );
 
     const files = rows.map((row) => ({
@@ -732,6 +725,8 @@ app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => 
 
     const id = 'ov-' + Date.now();
     const uploadDate = new Date().toISOString();
+    const kingdomId = 'kdm-default'; // 🔹 vorerst fest, später dynamisch je Königreich
+    const uploadedByUserId = null;   // 🔹 später: req.user?.id wenn wir Uploads an Login koppeln
 
     const newFile = {
       id,
@@ -742,13 +737,15 @@ app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => 
       uploadDate,
       headers: JSON.stringify(headers),
       data: JSON.stringify(data),
+      kingdom_id: kingdomId,
+      uploaded_by_user_id: uploadedByUserId,
     };
 
     await query(
       `
       INSERT INTO overview_files
-        (id, name, filename, path, size, uploadDate, headers, data)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        (id, name, filename, path, size, uploadDate, headers, data, kingdom_id, uploaded_by_user_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
     `,
       [
         newFile.id,
@@ -759,6 +756,8 @@ app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => 
         newFile.uploadDate,
         newFile.headers,
         newFile.data,
+        newFile.kingdom_id,
+        newFile.uploaded_by_user_id,
       ]
     );
 
@@ -783,10 +782,9 @@ app.delete('/overview/files/:id', async (req, res) => {
   try {
     const fileId = req.params.id;
 
-    const file = await get(
-      'SELECT * FROM overview_files WHERE id = $1',
-      [fileId]
-    );
+    const file = await get('SELECT * FROM overview_files WHERE id = $1', [
+      fileId,
+    ]);
 
     if (!file) {
       return res.status(404).json({ error: 'Datei nicht gefunden' });
@@ -839,8 +837,14 @@ app.post('/overview/files/reorder', async (req, res) => {
 
 app.get('/honor/files-data', async (req, res) => {
   try {
+    // 🔹 neu: explizit nur Files des Default-Kingdoms holen
     const rows = await all(
-      'SELECT * FROM honor_files ORDER BY fileOrder, uploadDate'
+      `
+      SELECT * FROM honor_files
+      WHERE kingdom_id = $1
+      ORDER BY fileOrder, uploadDate
+      `,
+      ['kdm-default']
     );
 
     const files = rows.map((row) => ({
@@ -866,6 +870,8 @@ app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
 
     const id = 'hon-' + Date.now();
     const uploadDate = new Date().toISOString();
+    const kingdomId = 'kdm-default'; // 🔹 vorerst fest
+    const uploadedByUserId = null;   // 🔹 später: req.user?.id
 
     const newFile = {
       id,
@@ -876,13 +882,15 @@ app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
       uploadDate,
       headers: JSON.stringify(headers),
       data: JSON.stringify(data),
+      kingdom_id: kingdomId,
+      uploaded_by_user_id: uploadedByUserId,
     };
 
     await query(
       `
       INSERT INTO honor_files
-        (id, name, filename, path, size, uploadDate, headers, data)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        (id, name, filename, path, size, uploadDate, headers, data, kingdom_id, uploaded_by_user_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
     `,
       [
         newFile.id,
@@ -893,6 +901,8 @@ app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
         newFile.uploadDate,
         newFile.headers,
         newFile.data,
+        newFile.kingdom_id,
+        newFile.uploaded_by_user_id,
       ]
     );
 
@@ -980,7 +990,7 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'KD3619 Backend API',
-    version: '2.0.0-pg',
+    version: '2.1.0-pg-kingdom-default',
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
       auth: [
