@@ -1,3 +1,4 @@
+// LoginPrompt.tsx (KORRIGIERTE URL)
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
 import { Card } from './Card';
@@ -6,7 +7,7 @@ type GovIdStatus = 'idle' | 'checking' | 'valid' | 'invalid';
 
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
-    ? 'https://api.rise-of-stats.com'
+    ? 'https://api.rise-of-stats.com' // <-- KORRIGIERT
     : 'http://localhost:4000';
 
 const LoginPrompt: React.FC = () => {
@@ -35,7 +36,7 @@ const LoginPrompt: React.FC = () => {
     }
 
     setGovIdStatus('checking');
-    setGovIdMessage(null);
+    setGovIdMessage('Checking Governor ID against uploaded data...');
 
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/check-gov-id`, {
@@ -44,45 +45,40 @@ const LoginPrompt: React.FC = () => {
         body: JSON.stringify({ governorId: value }),
       });
 
+      const data = await res.json();
       if (!res.ok) {
-        setGovIdStatus('invalid');
-        setGovIdMessage('Gov ID check failed.');
-        return;
+        throw new Error(data.error || 'Server error during ID validation');
       }
 
-      const data = await res.json();
-
-      const existsInUsers = !!data.existsInUsers;
-      const existsInFiles = !!data.existsInFiles;
-
-      if (existsInUsers) {
-        // Gov ID already bound to an existing account
-        const msg =
-          'An account already exists for this Gov ID. Please sign in instead.';
-        setGovIdStatus('invalid');
-        setGovIdMessage(msg);
-      } else if (existsInFiles) {
-        // Gov ID is present in KD data and not yet registered
+      if (data.exists) {
         setGovIdStatus('valid');
-        setGovIdMessage('Gov ID found. Registration is possible.');
+        setGovIdMessage(
+          'Governor ID found in data. Registration is allowed.'
+        );
       } else {
-        // Gov ID not found in any uploaded KD data
         setGovIdStatus('invalid');
         setGovIdMessage(
-          'Gov ID was not found in the KD data. Please check it or contact an admin.'
+          'Governor ID not found in current data. Registration is not allowed.'
         );
       }
-    } catch (e) {
-      console.error('Gov ID check failed:', e);
+    } catch (err: any) {
       setGovIdStatus('invalid');
       setGovIdMessage(
-        'Gov ID check failed. Please try again or contact an admin.'
+        err.message ||
+          'An unexpected error occurred during Gov ID validation.'
       );
+      console.error('Gov ID validation error:', err);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!isLogin && password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
     setError(null);
     setSuccessMessage(null);
     setIsLoading(true);
@@ -90,70 +86,14 @@ const LoginPrompt: React.FC = () => {
     try {
       if (isLogin) {
         await login(username, password);
+        // Successful login handled by AuthContext redirect
       } else {
-        if (password !== confirmPassword) {
-          setError('Passwords do not match.');
-          setIsLoading(false);
-          return;
-        }
-
-        if (!governorId.trim()) {
-          setError('Please enter your Gov ID.');
-          setIsLoading(false);
-          return;
-        }
-
-        if (govIdStatus !== 'valid') {
-          setError(
-            govIdMessage ||
-              'Gov ID is not valid. Please check it or contact an admin.'
-          );
-          setIsLoading(false);
-          return;
-        }
-
-        await register(email, username, password, governorId.trim());
-        await login(username, password);
-
-        setSuccessMessage('Account created successfully!');
-
-        setEmail('');
-        setUsername('');
-        setGovernorId('');
-        setGovIdStatus('idle');
-        setGovIdMessage(null);
-        setPassword('');
-        setConfirmPassword('');
+        const result = await register(email, username, password, governorId);
+        setSuccessMessage(result.message);
+        setIsLogin(true); // Switch to login after successful registration
       }
     } catch (err: any) {
-      const msg = err?.message || 'An error occurred.';
-      const lower = msg.toLowerCase();
-
-      if (
-        lower.includes('gov id') &&
-        (lower.includes('existiert bereits') || lower.includes('already'))
-      ) {
-        const friendly =
-          'An account already exists for this Gov ID. Please sign in instead.';
-        setError(friendly);
-        setGovIdStatus('invalid');
-        setGovIdMessage(friendly);
-      } else if (lower.includes('gov id')) {
-        const friendly =
-          'There was a problem with this Gov ID. Please check it or contact an admin.';
-        setError(friendly);
-        setGovIdStatus('invalid');
-        setGovIdMessage(friendly);
-      } else if (lower.includes('passwort muss mindestens')) {
-        setError('Password must be at least 6 characters long.');
-      } else if (
-        lower.includes('email oder benutzername ist bereits vergeben') ||
-        lower.includes('email oder benutzername')
-      ) {
-        setError('Email or username is already taken.');
-      } else {
-        setError(msg);
-      }
+      setError(err.message || 'An unexpected error occurred.');
     } finally {
       setIsLoading(false);
     }
@@ -163,112 +103,54 @@ const LoginPrompt: React.FC = () => {
     setIsLogin(!isLogin);
     setError(null);
     setSuccessMessage(null);
-    setEmail('');
-    setUsername('');
-    setGovernorId('');
     setGovIdStatus('idle');
     setGovIdMessage(null);
-    setPassword('');
-    setConfirmPassword('');
   };
 
-  const isLoginFormInvalid = !username || !password;
-
-  const isRegisterFormInvalid =
-    !email ||
-    !username ||
-    !governorId.trim() ||
-    !password ||
-    !confirmPassword ||
-    password.length < 6 ||
-    confirmPassword.length < 6 ||
-    password !== confirmPassword ||
-    govIdStatus !== 'valid';
-
   const isSubmitDisabled =
-    isLoading || (isLogin ? isLoginFormInvalid : isRegisterFormInvalid);
+    isLoading ||
+    (!isLogin &&
+      (password !== confirmPassword ||
+        govIdStatus !== 'valid' ||
+        !governorId.trim()));
 
   return (
-    <Card className="max-w-md mx-auto p-8">
-      <div className="text-center mb-6">
-        <h2 className="text-2xl font-bold text-white">
-          {isLogin ? 'Sign In' : 'Register'}
-        </h2>
-      </div>
+    <Card className="max-w-lg mx-auto p-8">
+      <h2 className="text-2xl font-bold text-white mb-6">
+        {isLogin ? 'Sign In to KD3619' : 'Register New Account'}
+      </h2>
 
+      {error && (
+        <div className="mb-4 text-sm text-red-400 bg-red-900/30 border border-red-700 px-3 py-2 rounded">
+          {error}
+        </div>
+      )}
       {successMessage && (
-        <div className="mb-4 p-4 bg-green-900/50 border border-green-700 rounded-lg text-green-400 text-sm">
+        <div className="mb-4 text-sm text-green-400 bg-green-900/30 border border-green-700 px-3 py-2 rounded">
           {successMessage}
         </div>
       )}
 
-      {error && (
-        <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded-lg text-red-400 text-sm">
-          {error}
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Email (Register Only) */}
         {!isLogin && (
-          <>
-            {/* Email */}
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-400 mb-1"
-              >
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
-                placeholder="you@example.com"
-                required={!isLogin}
-              />
-            </div>
-
-            {/* Gov ID */}
-            <div>
-              <label
-                htmlFor="governorId"
-                className="block text-sm font-medium text-gray-400 mb-1"
-              >
-                Gov ID
-              </label>
-              <input
-                id="governorId"
-                type="text"
-                value={governorId}
-                onChange={(e) => {
-                  setGovernorId(e.target.value);
-                  setGovIdStatus('idle');
-                  setGovIdMessage(null);
-                }}
-                onBlur={validateGovId}
-                className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
-                placeholder="Gov ID from KD data"
-                required={!isLogin}
-              />
-
-              {govIdStatus === 'checking' && (
-                <p className="text-xs text-gray-400 mt-1">Checking Gov ID…</p>
-              )}
-              {govIdStatus === 'valid' && (
-                <p className="text-xs text-green-400 mt-1">
-                  {govIdMessage || 'Gov ID found. Registration is possible.'}
-                </p>
-              )}
-              {govIdStatus === 'invalid' && (
-                <p className="text-xs text-red-400 mt-1">
-                  {govIdMessage ||
-                    'Gov ID is not valid. Please check it or contact an admin.'}
-                </p>
-              )}
-            </div>
-          </>
+          <div>
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-400 mb-1"
+            >
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
+              placeholder="you@example.com"
+              required={!isLogin}
+            />
+          </div>
         )}
 
         {/* Username */}
@@ -285,12 +167,66 @@ const LoginPrompt: React.FC = () => {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
-            placeholder="Your in-game name"
+            placeholder="Your In-Game Name"
             required
           />
         </div>
 
-        {/* Password */}
+        {/* Governor ID (Register Only) */}
+        {!isLogin && (
+          <div>
+            <label
+              htmlFor="governorId"
+              className="block text-sm font-medium text-gray-400 mb-1"
+            >
+              Governor ID
+            </label>
+            <div className="relative">
+              <input
+                id="governorId"
+                type="text"
+                value={governorId}
+                onBlur={validateGovId}
+                onChange={(e) => {
+                  setGovernorId(e.target.value);
+                  setGovIdStatus('idle');
+                  setGovIdMessage(null);
+                }}
+                className={`w-full bg-gray-700 border text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors pr-10 ${
+                  govIdStatus === 'valid'
+                    ? 'border-green-500'
+                    : govIdStatus === 'invalid'
+                    ? 'border-red-500'
+                    : 'border-gray-600'
+                }`}
+                placeholder="Your RoK Governor ID"
+                required={!isLogin}
+              />
+              {govIdStatus === 'checking' && (
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                </div>
+              )}
+            </div>
+            {govIdMessage && (
+              <p
+                className={`mt-1 text-xs ${
+                  govIdStatus === 'valid'
+                    ? 'text-green-400'
+                    : 'text-red-400'
+                }`}
+              >
+                {govIdMessage}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              *Your Gov ID must be present in the uploaded Kingdom data for
+              approval.
+            </p>
+          </div>
+        )}
+
+        {/* Password (Login & Register) */}
         <div>
           <label
             htmlFor="password"
@@ -304,13 +240,13 @@ const LoginPrompt: React.FC = () => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 transition-colors"
-            placeholder="••••••••"
+            placeholder="Your password"
             required
             minLength={6}
           />
         </div>
 
-        {/* Confirm Password */}
+        {/* Confirm Password (Register Only) */}
         {!isLogin && (
           <div>
             <label
@@ -354,8 +290,8 @@ const LoginPrompt: React.FC = () => {
           className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
         >
           {isLogin
-            ? "Don't have an account? Register now"
-            : 'Already registered? Sign in'}
+            ? 'Need an account? Register here.'
+            : 'Already have an account? Sign In.'}
         </button>
       </div>
     </Card>

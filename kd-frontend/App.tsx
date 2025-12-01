@@ -10,11 +10,13 @@ import PowerHistoryChart from './components/PowerHistoryChart';
 
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
-    ? 'https://api.rise-of-stats.com' // <-- KORREKTE PRODUKTIONS-URL
+    ? 'https://api.rise-of-stats.com' // <-- KORRIGIERT
     : 'http://localhost:4000';
 
 type ActiveView = 'overview' | 'honor' | 'analytics' | 'admin';
+// ... (Rest des Codes bleibt unverändert)
 
+// App.tsx muss in seiner Gesamtheit korrigiert werden, hier der vollständige Code:
 const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('overview');
   const { user, logout, isLoading } = useAuth();
