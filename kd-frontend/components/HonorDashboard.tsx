@@ -188,7 +188,6 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
   // ----------------------------------------------------
   const extractHonorPlayersFromFile = useCallback(
     (file: UploadedFile): HonorPlayerInfo[] => {
-      // ... (Logik wie vorher)
       if (!file || !file.headers || !file.data) return [];
 
       const headers = (file.headers || []).map((h) => String(h));
@@ -330,7 +329,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
             name: p.name,
             history: [],
           };
-          map.set(p.governorId, hist);
+          map.set(p.goverId, hist);
         }
         hist.name = p.name; // ggf. Name aktualisieren
         hist.history.push({
