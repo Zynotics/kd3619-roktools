@@ -1,11 +1,9 @@
-// PowerAnalyticsDashboard.tsx - AKTUALISIERT MIT CHART-LOGIK
-
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { cleanFileName, parseGermanNumber, findColumnIndex, formatNumber, abbreviateNumber } from '../utils';
-import { useAuth } from './AuthContext';
-import type { UploadedFile } from '../types'; 
+import { useAuth } from './AuthContext'; // Import useAuth
+import type { UploadedFile } from '../types'; // Import UploadedFile type
 
 // Interfaces kopiert aus types.ts
 interface PlayerAnalyticsRecord {
@@ -34,6 +32,7 @@ declare var Chart: any;
 interface PowerAnalyticsDashboardProps {
   isAdmin: boolean;
   backendUrl: string;
+  publicSlug: string | null; // <<< NEU: FÜR ÖFFENTLICHEN ZUGRIFF
 }
 
 // ----------------------------------------------------
@@ -142,8 +141,15 @@ const PlayerAnalyticsHistoryChart: React.FC<PlayerAnalyticsHistoryChartProps> = 
 };
 
 
-const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdmin, backendUrl }) => {
+const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdmin, backendUrl, publicSlug }) => {
   const { user } = useAuth();
+  const role = user?.role;
+  
+  // 🚩 Logik: isPublicView ist true, wenn Slug da und kein User eingeloggt ist
+  const isPublicView = !!publicSlug && !user; 
+  // Da Analytics keine Management-Funktionen hat, wird hier nur die isMinimalView Logik benötigt.
+  const isMinimalView = isPublicView || role === 'user'; 
+
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]); 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -153,26 +159,46 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   const [searchMatches, setSearchMatches] = useState<PlayerAnalyticsHistory[] | 'not_found' | null>(null);
   const [selectedPlayerHistory, setSelectedPlayerHistory] = useState<PlayerAnalyticsHistory | null>(null);
 
+  // 🔑 NEU: Verwende atomare Werte aus dem user-Objekt für die Abhängigkeiten
+  const userLoggedIn = !!user;
 
   // ----------------------------------------------------
-  // Dateien laden
+  // Dateien laden (KORRIGIERT: Fügt Public Fetching hinzu)
   // ----------------------------------------------------
   const fetchFiles = useCallback(async () => {
+    const isFetchPublic = !!publicSlug && !userLoggedIn;
+    
+    if (isFetchPublic && !publicSlug) {
+        setError('Public access requires a Kingdom slug.');
+        setIsLoading(false);
+        return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
+      let response: Response;
       
-      const token = localStorage.getItem('authToken'); 
-      if (!token) {
-        throw new Error('Authentication token not found. Please log in.');
+      if (isFetchPublic && publicSlug) {
+        // 1. Öffentlicher Modus: Nutze public API mit Slug
+        const publicUrl = `${backendUrl}/api/public/kingdom/${publicSlug}/overview-files`; // Analytics nutzt Overview-Dateien
+        response = await fetch(publicUrl);
+        
+      } else {
+        // 2. Privater Modus (eingeloggter User): Nutze geschützten Token-Endpunkt
+        const token = localStorage.getItem('authToken');
+        
+        if (!token) {
+          throw new Error('Authentication token not found. Please log in.');
+        }
+        
+        response = await fetch(`${backendUrl}/overview/files-data`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
       }
 
-      // Analytics verwendet die gleichen Dateien wie Overview
-      const response = await fetch(`${backendUrl}/overview/files-data`, { 
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -185,11 +211,16 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Error loading files for analytics.');
+      const message = err.message || 'Error loading files for analytics.';
+      if (isFetchPublic && (message.includes('403') || message.includes('404') || message.includes('No data found'))) {
+          setError('No data found for this Kingdom slug.');
+      } else {
+          setError(message);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [backendUrl]);
+  }, [backendUrl, publicSlug, userLoggedIn]); // <<< Reduziert auf die stabilsten IDs/Booleans
 
 
   useEffect(() => {
@@ -197,7 +228,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   }, [fetchFiles]);
   
   // ----------------------------------------------------
-  // Dateiparser und Analyse-Logik
+  // Dateiparser und Analyse-Logik (unverändert)
   // ----------------------------------------------------
 
   const parseFileToPlayers = (file: UploadedFile): any[] => {
