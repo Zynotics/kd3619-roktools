@@ -54,8 +54,23 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(`${backendUrl}/overview/files-data`);
-      if (!response.ok) throw new Error('Failed to fetch files from server.');
+      // 🔑 NEU: Token aus dem localStorage holen und Header hinzufügen
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('Authentication token not found. Please log in.');
+      }
+
+      const response = await fetch(`${backendUrl}/overview/files-data`, {
+        headers: {
+          Authorization: `Bearer ${token}`, // <-- HINZUGEFÜGT
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch files from server.');
+      }
+      
       const data: UploadedFile[] = await response.json();
 
       setUploadedFiles(data || []);
@@ -73,13 +88,13 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         setStartFileId('');
         setEndFileId('');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError('Error loading files from server.');
+      setError(err.message || 'Error loading files from server.');
     } finally {
       setIsLoading(false);
     }
-  }, [backendUrl]);
+  }, [backendUrl]); // backendUrl ist jetzt korrekt
 
   useEffect(() => {
     fetchFiles();
@@ -91,8 +106,15 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
   const handleDeleteFile = async (id: string) => {
     try {
+      // 🔑 NEU: Token-Header auch beim Löschen hinzufügen
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error('Authentication token missing.');
+
       const response = await fetch(`${backendUrl}/overview/files/${id}`, {
         method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
       if (!response.ok) throw new Error('Failed to delete file on server.');
       setUploadedFiles((prev) => (prev || []).filter((f) => f.id !== id));
@@ -109,10 +131,17 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
     // Reihenfolge auch im Backend persistent speichern
     try {
+      // 🔑 NEU: Token-Header auch beim Reorder hinzufügen
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error('Authentication token missing.');
+
       const order = reorderedFiles.map((f) => f.id);
       await fetch(`${backendUrl}/overview/files/reorder`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ order }),
       });
     } catch (err) {
@@ -122,6 +151,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
   // ---------------------------------------------------
   // Hilfsfunktion: Datei -> PlayerInfo[] (arbeitet mit headers + data)
+  // ... (Rest der Funktionen unverändert)
   // ---------------------------------------------------
   const parseFileToPlayers = (file: UploadedFile): PlayerInfo[] => {
     if (!file || !file.headers || !file.data) return [];
