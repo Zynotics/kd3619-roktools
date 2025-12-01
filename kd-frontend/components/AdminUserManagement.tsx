@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { useAuth } from './AuthContext';
-// 📝 NEU: Importiere Kingdom-Interface aus types.ts (falls es in types.ts liegt, ansonsten beibehalten)
+// 📝 Importiere Kingdom-Interface aus types.ts 
 import { Kingdom as KingdomType } from '../types'; 
 
 type UserRole = 'user' | 'r4' | 'r5' | 'admin';
@@ -23,16 +23,20 @@ interface User {
   canAccessOverview?: boolean;
 }
 
-// 📝 WICHTIG: Verwenden Sie hier das erweiterte Interface aus types.ts, wenn es korrekt importiert wird
-// Da ich keinen Zugriff auf den kompletten Pfad habe, benutze ich hier KingdomType
 type Kingdom = KingdomType;
 
-
-// 🌐 BACKEND_URL auf die neue API-Domain aktualisiert
+// 🌐 BACKEND_URL
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
-    ? 'https://api.rise-of-stats.com' // <-- KORRIGIERT
+    ? 'https://api.rise-of-stats.com'
     : 'http://localhost:4000';
+    
+// 🌐 NEU: Frontend URL für den Link
+const FRONTEND_URL = 
+  process.env.NODE_ENV === 'production'
+    ? 'https://rise-of-stats.com'
+    : 'http://localhost:5173';
+
 
 const AdminUserManagement: React.FC = () => {
   // -------- User-Management State --------
@@ -97,7 +101,6 @@ const AdminUserManagement: React.FC = () => {
       } else {
         const errorText = await response.text();
         console.log('❌ Users fetch failed:', errorText);
-        // Da wir jetzt den 500er beheben, sollte dieser Fehlercode nicht mehr kommen
         setUserError('Error loading users. Server reported an issue.');
       }
     } catch (err) {
@@ -206,19 +209,19 @@ const AdminUserManagement: React.FC = () => {
 
       if (!response.ok) {
         const errorText = await response.text();
+        const errorJson = JSON.parse(errorText || '{}');
         console.log('❌ Role update error:', errorText);
-        throw new Error('Failed to update role');
+        throw new Error(errorJson.error || 'Failed to update role');
       }
 
-      setUsers((prev) =>
-        prev.map((u) => (u.id === targetUser.id ? { ...u, role: newRole } : u))
-      );
+      // Bei Erfolg: User-Liste neu laden, um korrekte kingdomId/role-Kombination zu bekommen
+      fetchUsers(); 
       if (currentUser?.id === targetUser.id) {
         refreshUser();
       }
     } catch (err) {
       console.error('Error updating role:', err);
-      alert('Error updating role.');
+      alert(err instanceof Error ? err.message : 'Error updating role.');
     }
   };
 
@@ -243,14 +246,15 @@ const AdminUserManagement: React.FC = () => {
 
       if (!response.ok) {
         const errorText = await response.text();
+        const errorJson = JSON.parse(errorText || '{}');
         console.log('❌ Delete user error:', errorText);
-        throw new Error('Failed to delete user');
+        throw new Error(errorJson.error || 'Failed to delete user');
       }
 
       setUsers((prev) => prev.filter((u) => u.id !== userId));
     } catch (err) {
       console.error('Error deleting user:', err);
-      alert('Error deleting user.');
+      alert(err instanceof Error ? err.message : 'Error deleting user.');
     }
   };
 
@@ -362,7 +366,7 @@ const AdminUserManagement: React.FC = () => {
     }
   };
 
-  // 👑 NEU: R5 Zuweisung
+  // 👑 NEU: R5 Zuweisung (auch für Owner Change)
   const handleAssignR5 = async (e: React.FormEvent) => {
     e.preventDefault();
     setAssignR5Error(null);
@@ -391,23 +395,8 @@ const AdminUserManagement: React.FC = () => {
       // 1. Kingdom-Liste aktualisieren
       setKingdoms(prev => prev.map(k => k.id === updatedKingdom.id ? updatedKingdom : k));
       
-      // 2. User-Liste aktualisieren (Rolle von R5-User und alter R5-User zurücksetzen)
-      // Das Backend setzt die Rolle des neuen R5-Users korrekt, wir müssen nur den State aktualisieren
-      setUsers(prevUsers => {
-          const newUsers = prevUsers.map(u => {
-              if (u.id === r5UserId) {
-                  // Neuer R5 User
-                  return { ...u, role: 'r5' as UserRole, kingdomId: r5KingdomId };
-              }
-              if (u.role === 'r5' && u.kingdomId === r5KingdomId && u.id !== r5UserId) {
-                  // Alter R5 User des gleichen Königreichs (falls es einen gab)
-                  // Die DB-Logik sollte dies verhindern, aber für sauberen Frontend-State
-                  return { ...u, role: 'user' as UserRole, kingdomId: null };
-              }
-              return u;
-          });
-          return newUsers;
-      });
+      // 2. User-Liste neu laden, um die Rolle und kingdomId des betroffenen Users zu aktualisieren
+      fetchUsers();
       
       setR5UserId('');
       setR5KingdomId('');
@@ -455,7 +444,6 @@ const AdminUserManagement: React.FC = () => {
     }
   };
 
-  // ❌ NEU: Kingdom löschen
   const handleDeleteKingdom = async (kingdomId: string, kingdomName: string) => {
     if (kingdomId === 'kdm-default') {
       alert('The Default Kingdom cannot be deleted.');
@@ -604,12 +592,14 @@ const AdminUserManagement: React.FC = () => {
                             onChange={(e) =>
                               updateRole(user, e.target.value as UserRole)
                             }
-                            // R5 kann hier nicht gesetzt werden, da dies nur über die Kingdom-Zuweisung erlaubt ist (Admin-Regel)
+                            // R5 kann hier nur User/R4/R5 zuweisen (Wird im Backend geprüft)
                             className="bg-gray-800 border border-gray-600 text-gray-200 text-xs px-2 py-1 rounded-lg"
                           >
                             <option value="user">User</option>
                             <option value="r4">R4</option>
-                            {/* R5 Option entfernt, da Zuweisung über Kingdom-Management erfolgt */}
+                            {/* R5 Option ist nur erlaubt, wenn R5/Admin zuweist */}
+                            {currentUser?.kingdomId && <option value="r5">R5</option>} 
+                            {/* Admin kann Admin setzen, aber das machen wir nur über /create-admin */}
                           </select>
                         )}
                       </TableCell>
@@ -777,7 +767,8 @@ const AdminUserManagement: React.FC = () => {
                   >
                     <option value="">Select User...</option>
                     {users
-                      .filter(u => u.role === 'user' || u.role === 'r4') // Nur User oder R4 können R5 werden
+                      // Superadmin kann jeden Nicht-Admin zu R5 machen, einschließlich R4.
+                      .filter(u => u.role !== 'admin') 
                       .map((user) => (
                         <option key={user.id} value={user.id}>
                           {user.username} ({user.role}) - {user.email}
@@ -840,8 +831,8 @@ const AdminUserManagement: React.FC = () => {
             </h2>
             <p className="text-sm text-gray-400">
               Manage Rise of Kingdoms kingdoms, slugs and RoK IDs. Each slug
-              will later map to its own URL (e.g.
-              <span className="text-blue-300"> /k/3619-vikings</span>).
+              will later map to its own URL (z.B.
+              <span className="text-blue-300"> {FRONTEND_URL}/?slug=3619-vikings</span>).
             </p>
           </div>
         </div>
@@ -866,15 +857,11 @@ const AdminUserManagement: React.FC = () => {
                 <TableCell align="left" header>
                   Slug
                 </TableCell>
-                <TableCell align="center" header>
-                  RoK ID
-                </TableCell>
                 <TableCell align="left" header>
                   Owner (R5)
                 </TableCell>
-                <TableCell align="center" header>
-                  Plan
-                </TableCell>
+                {/* 🌐 NEU: Public Link Spalte */}
+                {isSuperAdmin && <TableCell align="left" header>Public Link</TableCell>}
                 <TableCell align="center" header>
                   Status
                 </TableCell>
@@ -884,7 +871,10 @@ const AdminUserManagement: React.FC = () => {
               </tr>
             </TableHeader>
             <tbody>
-              {kingdoms.map((k) => (
+              {kingdoms.map((k) => {
+                const publicLink = `${FRONTEND_URL}/?slug=${k.slug}`;
+                
+                return (
                 <TableRow key={k.id}>
                   <TableCell align="left" className="font-medium text-white">
                     {k.displayName}
@@ -894,10 +884,7 @@ const AdminUserManagement: React.FC = () => {
                       {k.slug}
                     </span>
                   </TableCell>
-                  <TableCell align="center">
-                    {k.rokIdentifier || <span className="text-gray-500">—</span>}
-                  </TableCell>
-                  {/* NEU: Owner/R5 anzeigen */}
+                  {/* Owner/R5 anzeigen */}
                   <TableCell align="left">
                     {k.ownerUsername ? (
                       <span className="text-xs text-green-300" title={k.ownerEmail || undefined}>
@@ -907,12 +894,21 @@ const AdminUserManagement: React.FC = () => {
                       <span className="text-gray-500 text-xs">—</span>
                     )}
                   </TableCell>
-                  <TableCell align="center">
-                    <span className="text-xs uppercase text-gray-300">
-                      {k.plan || 'free'}
-                    </span>
-                  </TableCell>
-                  {/* NEU: Status anzeigen */}
+                  {/* 🌐 NEU: Public Link Anzeige */}
+                  {isSuperAdmin && (
+                    <TableCell align="left">
+                        <a
+                            href={publicLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-400 hover:text-blue-300 underline truncate block max-w-xs"
+                            title={publicLink}
+                        >
+                            {`?slug=${k.slug}`}
+                        </a>
+                    </TableCell>
+                  )}
+                  {/* Status anzeigen */}
                   <TableCell align="center">
                     <span
                       className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -924,7 +920,7 @@ const AdminUserManagement: React.FC = () => {
                       {k.status.toUpperCase()}
                     </span>
                   </TableCell>
-                  {/* NEU: Status/Delete Actions */}
+                  {/* Status/Delete Actions */}
                   <TableCell align="center" className="space-x-2 whitespace-nowrap">
                     {canManageKingdoms && k.id !== 'kdm-default' && (
                       <>
@@ -953,12 +949,12 @@ const AdminUserManagement: React.FC = () => {
                     )}
                   </TableCell>
                 </TableRow>
-              ))}
+              );})}
             </tbody>
           </Table>
         )}
 
-        {/* Create Kingdom Form (bleibt unverändert, aber nur für Superadmin) */}
+        {/* Create Kingdom Form (Admin Only) */}
         <div className="mt-6 border-t border-gray-700 pt-4">
           <h3 className="text-lg font-semibold text-white mb-3">
             Create new Kingdom
