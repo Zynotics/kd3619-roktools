@@ -20,7 +20,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'kd3619-secret-key-change-in-produc
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
-  'https://kd3619-frontend.onrender.com',
+  'https://kd3619-frontend.onrender.com', // Kann entfernt werden, wenn nicht mehr verwendet
   'https://rise-of-stats.com',
 ];
 
@@ -124,10 +124,6 @@ async function requireAdmin(req, res, next) {
 
     const role = dbUser.role;
 
-    // Nur 'admin' hat volle Rechte über alle Endpunkte. 'r5' sollte nur spezifische Rechte haben.
-    // Da hier alle Admin-Endpunkte über requireAdmin laufen, lassen wir es vorerst nur für 'admin' und 'r5' zu.
-    // Anmerkung: Später muss hier unterschieden werden, ob der Endpunkt von einem R5 ausgeführt werden darf.
-    // Für die Kingdom-Verwaltung sollten NUR Superadmins ('admin') Zugriff haben.
     if (role !== 'admin' && role !== 'r5') {
       return res
         .status(403)
@@ -555,6 +551,7 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
     );
   } catch (error) {
     console.error('❌ Error fetching users:', error);
+    // HIER tritt der 500 Fehler auf, wenn kingdom_id in der DB-Tabelle fehlt.
     res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
   }
 });
@@ -1426,7 +1423,7 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'KD3619 Backend API',
-    version: '2.4.1-pg-kingdom-r5-fix', // Version aktualisiert
+    version: '2.4.2-pg-final-fix', // Version aktualisiert
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
       auth: [
@@ -1478,4 +1475,4 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`💾 Datenbank: Postgres via DATABASE_URL`);
   console.log(`🔐 JWT Secret: ${JWT_SECRET.substring(0, 10)}...`);
-}); 66
+});

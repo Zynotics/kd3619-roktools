@@ -15,11 +15,18 @@ async function init() {
       is_approved BOOLEAN DEFAULT FALSE,
       role TEXT DEFAULT 'user',
       governor_id TEXT,
-      can_access_honor BOOLEAN DEFAULT FALSE,
-      can_access_analytics BOOLEAN DEFAULT FALSE,
-      can_access_overview BOOLEAN DEFAULT FALSE,
+      can_access_honor BOOLEESCH DEFAULT FALSE,
+      can_access_analytics BOOLEESCH DEFAULT FALSE,
+      can_access_overview BOOLEESCH DEFAULT FALSE,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+  `);
+
+  // 👑 NEU: kingdom_id zur users-Tabelle hinzufügen
+  await query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS kingdom_id TEXT
+      REFERENCES kingdoms(id);
   `);
 
   // OVERVIEW FILES
@@ -70,7 +77,7 @@ async function init() {
     );
   `);
 
-  // 👑 NEUE SPALTE owner_user_id für Kingdoms hinzufügen (mit Fremdschlüssel)
+  // 👑 NEU: Spalte owner_user_id zur kingdoms-Tabelle hinzufügen
   await query(`
     ALTER TABLE kingdoms
       ADD COLUMN IF NOT EXISTS owner_user_id TEXT
