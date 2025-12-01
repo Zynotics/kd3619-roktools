@@ -511,6 +511,14 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
             </div>
         </div>
       )}
+      
+      {/* HINWEIS, falls im Public Mode keine Daten vorhanden sind */}
+      {!error && uploadedFiles.length === 0 && isPublicView && (
+          <div className="text-center p-8 text-yellow-400 bg-gray-800 rounded-xl">
+              <h3 className="text-xl font-bold mb-2">No Data Available</h3>
+              <p>The selected Kingdom has not uploaded any files yet.</p>
+          </div>
+      )}
 
 
       {!selectedPlayerHistory && isDataLoaded && (
