@@ -754,7 +754,6 @@ app.post(
         });
       }
 
-      // kleine Normalisierung
       const normalizedSlug = String(slug)
         .trim()
         .toLowerCase()
@@ -793,6 +792,127 @@ app.post(
     }
   }
 );
+
+// ==================== PUBLIC KINGDOM ENDPOINTS ====================
+
+// Hilfsfunktion: Kingdom per slug holen
+async function findKingdomBySlug(slug) {
+  if (!slug) return null;
+  const normalized = String(slug).trim().toLowerCase();
+  try {
+    const kingdom = await get(
+      `
+      SELECT
+        id,
+        display_name,
+        slug,
+        rok_identifier,
+        status,
+        plan,
+        created_at,
+        updated_at
+      FROM kingdoms
+      WHERE LOWER(slug) = $1
+      LIMIT 1
+      `,
+      [normalized]
+    );
+    return kingdom || null;
+  } catch (error) {
+    console.error('Error fetching kingdom by slug:', error);
+    return null;
+  }
+}
+
+// Metadaten zu einem Königreich (public)
+app.get('/api/public/kingdom/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const kingdom = await findKingdomBySlug(slug);
+
+    if (!kingdom) {
+      return res.status(404).json({ error: 'Königreich nicht gefunden' });
+    }
+
+    res.json({
+      id: kingdom.id,
+      displayName: kingdom.display_name,
+      slug: kingdom.slug,
+      rokIdentifier: kingdom.rok_identifier,
+      status: kingdom.status,
+      plan: kingdom.plan,
+      createdAt: kingdom.created_at,
+      updatedAt: kingdom.updated_at,
+    });
+  } catch (error) {
+    console.error('Error in public kingdom meta:', error);
+    res.status(500).json({ error: 'Fehler beim Laden des Königreichs' });
+  }
+});
+
+// Overview-Files für ein Königreich (public)
+app.get('/api/public/kingdom/:slug/overview-files', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const kingdom = await findKingdomBySlug(slug);
+
+    if (!kingdom) {
+      return res.status(404).json({ error: 'Königreich nicht gefunden' });
+    }
+
+    const rows = await all(
+      `
+      SELECT * FROM overview_files
+      WHERE kingdom_id = $1
+      ORDER BY fileOrder, uploadDate
+      `,
+      [kingdom.id]
+    );
+
+    const files = rows.map((row) => ({
+      ...row,
+      headers: JSON.parse(row.headers || '[]'),
+      data: JSON.parse(row.data || '[]'),
+    }));
+
+    res.json(files);
+  } catch (error) {
+    console.error('Error fetching public overview files:', error);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
+
+// Honor-Files für ein Königreich (public)
+app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const kingdom = await findKingdomBySlug(slug);
+
+    if (!kingdom) {
+      return res.status(404).json({ error: 'Königreich nicht gefunden' });
+    }
+
+    const rows = await all(
+      `
+      SELECT * FROM honor_files
+      WHERE kingdom_id = $1
+      ORDER BY fileOrder, uploadDate
+      `,
+      [kingdom.id]
+    );
+
+    const files = rows.map((row) => ({
+      ...row,
+      headers: JSON.parse(row.headers || '[]'),
+      data: JSON.parse(row.data || '[]'),
+    }));
+
+    res.json(files);
+  } catch (error) {
+    console.error('Error fetching public honor files:', error);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
 
 // ==================== OVERVIEW FILES ====================
 
@@ -1094,7 +1214,7 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'KD3619 Backend API',
-    version: '2.2.0-pg-kingdom-admin',
+    version: '2.3.0-pg-kingdom-public',
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
       auth: [
@@ -1112,6 +1232,11 @@ app.get('/', (req, res) => {
         'POST /api/admin/create-admin',
         'GET /api/admin/kingdoms',
         'POST /api/admin/kingdoms',
+      ],
+      public: [
+        'GET /api/public/kingdom/:slug',
+        'GET /api/public/kingdom/:slug/overview-files',
+        'GET /api/public/kingdom/:slug/honor-files',
       ],
       debug: ['GET /api/debug/users'],
       overview: [
