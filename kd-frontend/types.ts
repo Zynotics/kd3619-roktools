@@ -1,4 +1,4 @@
-
+// types.ts (VOLLSTÄNDIGER CODE)
 
 export type TableData = any[][];
 export type TableHeaders = string[];
@@ -121,4 +121,19 @@ export interface PlayerAnalyticsRecord {
   t4Kills: number;
   t5Kills: number;
   totalKills: number;
+}
+
+// 👑 NEU: Kingdom-Interface erweitern
+export interface Kingdom {
+  id: string;
+  displayName: string;
+  slug: string;
+  rokIdentifier: string | null;
+  status: 'active' | 'inactive' | string; // Erlaubt active/inactive Status
+  plan: string;
+  createdAt?: string;
+  updatedAt?: string;
+  ownerUserId?: string | null; // NEU: ID des Owners (sollte der R5 sein)
+  ownerUsername?: string | null; // NEU: Username des Owners
+  ownerEmail?: string | null; // NEU: Email des Owners
 }
