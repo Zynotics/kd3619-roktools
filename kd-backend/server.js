@@ -1,4 +1,4 @@
-// server.js - Backend mit Admin, Uploads, Gov-ID-Validierung & Feature-Rechten (Postgres-Version)
+// server.js - Backend mit Admin, Uploads, Gov-ID-Validierung, Feature-Rechten & Kingdom-Layout (Postgres)
 
 const express = require('express');
 const multer = require('multer');
@@ -466,7 +466,7 @@ app.get('/api/auth/validate', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== ADMIN ENDPOINTS ====================
+// ==================== ADMIN ENDPOINTS (USERS) ====================
 
 app.get('/api/debug/users', async (req, res) => {
   try {
@@ -688,11 +688,116 @@ app.delete(
   }
 );
 
+// ==================== KINGDOM ADMIN ENDPOINTS ====================
+
+// Liste aller Königreiche (nur admin/r5)
+app.get(
+  '/api/admin/kingdoms',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const kingdoms = await all(
+        `
+        SELECT
+          id,
+          display_name,
+          slug,
+          rok_identifier,
+          status,
+          plan,
+          created_at,
+          updated_at
+        FROM kingdoms
+        ORDER BY created_at DESC
+        `
+      );
+
+      res.json(
+        kingdoms.map((k) => ({
+          id: k.id,
+          displayName: k.display_name,
+          slug: k.slug,
+          rokIdentifier: k.rok_identifier,
+          status: k.status,
+          plan: k.plan,
+          createdAt: k.created_at,
+          updatedAt: k.updated_at,
+        }))
+      );
+    } catch (error) {
+      console.error('Error fetching kingdoms:', error);
+      res.status(500).json({ error: 'Fehler beim Laden der Königreiche' });
+    }
+  }
+);
+
+// Neues Königreich anlegen (nur admin/r5)
+// Body: { displayName, slug, rokIdentifier, status?, plan? }
+app.post(
+  '/api/admin/kingdoms',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const {
+        displayName,
+        slug,
+        rokIdentifier,
+        status = 'active',
+        plan = 'free',
+      } = req.body;
+
+      if (!displayName || !slug) {
+        return res.status(400).json({
+          error: 'displayName und slug werden benötigt',
+        });
+      }
+
+      // kleine Normalisierung
+      const normalizedSlug = String(slug)
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9\-]/g, '-');
+
+      const kingdomId = 'kdm-' + Date.now();
+
+      await query(
+        `
+        INSERT INTO kingdoms (
+          id, display_name, slug, rok_identifier, status, plan
+        )
+        VALUES ($1,$2,$3,$4,$5,$6)
+        `,
+        [kingdomId, displayName, normalizedSlug, rokIdentifier || null, status, plan]
+      );
+
+      res.json({
+        id: kingdomId,
+        displayName,
+        slug: normalizedSlug,
+        rokIdentifier: rokIdentifier || null,
+        status,
+        plan,
+      });
+    } catch (error) {
+      console.error('Error creating kingdom:', error);
+
+      if (error.message && error.message.includes('duplicate key')) {
+        return res.status(400).json({
+          error: 'Slug ist bereits vergeben. Bitte einen anderen wählen.',
+        });
+      }
+
+      res.status(500).json({ error: 'Fehler beim Anlegen des Königreichs' });
+    }
+  }
+);
+
 // ==================== OVERVIEW FILES ====================
 
 app.get('/overview/files-data', async (req, res) => {
   try {
-    // 🔹 neu: explizit nur Files des Default-Kingdoms holen
     const rows = await all(
       `
       SELECT * FROM overview_files
@@ -725,8 +830,8 @@ app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => 
 
     const id = 'ov-' + Date.now();
     const uploadDate = new Date().toISOString();
-    const kingdomId = 'kdm-default'; // 🔹 vorerst fest, später dynamisch je Königreich
-    const uploadedByUserId = null;   // 🔹 später: req.user?.id wenn wir Uploads an Login koppeln
+    const kingdomId = 'kdm-default';
+    const uploadedByUserId = null; // später: req.user?.id bei Login-gebundenen Uploads
 
     const newFile = {
       id,
@@ -837,7 +942,6 @@ app.post('/overview/files/reorder', async (req, res) => {
 
 app.get('/honor/files-data', async (req, res) => {
   try {
-    // 🔹 neu: explizit nur Files des Default-Kingdoms holen
     const rows = await all(
       `
       SELECT * FROM honor_files
@@ -870,8 +974,8 @@ app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
 
     const id = 'hon-' + Date.now();
     const uploadDate = new Date().toISOString();
-    const kingdomId = 'kdm-default'; // 🔹 vorerst fest
-    const uploadedByUserId = null;   // 🔹 später: req.user?.id
+    const kingdomId = 'kdm-default';
+    const uploadedByUserId = null;
 
     const newFile = {
       id,
@@ -990,7 +1094,7 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'KD3619 Backend API',
-    version: '2.1.0-pg-kingdom-default',
+    version: '2.2.0-pg-kingdom-admin',
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
       auth: [
@@ -1006,6 +1110,8 @@ app.get('/', (req, res) => {
         'POST /api/admin/users/role',
         'DELETE /api/admin/users/:id',
         'POST /api/admin/create-admin',
+        'GET /api/admin/kingdoms',
+        'POST /api/admin/kingdoms',
       ],
       debug: ['GET /api/debug/users'],
       overview: [
