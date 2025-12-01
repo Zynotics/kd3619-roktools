@@ -147,7 +147,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   
   // 🚩 Logik: isPublicView ist true, wenn Slug da und kein User eingeloggt ist
   const isPublicView = !!publicSlug && !user; 
-  // Da Analytics keine Management-Funktionen hat, wird hier nur die isMinimalView Logik benötigt.
+  // Da Analytics keine Management-Funktionen hat, ist hier die Vollansicht (Suche + Charts) erforderlich.
   const isMinimalView = isPublicView || role === 'user'; 
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]); 
