@@ -19,8 +19,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'kd3619-secret-key-change-in-produc
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
+  'https://kd3619-frontend.onrender.com',
   'https://rise-of-stats.com',
-    'https://kd3619-frontend.onrender.com',
 ];
 
 app.use(
@@ -106,14 +106,13 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// 🔐 Admin / R5 middleware (for user management & admin endpoints)
+// 🔐 Admin / R5 middleware (für Admin-Endpunkte)
 async function requireAdmin(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ error: 'Nicht authentifiziert' });
   }
 
   try {
-    // Rolle IMMER frisch aus der DB holen
     const dbUser = await get(
       'SELECT role FROM users WHERE id = $1',
       [req.user.id]
@@ -132,9 +131,7 @@ async function requireAdmin(req, res, next) {
         .json({ error: 'Admin oder R5 Rechte erforderlich' });
     }
 
-    // Rolle am Request-Objekt aktualisieren (falls sich was geändert hat)
     req.user.role = role;
-
     next();
   } catch (error) {
     console.error('Error checking admin privileges:', error);
@@ -321,14 +318,12 @@ app.post('/api/auth/register', async (req, res) => {
 
     const normalizedGovId = String(governorId).trim();
 
-    // 1) Prüfen, ob es schon einen Account mit dieser Gov ID gibt
     if (await userGovIdExists(normalizedGovId)) {
       return res.status(400).json({
         error: 'Für diese Gov ID existiert bereits ein Account.',
       });
     }
 
-    // 2) Prüfen, ob Email oder Username bereits vergeben sind
     const existingUser = await get(
       'SELECT id FROM users WHERE email = $1 OR username = $2 LIMIT 1',
       [email, username]
@@ -340,7 +335,6 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    // 3) Passwort hashen
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = 'user-' + Date.now();
 
@@ -365,12 +359,12 @@ app.post('/api/auth/register', async (req, res) => {
         email,
         username,
         passwordHash,
-        false, // is_approved
-        'user', // role
+        false,
+        'user',
         normalizedGovId,
-        false, // can_access_honor
-        false, // can_access_analytics
-        false, // can_access_overview
+        false,
+        false,
+        false,
       ]
     );
 
