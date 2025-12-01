@@ -1001,7 +1001,416 @@ app.delete(
 
 // ==================== PUBLIC KINGDOM ENDPOINTS ====================
 
-// ... (Rest des Codes bleibt gleich)
+// Hilfsfunktion: Kingdom per slug holen
+async function findKingdomBySlug(slug) {
+  if (!slug) return null;
+  const normalized = String(slug).trim().toLowerCase();
+  try {
+    const kingdom = await get(
+      `
+      SELECT
+        id,
+        display_name,
+        slug,
+        rok_identifier,
+        status,
+        plan,
+        created_at,
+        updated_at
+      FROM kingdoms
+      WHERE LOWER(slug) = $1
+      LIMIT 1
+      `,
+      [normalized]
+    );
+    return kingdom || null;
+  } catch (error) {
+    console.error('Error fetching kingdom by slug:', error);
+    return null;
+  }
+}
+
+// Metadaten zu einem Königreich (public)
+app.get('/api/public/kingdom/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const kingdom = await findKingdomBySlug(slug);
+
+    if (!kingdom) {
+      return res.status(404).json({ error: 'Königreich nicht gefunden' });
+    }
+
+    res.json({
+      id: kingdom.id,
+      displayName: kingdom.display_name,
+      slug: kingdom.slug,
+      rokIdentifier: kingdom.rok_identifier,
+      status: kingdom.status,
+      plan: kingdom.plan,
+      createdAt: kingdom.created_at,
+      updatedAt: kingdom.updated_at,
+    });
+  } catch (error) {
+    console.error('Error in public kingdom meta:', error);
+    res.status(500).json({ error: 'Fehler beim Laden des Königreichs' });
+  }
+});
+
+// Overview-Files für ein Königreich (public)
+app.get('/api/public/kingdom/:slug/overview-files', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const kingdom = await findKingdomBySlug(slug);
+
+    if (!kingdom) {
+      return res.status(404).json({ error: 'Königreich nicht gefunden' });
+    }
+
+    const rows = await all(
+      `
+      SELECT * FROM overview_files
+      WHERE kingdom_id = $1
+      ORDER BY fileOrder, uploadDate
+      `,
+      [kingdom.id]
+    );
+
+    const files = rows.map((row) => ({
+      ...row,
+      headers: JSON.parse(row.headers || '[]'),
+      data: JSON.parse(row.data || '[]'),
+    }));
+
+    res.json(files);
+  } catch (error) {
+    console.error('Error fetching public overview files:', error);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
+
+// Honor-Files für ein Königreich (public)
+app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const kingdom = await findKingdomBySlug(slug);
+
+    if (!kingdom) {
+      return res.status(404).json({ error: 'Königreich nicht gefunden' });
+    }
+
+    const rows = await all(
+      `
+      SELECT * FROM honor_files
+      WHERE kingdom_id = $1
+      ORDER BY fileOrder, uploadDate
+      `,
+      [kingdom.id]
+    );
+
+    const files = rows.map((row) => ({
+      ...row,
+      headers: JSON.parse(row.headers || '[]'),
+      data: JSON.parse(row.data || '[]'),
+    }));
+
+    res.json(files);
+  } catch (error) {
+    console.error('Error fetching public honor files:', error);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
+
+// ==================== OVERVIEW FILES ====================
+
+// 🚨 WICHTIG: Route mit Token schützen, damit der User authentifiziert sein muss
+app.get('/overview/files-data', authenticateToken, async (req, res) => { 
+  try {
+    // Später muss hier die Kingdom-ID aus dem authentifizierten User-Objekt (req.user) verwendet werden.
+    // Für den Moment bleibt es beim Default-Kingdom
+    const rows = await all(
+      `
+      SELECT * FROM overview_files
+      WHERE kingdom_id = $1 
+      ORDER BY fileOrder, uploadDate
+      `,
+      ['kdm-default']
+    );
+
+    const files = rows.map((row) => ({
+      ...row,
+      headers: JSON.parse(row.headers || '[]'),
+      data: JSON.parse(row.data || '[]'),
+    }));
+
+    res.json(files);
+  } catch (error) {
+    console.error('Error fetching overview files:', error);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
+
+app.post('/overview/upload', overviewUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Keine Datei hochgeladen' });
+    }
+
+    const { headers, data } = await parseExcel(req.file.path);
+
+    const id = 'ov-' + Date.now();
+    const uploadDate = new Date().toISOString();
+    const kingdomId = 'kdm-default';
+    const uploadedByUserId = null; // später: req.user?.id bei Login-gebundenen Uploads
+
+    const newFile = {
+      id,
+      name: req.file.originalname,
+      filename: req.file.filename,
+      path: req.file.path,
+      size: req.file.size,
+      uploadDate,
+      headers: JSON.stringify(headers),
+      data: JSON.stringify(data),
+      kingdom_id: kingdomId,
+      uploaded_by_user_id: uploadedByUserId,
+    };
+
+    await query(
+      `
+      INSERT INTO overview_files
+        (id, name, filename, path, size, uploadDate, headers, data, kingdom_id, uploaded_by_user_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `,
+      [
+        newFile.id,
+        newFile.name,
+        newFile.filename,
+        newFile.path,
+        newFile.size,
+        newFile.uploadDate,
+        newFile.headers,
+        newFile.data,
+        newFile.kingdom_id,
+        newFile.uploaded_by_user_id,
+      ]
+    );
+
+    res.json({
+      message: 'Datei erfolgreich hochgeladen',
+      file: {
+        ...newFile,
+        headers,
+        data,
+      },
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ error: 'Upload fehlgeschlagen: ' + error.message });
+  }
+});
+
+app.delete('/overview/files/:id', async (req, res) => {
+  try {
+    const fileId = req.params.id;
+
+    const file = await get('SELECT * FROM overview_files WHERE id = $1', [
+      fileId,
+    ]);
+
+    if (!file) {
+      return res.status(404).json({ error: 'Datei nicht gefunden' });
+    }
+
+    if (file.path && fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
+
+    const result = await query('DELETE FROM overview_files WHERE id = $1', [
+      fileId,
+    ]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Datei nicht gefunden' });
+    }
+
+    res.json({ message: 'Datei erfolgreich gelöscht' });
+  } catch (error) {
+    console.error('Delete error:', error);
+    res.status(500).json({ error: 'Löschen fehlgeschlagen' });
+  }
+});
+
+app.post('/overview/files/reorder', async (req, res) => {
+  try {
+    const { order } = req.body;
+    if (!order || !Array.isArray(order)) {
+      return res.status(400).json({ error: 'Ungültige Reihenfolge' });
+    }
+
+    for (let index = 0; index < order.length; index++) {
+      const id = order[index];
+      await query(
+        'UPDATE overview_files SET fileOrder = $1 WHERE id = $2',
+        [index, id]
+      );
+    }
+
+    res.json({ message: 'Reihenfolge aktualisiert' });
+  } catch (error) {
+    console.error('Reorder error:', error);
+    res
+      .status(500)
+      .json({ error: 'Reihenfolge konnte nicht aktualisiert werden' });
+  }
+});
+
+// ==================== HONOR FILES ====================
+
+// 🚨 WICHTIG: Route mit Token schützen, damit der User authentifiziert sein muss
+app.get('/honor/files-data', authenticateToken, async (req, res) => {
+  try {
+    // Später muss hier die Kingdom-ID aus dem authentifizierten User-Objekt (req.user) verwendet werden.
+    // Für den Moment bleibt es beim Default-Kingdom
+    const rows = await all(
+      `
+      SELECT * FROM honor_files
+      WHERE kingdom_id = $1
+      ORDER BY fileOrder, uploadDate
+      `,
+      ['kdm-default']
+    );
+
+    const files = rows.map((row) => ({
+      ...row,
+      headers: JSON.parse(row.headers || '[]'),
+      data: JSON.parse(row.data || '[]'),
+    }));
+
+    res.json(files);
+  } catch (error) {
+    console.error('Error fetching honor files:', error);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
+
+app.post('/honor/upload', honorUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Keine Datei hochgeladen' });
+    }
+
+    const { headers, data } = await parseExcel(req.file.path);
+
+    const id = 'hon-' + Date.now();
+    const uploadDate = new Date().toISOString();
+    const kingdomId = 'kdm-default';
+    const uploadedByUserId = null;
+
+    const newFile = {
+      id,
+      name: req.file.originalname,
+      filename: req.file.filename,
+      path: req.file.path,
+      size: req.file.size,
+      uploadDate,
+      headers: JSON.stringify(headers),
+      data: JSON.stringify(data),
+      kingdom_id: kingdomId,
+      uploaded_by_user_id: uploadedByUserId,
+    };
+
+    await query(
+      `
+      INSERT INTO honor_files
+        (id, name, filename, path, size, uploadDate, headers, data, kingdom_id, uploaded_by_user_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `,
+      [
+        newFile.id,
+        newFile.name,
+        newFile.filename,
+        newFile.path,
+        newFile.size,
+        newFile.uploadDate,
+        newFile.headers,
+        newFile.data,
+        newFile.kingdom_id,
+        newFile.uploaded_by_user_id,
+      ]
+    );
+
+    res.json({
+      message: 'Datei erfolgreich hochgeladen',
+      file: {
+        ...newFile,
+        headers,
+        data,
+      },
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ error: 'Upload fehlgeschlagen: ' + error.message });
+  }
+});
+
+app.delete('/honor/files/:id', async (req, res) => {
+  try {
+    const fileId = req.params.id;
+
+    const file = await get('SELECT * FROM honor_files WHERE id = $1', [fileId]);
+
+    if (!file) {
+      return res.status(404).json({ error: 'Datei nicht gefunden' });
+    }
+
+    if (file.path && fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
+
+    const result = await query('DELETE FROM honor_files WHERE id = $1', [
+      fileId,
+    ]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Datei nicht gefunden' });
+    }
+
+    res.json({ message: 'Datei erfolgreich gelöscht' });
+  } catch (error) {
+    console.error('Delete error:', error);
+    res.status(500).json({ error: 'Löschen fehlgeschlagen' });
+  }
+});
+
+app.post('/honor/files/reorder', async (req, res) => {
+  try {
+    const { order } = req.body;
+    if (!order || !Array.isArray(order)) {
+      return res.status(400).json({ error: 'Ungültige Reihenfolge' });
+    }
+
+    for (let index = 0; index < order.length; index++) {
+      const id = order[index];
+      await query(
+        'UPDATE honor_files SET fileOrder = $1 WHERE id = $2',
+        [index, id]
+      );
+    }
+
+    res.json({ message: 'Reihenfolge aktualisiert' });
+  } catch (error) {
+    console.error('Reorder error:', error);
+    res
+      .status(500)
+      .json({ error: 'Reihenfolge konnte nicht aktualisiert werden' });
+  }
+});
 
 // ==================== HEALTH & ROOT ====================
 
@@ -1017,7 +1426,7 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'KD3619 Backend API',
-    version: '2.4.0-pg-kingdom-r5', // Version aktualisiert
+    version: '2.4.1-pg-kingdom-r5-fix', // Version aktualisiert
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
       auth: [
@@ -1035,9 +1444,9 @@ app.get('/', (req, res) => {
         'POST /api/admin/create-admin',
         'GET /api/admin/kingdoms',
         'POST /api/admin/kingdoms',
-        'POST /api/admin/kingdoms/:id/assign-r5', // NEU
-        'POST /api/admin/kingdoms/:id/status',    // NEU
-        'DELETE /api/admin/kingdoms/:id',         // NEU
+        'POST /api/admin/kingdoms/:id/assign-r5', 
+        'POST /api/admin/kingdoms/:id/status',    
+        'DELETE /api/admin/kingdoms/:id',         
       ],
       public: [
         'GET /api/public/kingdom/:slug',
@@ -1046,13 +1455,13 @@ app.get('/', (req, res) => {
       ],
       debug: ['GET /api/debug/users'],
       overview: [
-        'GET /overview/files-data',
+        'GET /overview/files-data (Requires Token!)', // HINWEIS
         'POST /overview/upload',
         'DELETE /overview/files/:id',
         'POST /overview/files/reorder',
       ],
       honor: [
-        'GET /honor/files-data',
+        'GET /honor/files-data (Requires Token!)', // HINWEIS
         'POST /honor/upload',
         'DELETE /honor/files/:id',
         'POST /honor/files/reorder',
@@ -1069,4 +1478,4 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`💾 Datenbank: Postgres via DATABASE_URL`);
   console.log(`🔐 JWT Secret: ${JWT_SECRET.substring(0, 10)}...`);
-});
+}); 66
