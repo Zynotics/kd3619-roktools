@@ -1,3 +1,4 @@
+// AuthContext.tsx (VOLLSTÄNDIGER CODE)
 import React, {
   createContext,
   useState,
@@ -39,9 +40,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// 🌐 NEU: BACKEND_URL auf die neue API-Domain aktualisieren
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
-    ? 'https://kd3619-backend.onrender.com'
+    ? 'https://api.rise-of-stats.com' // <-- HIER IST DIE WICHTIGE ÄNDERUNG
     : 'http://localhost:4000';
 
 interface AuthProviderProps {
