@@ -1,13 +1,13 @@
-// PowerAnalyticsDashboard.tsx - AKTUALISIERT
+// PowerAnalyticsDashboard.tsx - AKTUALISIERT MIT CHART-LOGIK
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { cleanFileName, parseGermanNumber, findColumnIndex, formatNumber, abbreviateNumber } from '../utils';
-import { useAuth } from './AuthContext'; // Import useAuth
-import type { UploadedFile } from '../types'; // Import UploadedFile type
+import { useAuth } from './AuthContext';
+import type { UploadedFile } from '../types'; 
 
-// Interfaces kopiert aus types.ts/snippet
+// Interfaces kopiert aus types.ts
 interface PlayerAnalyticsRecord {
   fileName: string;
   power: number;
@@ -36,8 +36,114 @@ interface PowerAnalyticsDashboardProps {
   backendUrl: string;
 }
 
+// ----------------------------------------------------
+// NEUE KOMPONENTE: Chart-Anzeige für die Spielerhistorie
+// ----------------------------------------------------
+interface PlayerAnalyticsHistoryChartProps {
+    history: PlayerAnalyticsHistory;
+}
+
+const PlayerAnalyticsHistoryChart: React.FC<PlayerAnalyticsHistoryChartProps> = ({ history }) => {
+    const chartRef = useRef<HTMLCanvasElement>(null);
+    const chartInstanceRef = useRef<any>(null);
+
+    useEffect(() => {
+        if (!chartRef.current || !history || history.history.length === 0) return;
+        
+        const chartData = {
+            labels: history.history.map(h => h.fileName),
+            datasets: [
+                {
+                    label: 'Power (Macht)',
+                    data: history.history.map(h => h.power),
+                    borderColor: 'rgba(59, 130, 246, 0.9)', // blue-500
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                    fill: false,
+                    tension: 0.2,
+                    yAxisID: 'y',
+                },
+                {
+                    label: 'Kill Points',
+                    data: history.history.map(h => h.totalKillPoints),
+                    borderColor: 'rgba(16, 185, 129, 0.9)', // emerald-500
+                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                    fill: false,
+                    tension: 0.2,
+                    yAxisID: 'y1',
+                }
+            ],
+        };
+
+        if (chartInstanceRef.current) {
+            chartInstanceRef.current.destroy();
+        }
+
+        const ctx = chartRef.current.getContext('2d');
+        if (!ctx) return;
+        
+        chartInstanceRef.current = new Chart(ctx, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { color: '#e5e7eb' } // gray-200
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context: any) => {
+                                let label = context.dataset.label || '';
+                                if (label) label += ': ';
+                                return label + formatNumber(context.parsed.y);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                    y: { 
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        ticks: { color: 'rgba(59, 130, 246, 1)', callback: (v: any) => abbreviateNumber(v) },
+                        grid: { color: 'rgba(59, 130, 246, 0.2)' },
+                        title: { display: true, text: 'Power', color: 'rgba(59, 130, 246, 1)'}
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        grid: { drawOnChartArea: false, color: 'rgba(16, 185, 129, 0.2)' }, // do not draw grid lines on chart area
+                        ticks: { color: 'rgba(16, 185, 129, 1)', callback: (v: any) => abbreviateNumber(v) },
+                        title: { display: true, text: 'Kill Points', color: 'rgba(16, 185, 129, 1)'}
+                    }
+                }
+            }
+        });
+
+        return () => {
+            if (chartInstanceRef.current) {
+                chartInstanceRef.current.destroy();
+                chartInstanceRef.current = null;
+            }
+        };
+    }, [history]);
+
+    return (
+        <Card hover className="p-4" gradient>
+            <h5 className="text-md font-semibold text-gray-300 mb-3 text-center">Power & Kill Points Progression</h5>
+            <div className="relative h-96">
+                <canvas ref={chartRef}></canvas>
+            </div>
+        </Card>
+    );
+};
+
+
 const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdmin, backendUrl }) => {
-  const { user } = useAuth(); // Get user for governorId/etc.
+  const { user } = useAuth();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]); 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,10 +155,8 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
 
 
   // ----------------------------------------------------
-  // Dateien laden (KORRIGIERT: Fügt Token-Header hinzu)
+  // Dateien laden
   // ----------------------------------------------------
-
-  // Hinzugefügte Token-Logik in dieser Komponente, da diese den 401-Fehler verursacht hat.
   const fetchFiles = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -66,7 +170,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       // Analytics verwendet die gleichen Dateien wie Overview
       const response = await fetch(`${backendUrl}/overview/files-data`, { 
         headers: {
-          Authorization: `Bearer ${token}`, // <<< Authorization Header hinzugefügt
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -93,7 +197,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   }, [fetchFiles]);
   
   // ----------------------------------------------------
-  // Dateiparser und Analyse-Logik (unverändert)
+  // Dateiparser und Analyse-Logik
   // ----------------------------------------------------
 
   const parseFileToPlayers = (file: UploadedFile): any[] => {
@@ -207,7 +311,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
 
 
   // ----------------------------------------------------
-  // Spielersuche (unverändert)
+  // Spielersuche
   // ----------------------------------------------------
 
   const handleSearch = () => {
@@ -251,7 +355,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
 
 
   // ----------------------------------------------------
-  // Render-Teil (unverändert)
+  // Render-Teil
   // ----------------------------------------------------
 
   if (isLoading) {
@@ -331,8 +435,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       {/* Selected Player History / Charts */}
       {selectedPlayerHistory && (
         <div className="space-y-6">
-          <Card gradient className="p-6">
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 items-baseline mb-4">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 items-baseline mb-4 p-2">
                 <h4 className="text-xl font-bold text-white">{selectedPlayerHistory.name}</h4>
                 <div className="flex gap-4 text-sm text-gray-400">
                     <span>ID: {selectedPlayerHistory.id}</span>
@@ -340,36 +443,41 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
                 </div>
             </div>
           
-            {/* History Table */}
-            <div className="overflow-x-auto relative border border-gray-700 rounded-lg max-h-96">
-                <Table>
-                <TableHeader>
-                    <tr>
-                    <TableCell align="left" header>Snapshot</TableCell>
-                    <TableCell align="right" header>Power</TableCell>
-                    <TableCell align="right" header>Troops Power</TableCell>
-                    <TableCell align="right" header>Kill Points</TableCell>
-                    <TableCell align="right" header>Dead Troops</TableCell>
-                    <TableCell align="right" header>T5 Kills</TableCell>
-                    <TableCell align="right" header>Total Kills</TableCell>
-                    </tr>
-                </TableHeader>
-                <tbody>
-                    {selectedPlayerHistory.history.map((record, index) => (
-                    <TableRow key={index} hover={false}>
-                        <TableCell align="left" className="font-medium text-white">{record.fileName}</TableCell>
-                        <TableCell align="right">{formatNumber(record.power)}</TableCell>
-                        <TableCell align="right">{formatNumber(record.troopsPower)}</TableCell>
-                        <TableCell align="right">{formatNumber(record.totalKillPoints)}</TableCell>
-                        <TableCell align="right">{formatNumber(record.deadTroops)}</TableCell>
-                        <TableCell align="right">{formatNumber(record.t5Kills)}</TableCell>
-                        <TableCell align="right">{formatNumber(record.totalKills)}</TableCell>
-                    </TableRow>
-                    ))}
-                </tbody>
-                </Table>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* CHART HIER EINFÜGEN */}
+                <PlayerAnalyticsHistoryChart history={selectedPlayerHistory} />
+
+                {/* History Table */}
+                <Card gradient className="p-4">
+                    <h5 className="text-md font-semibold text-gray-300 mb-3 text-center">History Table</h5>
+                    <div className="overflow-x-auto relative border border-gray-700 rounded-lg max-h-96">
+                        <Table>
+                        <TableHeader>
+                            <tr>
+                            <TableCell align="left" header>Snapshot</TableCell>
+                            <TableCell align="right" header>Power</TableCell>
+                            <TableCell align="right" header>Troops Power</TableCell>
+                            <TableCell align="right" header>Kill Points</TableCell>
+                            <TableCell align="right" header>Dead Troops</TableCell>
+                            <TableCell align="right" header>Total Kills</TableCell>
+                            </tr>
+                        </TableHeader>
+                        <tbody>
+                            {selectedPlayerHistory.history.map((record, index) => (
+                            <TableRow key={index} hover={false}>
+                                <TableCell align="left" className="font-medium text-white">{record.fileName}</TableCell>
+                                <TableCell align="right">{formatNumber(record.power)}</TableCell>
+                                <TableCell align="right">{formatNumber(record.troopsPower)}</TableCell>
+                                <TableCell align="right">{formatNumber(record.totalKillPoints)}</TableCell>
+                                <TableCell align="right">{formatNumber(record.deadTroops)}</TableCell>
+                                <TableCell align="right">{formatNumber(record.totalKills)}</TableCell>
+                            </TableRow>
+                            ))}
+                        </tbody>
+                        </Table>
+                    </div>
+                </Card>
             </div>
-          </Card>
         </div>
       )}
 
