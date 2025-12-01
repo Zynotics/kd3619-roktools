@@ -693,7 +693,7 @@ app.post(
   }
 );
 
-// 🚩 GEÄNDERT: Rollenzuweisung mit Scoping-Prüfung (R5 darf R4/R5/User vergeben)
+// 🚩 GEÄNDERT: Rollenzuweisung mit Scoping-Prüfung (Fix 500 Fehler)
 app.post(
   '/api/admin/users/role',
   authenticateToken,
@@ -733,16 +733,14 @@ app.post(
       let updateSql = 'UPDATE users SET role = $1 WHERE id = $2';
       let params = [role, userId];
       
-      // Beim Setzen der Rolle auf 'user' oder 'r4' behalten wir die Kingdom-ID des R5 bei
-      if (role === 'user' || role === 'r4' || (role === 'r5' && currentUserRole !== 'admin')) {
-          updateSql = 'UPDATE users SET role = $1, kingdom_id = $3 WHERE id = $2';
-          // Der Zielbenutzer bekommt die Kingdom ID des aktuellen R5/Admin zugewiesen
-          params = [role, userId, currentUserKingdomId || targetUser.kingdom_id]; 
-      }
-      
-      // Beim Setzen von 'user' oder 'r4' durch einen Admin, der kein Kingdom hat, darf die Kingdom_id NICHT auf NULL gesetzt werden.
-      // Da die Scoping-Prüfung dies bereits handhabt und wir hier nur Role/KingdomId setzen, lassen wir es wie oben.
-      
+      // Wenn die Rolle auf 'user' oder 'r4' gesetzt wird, löschen wir die kingdom_id NICHT.
+      // ABER: Wenn ein Admin (currentUserKingdomId == NULL) die Rolle setzt, wird die kingdom_id des Users nicht angetastet.
+      // Wenn ein R5 die Rolle setzt, stellen wir sicher, dass die Kingdom ID des Ziels auf die des R5 gesetzt wird,
+      // was bereits durch den Scoping-Check impliziert ist.
+
+      // FIX: Nur die Rolle updaten. Die Kingdom-Zuweisung erfolgt primär über die /assign-r5 Route
+      // und sollte bei 'user'/'r4' beibehalten werden, wenn sie in einem Kingdom sind.
+      // Der UI-Code für R5/R4 stellt die korrekte Kingdom ID sicher.
       const result = await query(updateSql, params);
 
       if (result.rowCount === 0) {
@@ -851,11 +849,385 @@ app.get(
   }
 );
 
-// ... (Restliche Kingdom-Admin-Routen: create, assign-r5, status, delete bleiben unverändert)
+// Neues Königreich anlegen (nur admin/r5)
+// Body: { displayName, slug, rokIdentifier, status?, plan?, ownerUserId? }
+app.post(
+  '/api/admin/kingdoms',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    // Nur Admin (Superadmin) darf Königreiche erstellen
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Nur Superadmins dürfen Königreiche erstellen.' });
+    }
+    
+    try {
+      const {
+        displayName,
+        slug,
+        rokIdentifier,
+        status = 'active',
+        plan = 'free',
+        ownerUserId = null,
+      } = req.body;
+
+      if (!displayName || !slug) {
+        return res.status(400).json({
+          error: 'displayName und slug werden benötigt',
+        });
+      }
+
+      const normalizedSlug = String(slug)
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9\-]/g, '-');
+
+      const kingdomId = 'kdm-' + Date.now();
+
+      await query(
+        `
+        INSERT INTO kingdoms (
+          id, display_name, slug, rok_identifier, status, plan, owner_user_id
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `,
+        [
+          kingdomId,
+          displayName,
+          normalizedSlug,
+          rokIdentifier || null,
+          status,
+          plan,
+          ownerUserId || null,
+        ]
+      );
+
+      res.json({
+        id: kingdomId,
+        displayName,
+        slug: normalizedSlug,
+        rokIdentifier: rokIdentifier || null,
+        status,
+        plan,
+        ownerUserId: ownerUserId || null,
+      });
+    } catch (error) {
+      console.error('Error creating kingdom:', error);
+
+      if (error.message && error.message.includes('duplicate key')) {
+        return res.status(400).json({
+          error: 'Slug ist bereits vergeben. Bitte einen anderen wählen.',
+        });
+      }
+
+      res.status(500).json({ error: 'Fehler beim Anlegen des Königreichs' });
+    }
+  }
+);
+
+// 👑 NEU: R5-Rolle zuweisen und Kingdom-Owner setzen (Admin Only)
+// Body: { r5UserId }
+app.post(
+  '/api/admin/kingdoms/:id/assign-r5',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        error:
+          'Nur Superadmins (Rolle "admin") dürfen R5-Rollen zuweisen und Königreiche übertragen.',
+      });
+    }
+    
+    try {
+      const kingdomId = req.params.id;
+      const { r5UserId } = req.body;
+
+      if (!kingdomId || !r5UserId) {
+        return res.status(400).json({ error: 'kingdomId und r5UserId werden benötigt' });
+      }
+
+      const kingdom = await get(
+        'SELECT id, display_name FROM kingdoms WHERE id = $1 LIMIT 1',
+        [kingdomId]
+      );
+      if (!kingdom) {
+        return res.status(404).json({ error: 'Königreich nicht gefunden' });
+      }
+
+      const userToAssign = await get(
+        'SELECT id FROM users WHERE id = $1 LIMIT 1',
+        [r5UserId]
+      );
+      if (!userToAssign) {
+        return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+      }
+      
+      // Nutze die neue DB-Funktion, die beides in einem Schritt macht
+      await assignR5(r5UserId, kingdomId);
+
+      // Aktualisierte Kingdom-Daten zurücksenden (inkl. neuem Owner)
+      const updated = await get(
+        `
+        SELECT
+          k.id, k.display_name, k.slug, k.rok_identifier, k.status, k.plan, k.updated_at, k.owner_user_id,
+          u.username AS owner_username, u.email AS owner_email
+        FROM kingdoms k
+        LEFT JOIN users u ON u.id = k.owner_user_id
+        WHERE k.id = $1
+        `,
+        [kingdomId]
+      );
+
+      res.json({
+        success: true,
+        message: `Benutzer ${r5UserId} erfolgreich als R5 für ${updated.display_name} zugewiesen.`,
+        kingdom: updated,
+      });
+    } catch (error) {
+      console.error('Error assigning R5:', error);
+      res.status(500).json({ error: 'Fehler beim Zuweisen der R5-Rolle' });
+    }
+  }
+);
+
+// 🔒 NEU: Status eines Königreichs setzen (active / inactive) (Admin Only)
+app.post(
+  '/api/admin/kingdoms/:id/status',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        error:
+          'Nur Superadmins (Rolle "admin") dürfen den Kingdom-Status ändern.',
+      });
+    }
+
+    try {
+      const kingdomId = req.params.id;
+      const { status } = req.body;
+
+      const allowed = ['active', 'inactive'];
+      if (!status || !allowed.includes(status)) {
+        return res.status(400).json({
+          error: `Ungültiger Status. Erlaubt: ${allowed.join(', ')}`,
+        });
+      }
+
+      const k = await get(
+        'SELECT id, slug FROM kingdoms WHERE id = $1 LIMIT 1',
+        [kingdomId]
+      );
+      if (!k) {
+        return res.status(404).json({ error: 'Königreich nicht gefunden' });
+      }
+      
+      // Nutze die neue DB-Funktion
+      await updateKingdomStatus(kingdomId, status);
+
+      const updated = await get(
+        `
+        SELECT
+          k.id, k.display_name, k.slug, k.rok_identifier, k.status, k.plan, k.updated_at, k.owner_user_id,
+          u.username AS owner_username, u.email AS owner_email
+        FROM kingdoms k
+        LEFT JOIN users u ON u.id = k.owner_user_id
+        WHERE k.id = $1
+        `,
+        [kingdomId]
+      );
+
+      res.json({
+        id: updated.id,
+        displayName: updated.display_name,
+        slug: updated.slug,
+        rokIdentifier: updated.rok_identifier,
+        status: updated.status,
+        plan: updated.plan,
+        createdAt: updated.created_at,
+        updatedAt: updated.updated_at,
+        ownerUserId: updated.owner_user_id || null,
+        ownerUsername: updated.owner_username || null,
+        ownerEmail: updated.owner_email || null,
+      });
+    } catch (error) {
+      console.error('Error updating kingdom status:', error);
+      res
+        .status(500)
+        .json({ error: 'Fehler beim Aktualisieren des Kingdom-Status' });
+    }
+  }
+);
+
+// ❌ NEU: Königreich löschen (hart) – Default-Kingdom wird geschützt (Admin Only)
+app.delete(
+  '/api/admin/kingdoms/:id',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        error:
+          'Nur Superadmins (Rolle "admin") dürfen Königreiche löschen.',
+      });
+    }
+
+    try {
+      const kingdomId = req.params.id;
+
+      const k = await get(
+        'SELECT id, slug FROM kingdoms WHERE id = $1 LIMIT 1',
+        [kingdomId]
+      );
+      if (!k) {
+        return res.status(404).json({ error: 'Königreich nicht gefunden' });
+      }
+
+      // Safety: Default-Kingdom nicht löschen
+      if (k.slug === 'default-kingdom') {
+        return res.status(400).json({
+          error: 'Das Default-Kingdom kann nicht gelöscht werden',
+        });
+      }
+      
+      // Nutze die neue DB-Funktion
+      const deletedCount = await deleteKingdom(kingdomId);
+
+      if (deletedCount > 0) {
+        res.json({ success: true, message: 'Königreich erfolgreich gelöscht (inkl. zugehöriger Benutzer/Dateien)' });
+      } else {
+        res.status(404).json({ error: 'Königreich nicht gefunden' });
+      }
+
+    } catch (error) {
+      console.error('Error deleting kingdom:', error);
+      res.status(500).json({ error: 'Fehler beim Löschen des Königreichs' });
+    }
+  }
+);
+
 
 // ==================== PUBLIC KINGDOM ENDPOINTS ====================
 
-// ... (findKingdomBySlug, public/kingdom/:slug, public/kingdom/:slug/overview-files, public/kingdom/:slug/honor-files unverändert)
+// Hilfsfunktion: Kingdom per slug holen
+async function findKingdomBySlug(slug) {
+  if (!slug) return null;
+  const normalized = String(slug).trim().toLowerCase();
+  try {
+    const kingdom = await get(
+      `
+      SELECT
+        id,
+        display_name,
+        slug,
+        rok_identifier,
+        status,
+        plan,
+        created_at,
+        updated_at
+      FROM kingdoms
+      WHERE LOWER(slug) = $1
+      LIMIT 1
+      `,
+      [normalized]
+    );
+    return kingdom || null;
+  } catch (error) {
+    console.error('Error fetching kingdom by slug:', error);
+    return null;
+  }
+}
+
+// Metadaten zu einem Königreich (public)
+app.get('/api/public/kingdom/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const kingdom = await findKingdomBySlug(slug);
+
+    if (!kingdom) {
+      return res.status(404).json({ error: 'Königreich nicht gefunden' });
+    }
+
+    res.json({
+      id: kingdom.id,
+      displayName: kingdom.display_name,
+      slug: kingdom.slug,
+      rokIdentifier: kingdom.rok_identifier,
+      status: kingdom.status,
+      plan: kingdom.plan,
+      createdAt: kingdom.created_at,
+      updatedAt: kingdom.updated_at,
+    });
+  } catch (error) {
+    console.error('Error in public kingdom meta:', error);
+    res.status(500).json({ error: 'Fehler beim Laden des Königreichs' });
+  }
+});
+
+// Overview-Files für ein Königreich (public)
+app.get('/api/public/kingdom/:slug/overview-files', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const kingdom = await findKingdomBySlug(slug);
+
+    if (!kingdom) {
+      return res.status(404).json({ error: 'Königreich nicht gefunden' });
+    }
+
+    const rows = await all(
+      `
+      SELECT * FROM overview_files
+      WHERE kingdom_id = $1
+      ORDER BY fileOrder, uploadDate
+      `,
+      [kingdom.id]
+    );
+
+    const files = rows.map((row) => ({
+      ...row,
+      headers: JSON.parse(row.headers || '[]'),
+      data: JSON.parse(row.data || '[]'),
+    }));
+
+    res.json(files);
+  } catch (error) {
+    console.error('Error fetching public overview files:', error);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
+
+// Honor-Files für ein Königreich (public)
+app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const kingdom = await findKingdomBySlug(slug);
+
+    if (!kingdom) {
+      return res.status(404).json({ error: 'Königreich nicht gefunden' });
+    }
+
+    const rows = await all(
+      `
+      SELECT * FROM honor_files
+      WHERE kingdom_id = $1
+      ORDER BY fileOrder, uploadDate
+      `,
+      [kingdom.id]
+    );
+
+    const files = rows.map((row) => ({
+      ...row,
+      headers: JSON.parse(row.headers || '[]'),
+      data: JSON.parse(row.data || '[]'),
+    }));
+
+    res.json(files);
+  } catch (error) {
+    console.error('Error fetching public honor files:', error);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
 
 // ==================== AUTHENTIFIZIERTE DATEN-ENDPUNKTE ====================
 
