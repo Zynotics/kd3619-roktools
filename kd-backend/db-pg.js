@@ -1,4 +1,4 @@
-// db-pg.js – kleine Wrapper-Schicht für Postgres
+// db-pg.js – kleine Wrapper-Schicht für Postgres (VOLLSTÄNDIGER CODE)
 
 const { Pool } = require('pg');
 
