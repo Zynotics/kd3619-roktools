@@ -53,12 +53,18 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     null
   );
 
+  // 🔑 NEU: Verwende atomare Werte aus dem user-Objekt für die Abhängigkeiten, um Re-Renders zu vermeiden.
+  const userId = user?.id; 
+  const userLoggedIn = !!user;
+
   // ---------------------------------------------------
-  // Dateien laden (KORRIGIERT: Abhängigkeiten im useCallback)
+  // Dateien laden (KORRIGIERT: Logik für Public/Private)
   // ---------------------------------------------------
   const fetchFiles = useCallback(async () => {
-    // Wenn öffentlicher View und kein Slug vorhanden, breche ab
-    if (isPublicView && !publicSlug) {
+    // ⚠️ Verwende local abgeleitete Werte (die nun Teil der useCallback-Logik sind)
+    const isFetchPublic = !!publicSlug && !userLoggedIn;
+    
+    if (isFetchPublic && !publicSlug) {
         setError('Public access requires a Kingdom slug.');
         setIsLoading(false);
         return;
@@ -69,7 +75,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       setError(null);
       let response: Response;
       
-      if (isPublicView && publicSlug) {
+      if (isFetchPublic && publicSlug) {
         // 1. Öffentlicher Modus: Nutze public API mit Slug
         const publicUrl = `${backendUrl}/api/public/kingdom/${publicSlug}/overview-files`;
         response = await fetch(publicUrl);
@@ -79,7 +85,6 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         const token = localStorage.getItem('authToken');
         
         if (!token) {
-          // Im Private Mode muss ein Token da sein (wird durch ProtectedRoute verhindert)
           throw new Error('Authentication token not found. Please log in.');
         }
         
@@ -113,9 +118,8 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       }
     } catch (err: any) {
       console.error(err);
-      // Wenn 403/404 im Public Mode, zeige es als "No data"
       const message = err.message || 'Error loading files from server.';
-      if (isPublicView && (message.includes('403') || message.includes('404') || message.includes('No data found'))) {
+      if (isFetchPublic && (message.includes('403') || message.includes('404') || message.includes('No data found'))) {
           setError('No data found for this Kingdom slug.');
       } else {
           setError(message);
@@ -123,12 +127,12 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [backendUrl, publicSlug, user]); // <<< isPublicView entfernt
+  }, [backendUrl, publicSlug, userLoggedIn]); // <<< HIER der Fix: Reduziert auf die stabilsten IDs/Booleans
 
   useEffect(() => {
     fetchFiles();
   }, [fetchFiles]);
-  
+
   const handleUploadComplete = () => {
     fetchFiles();
   };
