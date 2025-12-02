@@ -490,6 +490,10 @@ const AdminUserManagement: React.FC = () => {
   const isSuperAdmin = currentUser?.role === 'admin';
   const canManageKingdoms = isSuperAdmin; // Nur Superadmin darf Königreiche erstellen/löschen/R5 zuweisen
 
+  // 🚩 NEU: Bestimme, welche Rollen der aktuelle Benutzer vergeben darf
+  const allowedRoles = isSuperAdmin ? ['user', 'r4', 'r5'] : ['user', 'r4'];
+  const canAssignR5 = isSuperAdmin || currentUser?.role === 'r5';
+
   return (
     <div className="space-y-6">
       {/* USER MANAGEMENT */}
@@ -556,6 +560,10 @@ const AdminUserManagement: React.FC = () => {
                   const isAdminUser = user.role === 'admin';
                   const userKingdom = kingdoms.find(k => k.id === user.kingdomId);
 
+                  // R5/R4 darf keine Admin/Superadmin-Benutzer verwalten
+                  const isManagementRestricted = isSelf || isAdminUser || (currentUser?.role === 'r5' && user.role === 'r5');
+
+
                   return (
                     <TableRow key={user.id}>
                       <TableCell align="left" className="font-medium text-white">
@@ -582,7 +590,7 @@ const AdminUserManagement: React.FC = () => {
 
                       {/* ROLE */}
                       <TableCell align="center">
-                        {!canManageUsers || isSelf || isAdminUser ? (
+                        {!canManageUsers || isManagementRestricted ? (
                           <span className="text-gray-300 text-sm capitalize">
                             {user.role}
                           </span>
@@ -592,14 +600,12 @@ const AdminUserManagement: React.FC = () => {
                             onChange={(e) =>
                               updateRole(user, e.target.value as UserRole)
                             }
-                            // R5 kann hier nur User/R4/R5 zuweisen (Wird im Backend geprüft)
                             className="bg-gray-800 border border-gray-600 text-gray-200 text-xs px-2 py-1 rounded-lg"
                           >
                             <option value="user">User</option>
                             <option value="r4">R4</option>
-                            {/* R5 Option ist nur erlaubt, wenn R5/Admin zuweist */}
-                            {currentUser?.kingdomId && <option value="r5">R5</option>} 
-                            {/* Admin kann Admin setzen, aber das machen wir nur über /create-admin */}
+                            {/* R5 kann Rolle selbst nur zuweisen, wenn Kingdom zugewiesen */}
+                            {canAssignR5 && <option value="r5">R5</option>} 
                           </select>
                         )}
                       </TableCell>
@@ -619,7 +625,7 @@ const AdminUserManagement: React.FC = () => {
                       {/* Access: Honor */}
                       <TableCell align="center">
                         <button
-                          disabled={!canManageUsers || isAdminUser}
+                          disabled={!canManageUsers || isManagementRestricted}
                           onClick={() =>
                             updateAccess(user, {
                               canAccessHonor: !user.canAccessHonor,
@@ -630,7 +636,7 @@ const AdminUserManagement: React.FC = () => {
                               ? 'bg-green-600 text-white'
                               : 'bg-gray-700 text-gray-300'
                           } ${
-                            !canManageUsers || isAdminUser
+                            !canManageUsers || isManagementRestricted
                               ? 'opacity-50 cursor-not-allowed'
                               : ''
                           }`}
@@ -642,7 +648,7 @@ const AdminUserManagement: React.FC = () => {
                       {/* Access: Analytics */}
                       <TableCell align="center">
                         <button
-                          disabled={!canManageUsers || isAdminUser}
+                          disabled={!canManageUsers || isManagementRestricted}
                           onClick={() =>
                             updateAccess(user, {
                               canAccessAnalytics: !user.canAccessAnalytics,
@@ -653,7 +659,7 @@ const AdminUserManagement: React.FC = () => {
                               ? 'bg-green-600 text-white'
                               : 'bg-gray-700 text-gray-300'
                           } ${
-                            !canManageUsers || isAdminUser
+                            !canManageUsers || isManagementRestricted
                               ? 'opacity-50 cursor-not-allowed'
                               : ''
                           }`}
@@ -665,7 +671,7 @@ const AdminUserManagement: React.FC = () => {
                       {/* Access: Overview */}
                       <TableCell align="center">
                         <button
-                          disabled={!canManageUsers || isAdminUser}
+                          disabled={!canManageUsers || isManagementRestricted}
                           onClick={() =>
                             updateAccess(user, {
                               canAccessOverview: !user.canAccessOverview,
@@ -676,7 +682,7 @@ const AdminUserManagement: React.FC = () => {
                               ? 'bg-green-600 text-white'
                               : 'bg-gray-700 text-gray-300'
                           } ${
-                            !canManageUsers || isAdminUser
+                            !canManageUsers || isManagementRestricted
                               ? 'opacity-50 cursor-not-allowed'
                               : ''
                           }`}
@@ -700,7 +706,7 @@ const AdminUserManagement: React.FC = () => {
 
                       {/* Actions */}
                       <TableCell align="center">
-                        {canManageUsers && !isSelf && !isAdminUser ? (
+                        {canManageUsers && !isManagementRestricted ? (
                           <div className="flex gap-2 justify-center">
                             {!user.isApproved ? (
                               <button
@@ -873,6 +879,7 @@ const AdminUserManagement: React.FC = () => {
             <tbody>
               {kingdoms.map((k) => {
                 const publicLink = `${FRONTEND_URL}/?slug=${k.slug}`;
+                const fullAccessLink = `${publicLink}`; // Superadmin nutzt den gleichen Link
                 
                 return (
                 <TableRow key={k.id}>
@@ -898,13 +905,13 @@ const AdminUserManagement: React.FC = () => {
                   {isSuperAdmin && (
                     <TableCell align="left">
                         <a
-                            href={publicLink}
+                            href={fullAccessLink} // Link führt zur App mit Slug-Parameter
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs text-blue-400 hover:text-blue-300 underline truncate block max-w-xs"
-                            title={publicLink}
+                            title={fullAccessLink}
                         >
-                            {`?slug=${k.slug}`}
+                            {`Open KD (${k.slug})`}
                         </a>
                     </TableCell>
                   )}
