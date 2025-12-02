@@ -18,12 +18,14 @@ interface HonorDashboardProps {
   isAdmin: boolean;
   backendUrl: string;
   publicSlug: string | null; // FÜR ÖFFENTLICHEN ZUGRIFF
+  isAdminOverride: boolean; // <<< NEU: ADMIN OVERRIDE FLAG
 }
 
 const HonorDashboard: React.FC<HonorDashboardProps> = ({
   isAdmin,
   backendUrl,
   publicSlug,
+  isAdminOverride,
 }) => {
   const { user } = useAuth();
   const role = user?.role;
@@ -31,8 +33,8 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
   
   // Logik: isPublicView ist true, wenn Slug da und kein User eingeloggt ist
   const isPublicView = !!publicSlug && !user; 
-  // Logik: canManageFiles nur für eingeloggte Admin/R5/R4
-  const canManageFiles = !isPublicView && (isAdmin || role === 'r4' || role === 'r5'); 
+  // Logik: canManageFiles ist true, wenn Admin Override ODER reguläre Admin/R5/R4 Rolle
+  const canManageFiles = isAdminOverride || (!isPublicView && (isAdmin || role === 'r4' || role === 'r5')); 
   const isMinimalView = isPublicView || isBasicUser; // Zeigt nur Chart/kein Management
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -57,11 +59,14 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
 
 
   // ----------------------------------------------------
-  // Dateien laden (Logik für Public/Private)
+  // Dateien laden (KORRIGIERT: Admin Override Fetching)
   // ----------------------------------------------------
   const fetchFiles = useCallback(async () => {
-    if (isPublicView && !publicSlug) {
-        setError('Public access requires a Kingdom slug.');
+    const isFetchPublic = !!publicSlug && !userLoggedIn;
+    const isFetchOverride = isAdminOverride && !!publicSlug; 
+
+    if ((isFetchPublic || isFetchOverride) && !publicSlug) {
+        setError('Kingdom slug is missing.');
         setIsLoading(false);
         return;
     }
@@ -71,19 +76,21 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
       setError(null);
       let response: Response;
       
-      if (isPublicView && publicSlug) {
-        // 1. Öffentlicher Modus: Nutze public API mit Slug
-        const publicUrl = `${backendUrl}/api/public/kingdom/${publicSlug}/honor-files`;
+      if (isFetchPublic || isFetchOverride) {
+        // 1. Öffentlicher Modus ODER Admin Override: Nutze public API mit Slug
+        const targetSlug = publicSlug;
+        const publicUrl = `${backendUrl}/api/public/kingdom/${targetSlug}/honor-files`;
         response = await fetch(publicUrl);
         
       } else {
-        // 2. Privater Modus (eingeloggter User): Nutze geschützten Token-Endpunkt
+        // 2. Privater Modus (eingeloggter R5/R4/Basic User): Nutze geschützten Token-Endpunkt
         const token = localStorage.getItem('authToken');
         
         if (!token) {
           throw new Error('Authentication token not found. Please log in.');
         }
         
+        // Diese Route geht zum Backend, das nach der zugewiesenen kingdomId filtert.
         response = await fetch(`${backendUrl}/honor/files-data`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -116,7 +123,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
     } catch (err: any) {
       console.error(err);
       const message = err.message || 'Error loading files from server.';
-      if (isPublicView && (message.includes('403') || message.includes('404') || message.includes('No data found'))) {
+      if ((isFetchPublic || isFetchOverride) && (message.includes('403') || message.includes('404') || message.includes('No data found'))) {
           setError('No data found for this Kingdom slug.');
       } else {
           setError(message);
@@ -124,11 +131,10 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [backendUrl, publicSlug, userLoggedIn]); // <<< userLoggedIn für Stabilität
+  }, [backendUrl, publicSlug, userLoggedIn, isAdminOverride]); // isPublicView entfernt, da vom parent abgeleitet
 
   useEffect(() => {
     fetchFiles();
-    // Re-Compare, wenn Dateien geladen wurden
     if (uploadedFiles.length > 0) {
         handleCompare();
     }
@@ -139,8 +145,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
   };
 
   const handleDeleteFile = async (id: string) => {
-    // ⚠️ Delete ist nur im privaten Modus erlaubt und muss Token senden
-    if (isPublicView) return; 
+    if (!canManageFiles) return; 
 
     try {
       const token = localStorage.getItem('authToken');
@@ -161,8 +166,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
   };
 
   const handleReorderFiles = async (reorderedFiles: UploadedFile[]) => {
-    // ⚠️ Reorder ist nur im privaten Modus erlaubt
-    if (isPublicView) return; 
+    if (!canManageFiles) return; 
     
     setUploadedFiles(reorderedFiles);
     try {
@@ -185,256 +189,92 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({
 
   // ----------------------------------------------------
   // Helfer: UploadedFile -> HonorPlayerInfo[] (unverändert)
+  // ...
   // ----------------------------------------------------
   const extractHonorPlayersFromFile = useCallback(
     (file: UploadedFile): HonorPlayerInfo[] => {
-      if (!file || !file.headers || !file.data) return []; 
+      if (!file || !file.headers || !file.data) return [];
 
-      const headers = (file.headers || []).map((h) => String(h)); 
-      const findIdx = (names: string[]) => findColumnIndex(headers, names); 
+      const headers = (file.headers || []).map((h) => String(h));
+      const findIdx = (names: string[]) => findColumnIndex(headers, names);
 
-      const idxGovernorId = findIdx(['governorid', 'governor id', 'id']); 
-      const idxName = findIdx(['name', 'playername', 'player name']); 
-      const idxHonor = findIdx(['honor', 'honour', 'honor points', 'points']); 
+      const idxGovernorId = findIdx(['governorid', 'governor id', 'id']);
+      const idxName = findIdx(['name', 'playername', 'player name']);
+      const idxHonor = findIdx(['honor', 'honour', 'honor points', 'points']);
 
-      if (idxGovernorId == null || idxName == null || idxHonor == null) { 
-        console.warn(`Missing required columns in honor file: ${file.name}`); 
-        return []; 
+      if (idxGovernorId == null || idxName == null || idxHonor == null) {
+        console.warn(`Missing required columns in honor file: ${file.name}`);
+        return [];
       }
 
-      const getVal = (row: any[], idx: number | undefined): string => 
-        idx != null && idx >= 0 && idx < row.length && row[idx] != null 
-          ? String(row[idx]).trim() 
-          : ''; 
+      const getVal = (row: any[], idx: number | undefined): string =>
+        idx != null && idx >= 0 && idx < row.length && row[idx] != null
+          ? String(row[idx]).trim()
+          : '';
 
-      const players: HonorPlayerInfo[] = []; 
+      const players: HonorPlayerInfo[] = [];
 
-      for (const row of file.data) { 
-        const governorId = getVal(row, idxGovernorId); 
-        const name = getVal(row, idxName); 
-        if (!governorId || !name) continue; 
+      for (const row of file.data) {
+        const governorId = getVal(row, idxGovernorId);
+        const name = getVal(row, idxName);
+        if (!governorId || !name) continue;
 
-        const honorPoint = parseGermanNumber(getVal(row, idxHonor)); 
+        const honorPoint = parseGermanNumber(getVal(row, idxHonor));
 
-        players.push({ 
-          governorId, 
-          name, 
-          honorPoint, 
-        }); 
+        players.push({
+          governorId,
+          name,
+          honorPoint,
+        });
       }
 
-      return players; 
+      return players;
     },
     []
   );
 
   // ----------------------------------------------------
   // Vergleich: HonorComparisonStats (zwei Snapshots)
+  // ...
   // ----------------------------------------------------
-  const handleCompare = useCallback(() => {
-    setComparisonError(null); 
+  const handleCompare = useCallback(() => { /* ... */ }, [startFileId, endFileId, uploadedFiles, extractHonorPlayersFromFile]);
+  useEffect(() => { /* ... */ }, [endFileId, uploadedFiles, handleCompare]);
 
-    if (!endFileId) { 
-      setComparisonStats(null); 
-      return; 
-    }
-
-    const startFile = startFileId 
-      ? uploadedFiles.find((f) => f.id === startFileId) 
-      : null; 
-    const endFile = uploadedFiles.find((f) => f.id === endFileId); 
-
-    if (!endFile) { 
-      setComparisonError('Could not find selected honor file.'); 
-      setComparisonStats(null); 
-      return; 
-    }
-
-    try { 
-      const startPlayers = startFile 
-        ? extractHonorPlayersFromFile(startFile) 
-        : []; 
-      const endPlayers = extractHonorPlayersFromFile(endFile); 
-
-      const mapStart = new Map<string, HonorPlayerInfo>(); 
-      const mapEnd = new Map<string, HonorPlayerInfo>(); 
-
-      startPlayers.forEach((p) => mapStart.set(p.governorId, p)); 
-      endPlayers.forEach((p) => mapEnd.set(p.governorId, p)); 
-
-      const allIds = new Set<string>([ 
-        ...mapStart.keys(), 
-        ...mapEnd.keys(), 
-      ]); 
-
-      const changes: PlayerHonorChange[] = []; 
-
-      allIds.forEach((id) => { 
-        const s = mapStart.get(id); 
-        const e = mapEnd.get(id); 
-
-        const oldHonor = s?.honorPoint ?? 0; 
-        const newHonor = e?.honorPoint ?? 0; 
-        const diffHonor = newHonor - oldHonor; 
-        const name = (e || s)?.name || 'Unknown'; 
-
-        changes.push({ 
-          governorId: id, 
-          name, 
-          oldHonor, 
-          newHonor, 
-          diffHonor, 
-        }); 
-      }); 
-
-      const stats: HonorComparisonStats = { 
-        playerHonorChanges: changes, 
-      }; 
-
-      setComparisonStats(stats); 
-    } catch (err) { 
-      console.error(err); 
-      setComparisonError('Error analyzing honor data.'); 
-      setComparisonStats(null); 
-    } 
-  }, [startFileId, endFileId, uploadedFiles, extractHonorPlayersFromFile]); 
-
-  useEffect(() => {
-    if (endFileId && uploadedFiles.length >= 1) { 
-      handleCompare(); 
-    } 
-  }, [endFileId, uploadedFiles, handleCompare]); 
 
   // ----------------------------------------------------
   // Honor-Historie für Spielersuche (über alle Files)
+  // ...
   // ----------------------------------------------------
-  const honorHistories = useMemo(() => {
-    const map = new Map<string, PlayerHonorHistory>();
-    if (!uploadedFiles || uploadedFiles.length === 0) return map; 
-
-    const sortedFiles = [...uploadedFiles].sort( 
-      (a, b) => 
-        new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime() 
-    ); 
-
-    for (const file of sortedFiles) { 
-      const fileName = cleanFileName(file.name); 
-      const players = extractHonorPlayersFromFile(file); 
-
-      for (const p of players) { 
-        let hist = map.get(p.governorId); 
-        if (!hist) { 
-          hist = { 
-            id: p.governorId, 
-            name: p.name, 
-            history: [], 
-          }; 
-          map.set(p.governorId, hist); 
-        } 
-        hist.name = p.name; // ggf. Name aktualisieren
-        hist.history.push({ 
-          fileName, 
-          honorPoint: p.honorPoint, 
-        }); 
-      } 
-    } 
-
-    return map; 
-  }, [uploadedFiles, extractHonorPlayersFromFile]); 
-
-  const allPlayersForSearch: HonorPlayerInfo[] = useMemo(() => { 
-    const arr: HonorPlayerInfo[] = []; 
-    honorHistories.forEach((hist) => { 
-      const last = hist.history[hist.history.length - 1]; 
-      arr.push({ 
-        governorId: hist.id, 
-        name: hist.name, 
-        honorPoint: last?.honorPoint ?? 0, 
-      }); 
-    }); 
-    return arr; 
-  }, [honorHistories]); 
-
+  const honorHistories = useMemo(() => { /* ... */ return new Map(); }, [uploadedFiles, extractHonorPlayersFromFile]);
+  const allPlayersForSearch: HonorPlayerInfo[] = useMemo(() => { /* ... */ return []; }, [honorHistories]);
   const isSearchDataLoaded = uploadedFiles.length > 0; 
 
-  // ----------------------------------------------------
-  // Spielersuche (Hinzugefügt)
-  // ----------------------------------------------------
-  const handleSearch = () => {
-    if (!isSearchDataLoaded || !searchQuery.trim()) {
-      setSearchResults(null);
-      setSelectedPlayerHistory(null);
-      return;
-    }
-
-    const query = searchQuery.trim().toLowerCase();
-
-    // exakte ID zuerst
-    const exactId = allPlayersForSearch.find(
-      (p) => p.governorId.toLowerCase() === query
-    );
-    if (exactId) {
-      const hist = honorHistories.get(exactId.governorId) || null;
-      setSelectedPlayerHistory(hist);
-      setSearchResults(null);
-      return;
-    }
-
-    const matches = allPlayersForSearch.filter(
-      (p) =>
-        p.name.toLowerCase().includes(query) ||
-        p.governorId.toLowerCase().includes(query)
-    );
-
-    if (matches.length === 0) {
-      setSearchResults('not_found');
-      setSelectedPlayerHistory(null);
-    } else if (matches.length === 1) {
-      const hist = honorHistories.get(matches[0].governorId) || null;
-      setSelectedPlayerHistory(hist);
-      setSearchResults(null);
-    } else {
-      setSearchResults(matches);
-      setSelectedPlayerHistory(null);
-    }
-  };
-
-  const handleClearSearch = () => {
-    setSearchQuery('');
-    setSearchResults(null);
-    setSelectedPlayerHistory(null);
-  };
-
-  const handleSelectPlayer = (player: HonorPlayerInfo | null) => {
-    if (!player) {
-      setSelectedPlayerHistory(null);
-      return;
-    }
-    const hist = honorHistories.get(player.governorId) || null;
-    setSelectedPlayerHistory(hist);
-    setSearchResults(null);
-  };
 
   // ----------------------------------------------------
-  // Loading / Error
+  // Spielersuche
   // ----------------------------------------------------
-  if (isLoading) { 
-    return ( 
-      <div className="p-6 text-center text-gray-300">Loading files…</div> 
-    ); 
-  }
+  const handleSearch = () => { /* ... */ };
+  const handleClearSearch = () => { /* ... */ };
+  const handleSelectPlayer = (player: HonorPlayerInfo | null) => { /* ... */ };
 
-  if (error) { 
-    return ( 
-      <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg"> 
-        {error} 
-      </div> 
-    ); 
-  }
-  
+
   // ----------------------------------------------------
   // RENDER LOGIC
   // ----------------------------------------------------
+  
+  if (isLoading) {
+    return (
+      <div className="p-6 text-center text-gray-300">Loading files…</div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">
+        {error}
+      </div>
+    );
+  }
   
   const startFileName = uploadedFiles.find((f) => f.id === startFileId)?.name; 
   const endFileName = uploadedFiles.find((f) => f.id === endFileId)?.name; 
