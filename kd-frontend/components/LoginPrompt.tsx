@@ -117,7 +117,7 @@ const LoginPrompt: React.FC = () => {
   return (
     <Card className="max-w-lg mx-auto p-8">
       <h2 className="text-2xl font-bold text-white mb-6">
-        {isLogin ? 'Sign In to KD3619' : 'Register New Account'}
+        {isLogin ? 'Sign In to Rise of Stats' : 'Register New Account'}
       </h2>
 
       {error && (
