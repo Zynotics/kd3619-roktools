@@ -21,7 +21,7 @@ interface PowerAnalyticsDashboardProps {
   isAdminOverride: boolean;
 }
 
-// --- CHART COMPONENT ---
+// --- CHART COMPONENT (Unverändert) ---
 const PlayerAnalyticsHistoryChart: React.FC<{ history: PlayerAnalyticsHistory }> = ({ history }) => {
     const chartRef = useRef<HTMLCanvasElement>(null);
     const chartInstanceRef = useRef<any>(null);
@@ -66,6 +66,7 @@ const PlayerAnalyticsHistoryChart: React.FC<{ history: PlayerAnalyticsHistory }>
 
 const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdmin, backendUrl, publicSlug, isAdminOverride }) => {
   const { user } = useAuth();
+  const role = user?.role;
   
   const isPublicView = !!publicSlug && !user;
   const userLoggedIn = !!user;
@@ -73,20 +74,22 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]); 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDataLoaded, setIsDataLoaded] = useState<boolean>(false);
   const [kingdomName, setKingdomName] = useState<string>('Player Analytics');
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchMatches, setSearchMatches] = useState<PlayerAnalyticsHistory[] | 'not_found' | null>(null);
   const [selectedPlayerHistory, setSelectedPlayerHistory] = useState<PlayerAnalyticsHistory | null>(null);
 
+  // --- FETCHING ---
   const fetchKingdomName = useCallback(async (slug: string) => {
     try {
         const res = await fetch(`${backendUrl}/api/public/kingdom/${slug}`);
         if (res.ok) {
             const data = await res.json();
-            setKingdomName(data.displayName + ' Analytics');
+            setKingdomName(data.displayName);
         }
-    } catch (e) { setKingdomName(slug.toUpperCase() + ' ANALYTICS'); }
+    } catch (e) { setKingdomName('Kingdom Analytics'); }
   }, [backendUrl]);
 
   const fetchFiles = useCallback(async () => {
@@ -104,7 +107,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       setIsLoading(true); setError(null);
       let response: Response;
       if (isFetchPublic || isFetchOverride) {
-        response = await fetch(`${backendUrl}/api/public/kingdom/${publicSlug}/overview-files`);
+        response = await fetch(`${backendUrl}/api/public/kingdom/${publicSlug}/overview-files`); // Analytics nutzt Overview Files!
       } else {
         const token = localStorage.getItem('authToken');
         if (!token) throw new Error('Auth missing');
@@ -114,6 +117,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       if (!response.ok) throw new Error('Fetch failed');
       const data = await response.json();
       setUploadedFiles(data || []);
+      setIsDataLoaded(true);
     } catch (err: any) {
       const msg = err.message;
       if ((isFetchPublic || isFetchOverride) && (msg.includes('404') || msg.includes('403'))) setUploadedFiles([]);
@@ -125,49 +129,105 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
-  // --- PARSING ---
+  // --- PARSING (ROBUST) ---
   const parseFileToPlayers = (file: UploadedFile): any[] => {
       if (!file || !file.headers || !file.data) return [];
-      const headers = file.headers;
-      const getNumber = (row: any[], ks: string[]) => parseGermanNumber(String(row[findColumnIndex(headers, ks) || -1]));
-      const getString = (row: any[], ks: string[]) => String(row[findColumnIndex(headers, ks) || -1] || '');
+      const headers = file.headers.map(h => String(h)); // Sicherstellen, dass Header Strings sind
+      
+      // Erweiterte Keywords für bessere Erkennung
+      const getIdx = (keys: string[]) => findColumnIndex(headers, keys);
+      const getVal = (row: any[], idx: number | undefined) => (idx !== undefined && row[idx] != null) ? String(row[idx]).trim() : '';
+      const getNum = (row: any[], idx: number | undefined) => parseGermanNumber(getVal(row, idx));
+
+      const idxId = getIdx(['governorid', 'governor id', 'id', 'gov id']);
+      const idxName = getIdx(['name', 'playername', 'player name']);
+      const idxAlly = getIdx(['alliance', 'allianz', 'tag']);
+      const idxPower = getIdx(['power', 'macht']);
+      const idxTroops = getIdx(['troopspower', 'troops power']);
+      const idxKP = getIdx(['total kill points', 'kill points', 'kp']);
+      const idxDead = getIdx(['deadtroops', 'dead troops', 'dead']);
+      
+      // Kills T1-T5
+      const idxT1 = getIdx(['t1', 'tier 1', 't1 kills']);
+      const idxT2 = getIdx(['t2', 'tier 2', 't2 kills']);
+      const idxT3 = getIdx(['t3', 'tier 3', 't3 kills']);
+      const idxT4 = getIdx(['t4', 'tier 4', 't4 kills']);
+      const idxT5 = getIdx(['t5', 'tier 5', 't5 kills']);
 
       const res: any[] = [];
       file.data.forEach(row => {
-          const id = getString(row, ['governorid', 'id']);
-          const name = getString(row, ['name', 'player name']);
+          const id = getVal(row, idxId);
+          const name = getVal(row, idxName);
+          
+          // WICHTIG: Nur gültige Zeilen (ID oder Name muss da sein)
           if (!id && !name) return;
+
+          const t1 = getNum(row, idxT1);
+          const t2 = getNum(row, idxT2);
+          const t3 = getNum(row, idxT3);
+          const t4 = getNum(row, idxT4);
+          const t5 = getNum(row, idxT5);
+
           res.push({
-              id, name, alliance: getString(row, ['alliance']),
-              power: getNumber(row, ['power']), troopsPower: getNumber(row, ['troopspower']),
-              totalKillPoints: getNumber(row, ['total kill points']), deadTroops: getNumber(row, ['deadtroops']),
-              t1Kills: getNumber(row, ['t1']), t2Kills: getNumber(row, ['t2']), t3Kills: getNumber(row, ['t3']),
-              t4Kills: getNumber(row, ['t4']), t5Kills: getNumber(row, ['t5']),
-              totalKills: getNumber(row, ['t1']) + getNumber(row, ['t2']) + getNumber(row, ['t3']) + getNumber(row, ['t4']) + getNumber(row, ['t5'])
+              id, name, alliance: getVal(row, idxAlly),
+              power: getNum(row, idxPower),
+              troopsPower: getNum(row, idxTroops),
+              totalKillPoints: getNum(row, idxKP),
+              deadTroops: getNum(row, idxDead),
+              t1Kills: t1, t2Kills: t2, t3Kills: t3, t4Kills: t4, t5Kills: t5,
+              totalKills: t1 + t2 + t3 + t4 + t5
           });
       });
       return res;
   };
 
+  // --- SEARCH & HISTORY LOGIC ---
   const playerHistories = useMemo(() => {
       const map = new Map<string, PlayerAnalyticsHistory>();
-      [...uploadedFiles].sort((a,b) => new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime())
-        .forEach(f => {
-            parseFileToPlayers(f).forEach(p => {
-                if (!p.id) return;
-                let h = map.get(p.id);
-                if (!h) { h = { id: p.id, name: p.name, alliance: p.alliance, history: [] }; map.set(p.id, h); }
-                h.name = p.name; 
-                h.history.push({ fileName: cleanFileName(f.name), ...p });
-            });
-        });
+      if (!uploadedFiles || uploadedFiles.length === 0) return map;
+
+      const sortedFiles = [...uploadedFiles].sort((a,b) => new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime());
+
+      for (const file of sortedFiles) {
+          const fileName = cleanFileName(file.name);
+          const players = parseFileToPlayers(file);
+
+          for (const p of players) {
+              // Nutze ID als Key, wenn vorhanden, sonst Name (Fallback)
+              const key = p.id || p.name;
+              if (!key) continue;
+
+              let h = map.get(key);
+              if (!h) { 
+                  h = { id: p.id || 'Unknown', name: p.name || 'Unknown', alliance: p.alliance, history: [] }; 
+                  map.set(key, h); 
+              }
+              // Update Name/Alliance mit neuesten Daten
+              if (p.name) h.name = p.name;
+              if (p.alliance) h.alliance = p.alliance;
+              
+              h.history.push({ 
+                  fileName, 
+                  power: p.power, troopsPower: p.troopsPower, totalKillPoints: p.totalKillPoints, 
+                  deadTroops: p.deadTroops, t1Kills: p.t1Kills, t2Kills: p.t2Kills, 
+                  t3Kills: p.t3Kills, t4Kills: p.t4Kills, t5Kills: p.t5Kills, totalKills: p.totalKills 
+              });
+          }
+      }
       return map;
   }, [uploadedFiles]);
 
   const handleSearch = () => {
-      if (!searchQuery.trim()) { setSearchMatches(null); setSelectedPlayerHistory(null); return; }
-      const q = searchQuery.toLowerCase();
-      const res = Array.from(playerHistories.values()).filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q));
+      if (!isDataLoaded || !searchQuery.trim()) { setSearchMatches(null); setSelectedPlayerHistory(null); return; }
+      const q = searchQuery.toLowerCase().trim();
+      const all = Array.from(playerHistories.values());
+      
+      // Suche: ID match (exakt) oder Name match (contains)
+      const res = all.filter(p => 
+          (p.id && p.id.toLowerCase().includes(q)) || 
+          (p.name && p.name.toLowerCase().includes(q))
+      );
+
       if (res.length === 0) setSearchMatches('not_found');
       else if (res.length === 1) { setSelectedPlayerHistory(res[0]); setSearchMatches(null); }
       else setSearchMatches(res);
