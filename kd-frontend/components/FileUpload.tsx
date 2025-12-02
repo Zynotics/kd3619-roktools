@@ -17,17 +17,30 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete, uploadUrl, ch
     setError(null);
     setIsUploading(true);
 
+    // 🔑 NEU: Token holen
+    const token = localStorage.getItem('authToken');
+
     const uploadPromises = Array.from(files).map(file => {
       const formData = new FormData();
       formData.append('file', file);
 
+      // Fetch mit Token Header
       return fetch(uploadUrl, {
         method: 'POST',
+        headers: {
+            // WICHTIG: Bei FormData kein 'Content-Type' setzen (macht der Browser automatisch),
+            // aber der Authorization Header ist Pflicht!
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: formData,
       }).then(async response => {
         if (!response.ok) {
-          const errData = await response.json().catch(() => ({ message: 'Upload failed (unknown server error).' }));
-          return Promise.reject(`Error uploading "${file.name}": ${errData.message || 'Server error'}`);
+          const errData = await response.json().catch(() => ({ message: 'Upload failed.' }));
+          // Spezifische Fehlermeldung für 401/403
+          if (response.status === 401 || response.status === 403) {
+              return Promise.reject(`Permission denied for file "${file.name}". Are you logged in?`);
+          }
+          return Promise.reject(`Error uploading "${file.name}": ${errData.message || response.statusText}`);
         }
         return response.json();
       });
@@ -42,57 +55,29 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete, uploadUrl, ch
       .map(res => (res as PromiseRejectedResult).reason);
 
     if (errorMessages.length > 0) {
-      setError(errorMessages.join('\n'));
-    }
-
-    const successfulUploads = results.filter(res => res.status === 'fulfilled').length;
-    if (successfulUploads > 0) {
+      setError(errorMessages.join(', '));
+    } else {
+      // Erfolg
+      if (event.target) {
+          event.target.value = ''; // Reset input
+      }
       onUploadComplete();
     }
-
-    // Reset input so same file can be uploaded again
-    event.target.value = '';
   };
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Upload Files</h2>
-
+    <div className="w-full">
       <div className="flex items-center justify-center w-full">
         <label
-          htmlFor="file-upload-input"
-          className={`flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed
-                      rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-700
-                      hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500
-                      dark:hover:bg-gray-600 transition-colors
-                      ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          htmlFor="dropzone-file"
+          className={`flex flex-col items-center justify-center w-full h-32 border-2 border-gray-600 border-dashed rounded-lg cursor-pointer bg-gray-700 hover:bg-gray-600 transition-colors ${
+            isUploading ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
         >
           {isUploading ? (
-            <div className="flex flex-col items-center justify-center">
-              <svg
-                className="animate-spin h-6 w-6 text-white"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4zm2 
-                     5.291A7.96 7.96 0 014 12H0c0 
-                     3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-
-              <p className="mt-2 text-sm text-gray-300">Uploading...</p>
+            <div className="flex flex-col items-center pt-5 pb-6">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
+              <p className="text-sm text-gray-400">Uploading...</p>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center pt-5 pb-6">
@@ -115,7 +100,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete, uploadUrl, ch
               </svg>
 
               <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
-                <span className="font-semibold">Click to upload</span> or drag and drop
+                <span className="font-semibold">Click to upload</span>
               </p>
 
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -125,24 +110,24 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete, uploadUrl, ch
           )}
 
           <input
-            id="file-upload-input"
+            id="dropzone-file"
             type="file"
             className="hidden"
-            onChange={handleFileChange}
-            accept=".xlsx, .xls, .csv"
             multiple
+            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+            onChange={handleFileChange}
             disabled={isUploading}
           />
         </label>
       </div>
-
-      {children}
-
+      
       {error && (
-        <p className="mt-2 text-sm text-red-600 whitespace-pre-line">
+        <div className="mt-4 p-3 bg-red-900/50 text-red-200 text-sm rounded border border-red-700">
           {error}
-        </p>
+        </div>
       )}
+      
+      {children}
     </div>
   );
 };
