@@ -1,4 +1,4 @@
-// App.tsx - KD3619 with Login, Admin & Feature Permissions (Top Navigation) (VOLLSTÄNDIGER CODE)
+// App.tsx - KD3619 mit Admin Override und vereinfachter Superadmin-Ansicht (VOLLSTÄNDIGER CODE)
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -7,7 +7,7 @@ import OverviewDashboard from './components/OverviewDashboard';
 import HonorDashboard from './components/HonorDashboard';
 import PowerAnalyticsDashboard from './components/PowerAnalyticsDashboard';
 import PowerHistoryChart from './components/PowerHistoryChart';
-import LoginPrompt from './components/LoginPrompt'; // LoginPrompt muss hinzugefügt werden
+import LoginPrompt from './components/LoginPrompt'; 
 
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
@@ -18,41 +18,45 @@ type ActiveView = 'overview' | 'honor' | 'analytics' | 'admin';
 
 const AppContent: React.FC = () => {
   const { user, logout, isLoading } = useAuth();
-
-  // 🌐 NEU: Lese Slug aus Query-Parametern (z.B. ?slug=kd3619)
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
   
-  // Bestimme den aktiven View
+  // Rollen
+  const isSuperAdmin = user?.role === 'admin';
+  const isR5 = user?.role === 'r5';
+  const isAdmin = isSuperAdmin || isR5; // Allgemeine erhöhte Rolle
+  
+  // --- Access Mode Determination ---
+  const isPublicView = !!publicSlug && !user; 
+  const isAdminOverrideView = isSuperAdmin && !!publicSlug; // Superadmin ist eingeloggt UND nutzt den Slug
+
   const [activeView, setActiveView] = useState<ActiveView>(
     publicSlug ? 'overview' : 'overview'
   );
   
-  // NUR Public View, wenn KEIN User eingeloggt UND Slug vorhanden ist
-  const isPublicView = !!publicSlug && !user;
-  
-  // Wenn Public View, zwinge den View auf die erlaubten Dashboards
-  if (isPublicView && activeView === 'admin') {
-      setActiveView('overview');
+  // FIX: Wenn Superadmin eingeloggt ist und KEINEN Slug hat, erzwinge Admin-Ansicht
+  if (isSuperAdmin && !isAdminOverrideView && activeView !== 'admin') {
+      setActiveView('admin');
   }
-
-
-  // 👉 R5 wird hier wie Admin behandelt
-  const isAdmin = user?.role === 'admin' || user?.role === 'r5';
   
   // Wenn der Benutzer NICHT eingeloggt und KEIN Slug vorhanden ist
   if (!user && !publicSlug && !isLoading) {
       return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                <LoginPrompt />
-                <div className="mt-8 text-center text-gray-500">
-                    <p>Or access a Kingdom directly using a public link (e.g., YourDomain.com?slug=kingdom-name).</p>
-                </div>
-            </div>
-        </div>
+          <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+                  <LoginPrompt />
+                  <div className="mt-8 text-center text-gray-500">
+                      <p>Or access a Kingdom directly using a public link (e.g., YourDomain.com?slug=kingdom-name).</p>
+                  </div>
+              </div>
+          </div>
       );
   }
+
+  // Navigation Logic
+  const showDashboardTabs = !isSuperAdmin || isAdminOverrideView; 
+  const showAdminTab = isAdmin || isSuperAdmin; // Nur Admin-Tab für Superadmin, wenn kein Slug
+  
 
 
   return (
@@ -71,7 +75,6 @@ const AppContent: React.FC = () => {
                   KD3619 Kingdom Analytics
                 </h1>
                 <p className="text-xs text-gray-400">
-                  {/* Zeige Slug im öffentlichen Modus */}
                   {publicSlug && `Viewing Public Data for: ${publicSlug}`}
                 </p>
               </div>
@@ -83,7 +86,6 @@ const AppContent: React.FC = () => {
                 <span className="text-xs text-gray-400">Checking login…</span>
               )}
               {user ? (
-                // Angemeldete Ansicht
                 <>
                   <div className="text-right">
                     <div className="text-sm font-semibold text-white">
@@ -105,52 +107,55 @@ const AppContent: React.FC = () => {
                     Log out
                   </button>
                 </>
-              ) : null /* Im öffentlichen Modus nichts anzeigen */}
+              ) : null}
             </div>
           </div>
 
           {/* TOP NAVIGATION */}
           <nav className="mt-4">
             <div className="flex flex-wrap gap-2">
-              {/* Overview (immer verfügbar) */}
-              <button
-                onClick={() => setActiveView('overview')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeView === 'overview'
-                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/25'
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
-                }`}
-              >
-                CH25 Kingdom Analytics
-              </button>
-
-              {/* Honor (immer verfügbar) */}
-              <button
-                onClick={() => setActiveView('honor')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeView === 'honor'
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/25'
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
-                }`}
-              >
-                Honor Ranking
-              </button>
               
-              {/* Analytics (immer verfügbar) */}
-              <button
-                onClick={() => setActiveView('analytics')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeView === 'analytics'
-                    ? 'bg-gradient-to-r from-emerald-500 to-lime-500 text-white shadow-lg shadow-emerald-500/25'
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
-                }`}
-              >
-                Player Analytics
-              </button>
+              {/* Dashboard Links (Scoping: Nur wenn kein reiner Superadmin-View) */}
+              {showDashboardTabs && (
+                <>
+                  <button
+                    onClick={() => setActiveView('overview')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      activeView === 'overview'
+                        ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/25'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
+                    }`}
+                  >
+                    CH25 Kingdom Analytics
+                  </button>
+
+                  <button
+                    onClick={() => setActiveView('honor')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      activeView === 'honor'
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/25'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
+                    }`}
+                  >
+                    Honor Ranking
+                  </button>
+                  
+                  <button
+                    onClick={() => setActiveView('analytics')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      activeView === 'analytics'
+                        ? 'bg-gradient-to-r from-emerald-500 to-lime-500 text-white shadow-lg shadow-emerald-500/25'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
+                    }`}
+                  >
+                    Player Analytics
+                  </button>
+                </>
+              )}
 
 
-              {/* 👉 Admin-Users Button nur für eingeloggte Admins/R5 */}
-              {user && (isAdmin || user.role === 'r5') && (
+              {/* Admin Users Button (nur wenn Admin oder R5) */}
+              {showAdminTab && (
                 <button
                   onClick={() => setActiveView('admin')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -168,39 +173,42 @@ const AppContent: React.FC = () => {
 
         {/* MAIN CONTENT */}
         <main className="space-y-6">
-          {/* Lade die Dashboards mit dem Slug (Public) oder ProtectedRoute (Private) */}
+          {/* Lade die Dashboards mit Public/Private/Admin Override Logik */}
           
           {activeView === 'overview' && (
-            <PublicOrProtectedRoute isPublic={isPublicView} publicSlug={publicSlug} accessType="overview">
+            <PublicOrProtectedRoute isPublic={isPublicView} publicSlug={publicSlug} accessType="overview" isAdminOverride={isAdminOverrideView}>
               <OverviewDashboard 
-                  isAdmin={!!isAdmin} 
+                  isAdmin={isAdmin} 
                   backendUrl={BACKEND_URL} 
-                  publicSlug={publicSlug} 
+                  publicSlug={publicSlug}
+                  isAdminOverride={isAdminOverrideView} // <<< FLAG
               />
             </PublicOrProtectedRoute>
           )}
 
           {activeView === 'honor' && (
-            <PublicOrProtectedRoute isPublic={isPublicView} publicSlug={publicSlug} accessType="honor">
+            <PublicOrProtectedRoute isPublic={isPublicView} publicSlug={publicSlug} accessType="honor" isAdminOverride={isAdminOverrideView}>
               <HonorDashboard 
-                  isAdmin={!!isAdmin} 
+                  isAdmin={isAdmin} 
                   backendUrl={BACKEND_URL} 
                   publicSlug={publicSlug}
+                  isAdminOverride={isAdminOverrideView} // <<< FLAG
               />
             </PublicOrProtectedRoute>
           )}
 
           {activeView === 'analytics' && (
-            <PublicOrProtectedRoute isPublic={isPublicView} publicSlug={publicSlug} accessType="analytics">
+            <PublicOrProtectedRoute isPublic={isPublicView} publicSlug={publicSlug} accessType="analytics" isAdminOverride={isAdminOverrideView}>
               <PowerAnalyticsDashboard
-                isAdmin={!!isAdmin}
+                isAdmin={isAdmin}
                 backendUrl={BACKEND_URL}
                 publicSlug={publicSlug}
+                isAdminOverride={isAdminOverrideView} // <<< FLAG
               />
             </PublicOrProtectedRoute>
           )}
 
-          {activeView === 'admin' && user && (isAdmin || user.role === 'r5') && (
+          {activeView === 'admin' && showAdminTab && (
             <ProtectedRoute>
               <AdminUserManagement />
             </ProtectedRoute>
@@ -211,24 +219,25 @@ const AppContent: React.FC = () => {
   );
 };
 
-// 🌐 NEU: Hilfs-Komponente, um ProtectedRoute zu umgehen, wenn ein Slug vorhanden ist.
+// 🌐 NEU: Hilfs-Komponente, um ProtectedRoute zu umgehen und Admin-Override zu handhaben
 interface PublicOrProtectedRouteProps {
     children: React.ReactNode;
     isPublic: boolean;
     publicSlug: string | null;
     accessType: 'overview' | 'honor' | 'analytics';
+    isAdminOverride: boolean; // NEU
 }
 
-const PublicOrProtectedRoute: React.FC<PublicOrProtectedRouteProps> = ({ children, isPublic, publicSlug, accessType }) => {
-    // Wenn es ein öffentlicher View ist, gib das Kind direkt zurück.
-    if (isPublic) {
-        if (!publicSlug) {
+const PublicOrProtectedRoute: React.FC<PublicOrProtectedRouteProps> = ({ children, isPublic, publicSlug, accessType, isAdminOverride }) => {
+    // Wenn es ein öffentlicher View ist ODER ein Admin den Override nutzt, gib das Kind direkt zurück.
+    if (isPublic || isAdminOverride) {
+        if (!publicSlug && isPublic) {
              return <div className="text-center p-8 text-red-400 bg-gray-800 rounded-xl">Invalid Public Link.</div>;
         }
         return <>{children}</>;
     }
     
-    // Ansonsten, nutze die normale ProtectedRoute Logik (für eingeloggte User)
+    // Ansonsten, nutze die normale ProtectedRoute Logik (für eingeloggte R5/R4/Basic User)
     return <ProtectedRoute accessType={accessType}>{children}</ProtectedRoute>;
 };
 
