@@ -1,13 +1,13 @@
-// LoginPrompt.tsx (KORRIGIERTE URL)
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
 import { Card } from './Card';
 
 type GovIdStatus = 'idle' | 'checking' | 'valid' | 'invalid';
 
+// Sicherstellen, dass die URL korrekt ist
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
-    ? 'https://api.rise-of-stats.com' // <-- KORRIGIERT
+    ? 'https://api.rise-of-stats.com'
     : 'http://localhost:4000';
 
 const LoginPrompt: React.FC = () => {
@@ -86,14 +86,20 @@ const LoginPrompt: React.FC = () => {
     try {
       if (isLogin) {
         await login(username, password);
-        // Successful login handled by AuthContext redirect
+        // Successful login handled by AuthContext redirect automatically
       } else {
-        const result = await register(email, username, password, governorId);
-        setSuccessMessage(result.message);
-        setIsLogin(true); // Switch to login after successful registration
+        // 1. Registrieren
+        await register(email, username, password, governorId);
+        
+        // 2. ✨ AUTO-LOGIN direkt nach Registrierung
+        // Da kein Fehler geworfen wurde, war die Registrierung erfolgreich.
+        // Wir loggen den User sofort mit den eben eingegebenen Daten ein.
+        await login(username, password);
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.');
+      // Bei Fehler im Login nach Registrierung bleiben wir im Formular,
+      // aber der User ist theoretisch registriert.
     } finally {
       setIsLoading(false);
     }
@@ -117,7 +123,7 @@ const LoginPrompt: React.FC = () => {
   return (
     <Card className="max-w-lg mx-auto p-8">
       <h2 className="text-2xl font-bold text-white mb-6">
-        {isLogin ? 'Sign In to Rise of Stats' : 'Register New Account'}
+        {isLogin ? 'Sign In to KD3619' : 'Register New Account'}
       </h2>
 
       {error && (
@@ -277,7 +283,7 @@ const LoginPrompt: React.FC = () => {
           {isLoading
             ? isLogin
               ? 'Signing in...'
-              : 'Creating account...'
+              : 'Creating account & Signing in...'
             : isLogin
             ? 'Sign In'
             : 'Register'}
