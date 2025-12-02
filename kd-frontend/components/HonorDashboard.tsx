@@ -6,403 +6,248 @@ import HonorOverviewTable from './HonorOverviewTable';
 import HonorPlayerSearch from './HonorPlayerSearch';
 import { useAuth } from './AuthContext';
 import { cleanFileName, parseGermanNumber, findColumnIndex } from '../utils';
-import type {
-  UploadedFile,
-  HonorPlayerInfo,
-  PlayerHonorChange,
-  HonorComparisonStats,
-  PlayerHonorHistory,
-} from '../types';
+import type { UploadedFile, HonorPlayerInfo, PlayerHonorChange, HonorComparisonStats, PlayerHonorHistory } from '../types';
 
 interface HonorDashboardProps {
   isAdmin: boolean;
   backendUrl: string;
-  publicSlug: string | null; // FÜR ÖFFENTLICHEN ZUGRIFF
-  isAdminOverride: boolean; // <<< NEU: ADMIN OVERRIDE FLAG
+  publicSlug: string | null;
+  isAdminOverride: boolean;
 }
 
-const HonorDashboard: React.FC<HonorDashboardProps> = ({
-  isAdmin,
-  backendUrl,
-  publicSlug,
-  isAdminOverride,
-}) => {
+const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, publicSlug, isAdminOverride }) => {
   const { user } = useAuth();
   const role = user?.role;
-  const isBasicUser = role === 'user';
   
-  // Logik: isPublicView ist true, wenn Slug da und kein User eingeloggt ist
   const isPublicView = !!publicSlug && !user; 
-  // Logik: canManageFiles ist true, wenn Admin Override ODER reguläre Admin/R5/R4 Rolle
   const canManageFiles = isAdminOverride || (!isPublicView && (isAdmin || role === 'r4' || role === 'r5')); 
-  const isMinimalView = isPublicView || isBasicUser; // Zeigt nur Chart/kein Management
+  // Honor Dashboard: Minimal View ist nicht nötig, da Public User alles sehen sollen (außer Uploads)
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [kingdomName, setKingdomName] = useState<string>('Honor Ranking');
 
   const [startFileId, setStartFileId] = useState<string>('');
   const [endFileId, setEndFileId] = useState<string>('');
-  const [comparisonStats, setComparisonStats] =
-    useState<HonorComparisonStats | null>(null);
+  const [comparisonStats, setComparisonStats] = useState<HonorComparisonStats | null>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [searchResults, setSearchResults] = useState<
-    HonorPlayerInfo[] | 'not_found' | null
-  >(null);
-  const [selectedPlayerHistory, setSelectedPlayerHistory] =
-    useState<PlayerHonorHistory | null>(null);
+  const [searchResults, setSearchResults] = useState<HonorPlayerInfo[] | 'not_found' | null>(null);
+  const [selectedPlayerHistory, setSelectedPlayerHistory] = useState<PlayerHonorHistory | null>(null);
     
-  // 🔑 NEU: Verwende atomare Werte aus dem user-Objekt für die Abhängigkeiten
   const userLoggedIn = !!user;
 
+  const fetchKingdomName = useCallback(async (slug: string) => {
+    try {
+        const res = await fetch(`${backendUrl}/api/public/kingdom/${slug}`);
+        if (res.ok) {
+            const data = await res.json();
+            setKingdomName(data.displayName + ' Honor');
+        }
+    } catch (e) { setKingdomName(slug.toUpperCase() + ' HONOR'); }
+  }, [backendUrl]);
 
-  // ----------------------------------------------------
-  // Dateien laden (KORRIGIERT: Admin Override Fetching)
-  // ----------------------------------------------------
   const fetchFiles = useCallback(async () => {
     const isFetchPublic = !!publicSlug && !userLoggedIn;
     const isFetchOverride = isAdminOverride && !!publicSlug; 
+    
+    if (publicSlug) fetchKingdomName(publicSlug);
+    else setKingdomName('Honor Ranking');
 
     if ((isFetchPublic || isFetchOverride) && !publicSlug) {
-        setError('Kingdom slug is missing.');
-        setIsLoading(false);
-        return;
+        setError('Slug missing'); setIsLoading(false); return;
     }
 
     try {
-      setIsLoading(true);
-      setError(null);
+      setIsLoading(true); setError(null);
       let response: Response;
       
       if (isFetchPublic || isFetchOverride) {
-        // 1. Öffentlicher Modus ODER Admin Override: Nutze public API mit Slug
-        const targetSlug = publicSlug;
-        const publicUrl = `${backendUrl}/api/public/kingdom/${targetSlug}/honor-files`;
-        response = await fetch(publicUrl);
-        
+        response = await fetch(`${backendUrl}/api/public/kingdom/${publicSlug}/honor-files`);
       } else {
-        // 2. Privater Modus (eingeloggter R5/R4/Basic User): Nutze geschützten Token-Endpunkt
         const token = localStorage.getItem('authToken');
-        
-        if (!token) {
-          throw new Error('Authentication token not found. Please log in.');
-        }
-        
-        // Diese Route geht zum Backend, das nach der zugewiesenen kingdomId filtert.
+        if (!token) throw new Error('Auth missing');
         response = await fetch(`${backendUrl}/honor/files-data`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
       }
 
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to fetch files from server (${response.status}).`);
-      }
-      
+      if (!response.ok) throw new Error('Fetch failed');
       const data = await response.json();
       setUploadedFiles(data || []);
 
-      if (data && data.length >= 2) {
-        const sorted = [...data].sort(
-          (a, b) =>
-            new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime()
-        );
-        const last = sorted[sorted.length - 1];
-        const secondLast = sorted[sorted.length - 2];
-        setStartFileId(secondLast.id);
-        setEndFileId(last.id);
-      } else if (data && data.length === 1) {
+      if (data.length >= 2) {
+        setStartFileId(data[data.length - 2].id);
+        setEndFileId(data[data.length - 1].id);
+      } else if (data.length === 1) {
         setStartFileId(data[0].id);
         setEndFileId(data[0].id);
       }
     } catch (err: any) {
-      console.error(err);
-      const message = err.message || 'Error loading files from server.';
-      if ((isFetchPublic || isFetchOverride) && (message.includes('403') || message.includes('404') || message.includes('No data found'))) {
-          setError('No data found for this Kingdom slug.');
-      } else {
-          setError(message);
-      }
+      const msg = err.message;
+      if ((isFetchPublic || isFetchOverride) && (msg.includes('404') || msg.includes('403'))) setUploadedFiles([]);
+      else setError(msg);
     } finally {
       setIsLoading(false);
     }
-  }, [backendUrl, publicSlug, userLoggedIn, isAdminOverride]); // isPublicView entfernt, da vom parent abgeleitet
+  }, [backendUrl, publicSlug, userLoggedIn, isAdminOverride, fetchKingdomName]); 
 
   useEffect(() => {
     fetchFiles();
-    if (uploadedFiles.length > 0) {
-        handleCompare();
-    }
   }, [fetchFiles]);
 
-  const handleUploadComplete = () => {
-    fetchFiles();
-  };
+  useEffect(() => {
+     if (endFileId && uploadedFiles.length > 0) handleCompare();
+  }, [endFileId, uploadedFiles]);
+
+  // --- Upload / Delete / Reorder ---
+  const uploadUrl = `${backendUrl}/honor/upload${isAdminOverride && publicSlug ? `?slug=${publicSlug}` : ''}`;
+  
+  const handleUploadComplete = () => fetchFiles();
 
   const handleDeleteFile = async (id: string) => {
-    if (!canManageFiles) return; 
-
+    if (!canManageFiles) return;
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) throw new Error('Authentication token missing.');
-      
-      const response = await fetch(`${backendUrl}/honor/files/${id}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) throw new Error('Failed to delete file on server.');
-      setUploadedFiles((prev) => (prev || []).filter((f) => f.id !== id));
-    } catch (err) {
-      console.error(err);
-      setError('Failed to delete file.');
-    }
+        const token = localStorage.getItem('authToken');
+        await fetch(`${backendUrl}/honor/files/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+        setUploadedFiles(p => p.filter(f => f.id !== id));
+    } catch (e) { console.error(e); }
   };
 
   const handleReorderFiles = async (reorderedFiles: UploadedFile[]) => {
-    if (!canManageFiles) return; 
-    
+    if (!canManageFiles) return;
     setUploadedFiles(reorderedFiles);
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) throw new Error('Authentication token missing.');
-
-      const order = reorderedFiles.map((f) => f.id);
-      await fetch(`${backendUrl}/honor/files/reorder`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ order }),
-      });
-    } catch (err) {
-      console.error('Failed to persist honor file order', err);
-    }
+        const token = localStorage.getItem('authToken');
+        const order = reorderedFiles.map(f => f.id);
+        await fetch(`${backendUrl}/honor/files/reorder`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ order }) });
+    } catch (e) { console.error(e); }
   };
 
-  // ----------------------------------------------------
-  // Helfer: UploadedFile -> HonorPlayerInfo[] (unverändert)
-  // ...
-  // ----------------------------------------------------
-  const extractHonorPlayersFromFile = useCallback(
-    (file: UploadedFile): HonorPlayerInfo[] => {
+  // --- Parsing Helpers ---
+  const extractHonorPlayersFromFile = useCallback((file: UploadedFile): HonorPlayerInfo[] => {
       if (!file || !file.headers || !file.data) return [];
+      const headers = file.headers.map(h => String(h));
+      const idxId = findColumnIndex(headers, ['governorid', 'governor id', 'id']);
+      const idxName = findColumnIndex(headers, ['name', 'playername']);
+      const idxHonor = findColumnIndex(headers, ['honor', 'honour', 'points']);
+      if (idxId == null || idxName == null || idxHonor == null) return [];
 
-      const headers = (file.headers || []).map((h) => String(h));
-      const findIdx = (names: string[]) => findColumnIndex(headers, names);
+      const res: HonorPlayerInfo[] = [];
+      file.data.forEach(row => {
+          const id = String(row[idxId] || '').trim();
+          const name = String(row[idxName] || '').trim();
+          if (id && name) {
+              res.push({ governorId: id, name, honorPoint: parseGermanNumber(String(row[idxHonor])) });
+          }
+      });
+      return res;
+  }, []);
 
-      const idxGovernorId = findIdx(['governorid', 'governor id', 'id']);
-      const idxName = findIdx(['name', 'playername', 'player name']);
-      const idxHonor = findIdx(['honor', 'honour', 'honor points', 'points']);
+  const handleCompare = useCallback(() => {
+      if (!endFileId) return;
+      const sFile = uploadedFiles.find(f => f.id === startFileId);
+      const eFile = uploadedFiles.find(f => f.id === endFileId);
+      if (!eFile) return;
 
-      if (idxGovernorId == null || idxName == null || idxHonor == null) {
-        console.warn(`Missing required columns in honor file: ${file.name}`);
-        return [];
-      }
+      const sP = sFile ? extractHonorPlayersFromFile(sFile) : [];
+      const eP = extractHonorPlayersFromFile(eFile);
+      const mapS = new Map(sP.map(p => [p.governorId, p]));
+      const mapE = new Map(eP.map(p => [p.governorId, p]));
+      const changes: PlayerHonorChange[] = [];
+      
+      new Set([...mapS.keys(), ...mapE.keys()]).forEach(id => {
+          const s = mapS.get(id);
+          const e = mapE.get(id);
+          changes.push({
+              governorId: id,
+              name: (e || s)?.name || '',
+              oldHonor: s?.honorPoint || 0,
+              newHonor: e?.honorPoint || 0,
+              diffHonor: (e?.honorPoint || 0) - (s?.honorPoint || 0)
+          });
+      });
+      setComparisonStats({ playerHonorChanges: changes });
+  }, [startFileId, endFileId, uploadedFiles, extractHonorPlayersFromFile]);
 
-      const getVal = (row: any[], idx: number | undefined): string =>
-        idx != null && idx >= 0 && idx < row.length && row[idx] != null
-          ? String(row[idx]).trim()
-          : '';
-
-      const players: HonorPlayerInfo[] = [];
-
-      for (const row of file.data) {
-        const governorId = getVal(row, idxGovernorId);
-        const name = getVal(row, idxName);
-        if (!governorId || !name) continue;
-
-        const honorPoint = parseGermanNumber(getVal(row, idxHonor));
-
-        players.push({
-          governorId,
-          name,
-          honorPoint,
+  // --- Search Logic ---
+  const honorHistories = useMemo(() => {
+      const map = new Map<string, PlayerHonorHistory>();
+      [...uploadedFiles].sort((a,b) => new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime())
+        .forEach(f => {
+            extractHonorPlayersFromFile(f).forEach(p => {
+                let h = map.get(p.governorId);
+                if (!h) { h = { id: p.governorId, name: p.name, history: [] }; map.set(p.governorId, h); }
+                h.name = p.name;
+                h.history.push({ fileName: cleanFileName(f.name), honorPoint: p.honorPoint });
+            });
         });
-      }
+      return map;
+  }, [uploadedFiles, extractHonorPlayersFromFile]);
 
-      return players;
-    },
-    []
-  );
-
-  // ----------------------------------------------------
-  // Vergleich: HonorComparisonStats (zwei Snapshots)
-  // ...
-  // ----------------------------------------------------
-  const handleCompare = useCallback(() => { /* ... */ }, [startFileId, endFileId, uploadedFiles, extractHonorPlayersFromFile]);
-  useEffect(() => { /* ... */ }, [endFileId, uploadedFiles, handleCompare]);
-
-
-  // ----------------------------------------------------
-  // Honor-Historie für Spielersuche (über alle Files)
-  // ...
-  // ----------------------------------------------------
-  const honorHistories = useMemo(() => { /* ... */ return new Map(); }, [uploadedFiles, extractHonorPlayersFromFile]);
-  const allPlayersForSearch: HonorPlayerInfo[] = useMemo(() => { /* ... */ return []; }, [honorHistories]);
-  const isSearchDataLoaded = uploadedFiles.length > 0; 
-
-
-  // ----------------------------------------------------
-  // Spielersuche
-  // ----------------------------------------------------
-  const handleSearch = () => { /* ... */ };
-  const handleClearSearch = () => { /* ... */ };
-  const handleSelectPlayer = (player: HonorPlayerInfo | null) => { /* ... */ };
-
-
-  // ----------------------------------------------------
-  // RENDER LOGIC
-  // ----------------------------------------------------
+  const handleSearch = () => {
+      if (!searchQuery.trim()) { setSearchResults(null); setSelectedPlayerHistory(null); return; }
+      const q = searchQuery.toLowerCase();
+      const res = Array.from(honorHistories.values()).filter(h => h.name.toLowerCase().includes(q) || h.id.toLowerCase().includes(q));
+      
+      if (res.length === 0) setSearchResults('not_found');
+      else if (res.length === 1) { setSelectedPlayerHistory(res[0]); setSearchResults(null); }
+      else setSearchResults(res.map(h => ({ governorId: h.id, name: h.name, honorPoint: h.history[h.history.length-1].honorPoint })));
+  };
   
-  if (isLoading) {
-    return (
-      <div className="p-6 text-center text-gray-300">Loading files…</div>
-    );
-  }
+  const handleSelectPlayer = (p: HonorPlayerInfo) => {
+      setSelectedPlayerHistory(honorHistories.get(p.governorId) || null);
+      setSearchResults(null);
+  };
 
-  if (error) {
-    return (
-      <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">
-        {error}
-      </div>
-    );
-  }
-  
-  const startFileName = uploadedFiles.find((f) => f.id === startFileId)?.name; 
-  const endFileName = uploadedFiles.find((f) => f.id === endFileId)?.name; 
-
-  if (isMinimalView) {
-      return (
-          <div className="space-y-8">
-              {/* Chart ist Teil der Minimal View */}
-              <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-                  <HonorHistoryChart files={uploadedFiles || []} />
-              </div>
-              {/* Suche ist Teil der Minimal View */}
-              <HonorPlayerSearch
-                  query={searchQuery}
-                  setQuery={setSearchQuery}
-                  onSearch={handleSearch}
-                  onClear={handleClearSearch}
-                  results={searchResults}
-                  selectedPlayerHistory={selectedPlayerHistory}
-                  onSelectPlayer={handleSelectPlayer}
-                  isDataLoaded={isSearchDataLoaded}
-              />
-              {/* HINWEIS, falls keine Daten vorhanden sind */}
-              {!error && uploadedFiles.length === 0 && (
-                  <div className="text-center p-8 text-yellow-400 bg-gray-800 rounded-xl">
-                      <h3 className="text-xl font-bold mb-2">No Data Available</h3>
-                      <p>The selected Kingdom has not uploaded any files yet.</p>
-                  </div>
-              )}
-          </div>
-      );
-  }
-
+  // --- RENDER ---
+  if (isLoading) return <div className="p-6 text-center text-gray-300">Loading...</div>;
 
   return (
     <div className="space-y-8">
-      {/* Upload + File list – nur für R4, R5 & Admin */}
+      {error && <div className="text-center text-red-400 p-4 bg-red-900/50 rounded-lg">{error}</div>}
+      
       {canManageFiles && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-            <FileUpload
-              uploadUrl={`${backendUrl}/honor/upload`}
-              onUploadComplete={handleUploadComplete}
-            />
+             <FileUpload uploadUrl={uploadUrl} onUploadComplete={handleUploadComplete} />
           </div>
           <div>
-            <FileList
-              files={uploadedFiles || []}
-              onDeleteFile={handleDeleteFile}
-              onReorder={handleReorderFiles}
-            />
+             <FileList files={uploadedFiles} onDeleteFile={handleDeleteFile} onReorder={handleReorderFiles} />
           </div>
         </div>
       )}
 
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-        <HonorHistoryChart files={uploadedFiles || []} />
+        <h3 className="text-lg font-semibold text-gray-200 mb-4">{kingdomName} History</h3>
+        <HonorHistoryChart files={uploadedFiles} />
       </div>
 
-      {/* Vergleichs-Auswahl */}
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-        <h3 className="text-lg font-semibold text-gray-200 mb-4">
-          Honor Comparison Controls
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
-          <div className="flex flex-col">
-            <label
-              htmlFor="start-date-select-honor"
-              className="text-sm font-medium text-gray-400 mb-1"
-            >
-              Start Snapshot
-            </label>
-            <select
-              id="start-date-select-honor"
-              value={startFileId}
-              onChange={(e) => setStartFileId(e.target.value)}
-              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
-            >
-              <option value="">Select…</option>
-              {uploadedFiles.map((file) => (
-                <option key={file.id} value={file.id}>
-                  {cleanFileName(file.name)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col">
-            <label
-              htmlFor="end-date-select-honor"
-              className="text-sm font-medium text-gray-400 mb-1"
-            >
-              End Snapshot
-            </label>
-            <select
-              id="end-date-select-honor"
-              value={endFileId}
-              onChange={(e) => setEndFileId(e.target.value)}
-              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
-            >
-              <option value="">Select…</option>
-              {uploadedFiles.map((file) => (
-                <option key={file.id} value={file.id}>
-                  {cleanFileName(file.name)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+         <h3 className="text-lg font-semibold text-gray-200 mb-4">Honor Comparison</h3>
+         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+             <select value={startFileId} onChange={e => setStartFileId(e.target.value)} className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5">
+                 <option value="">Start Snapshot...</option>
+                 {uploadedFiles.map(f => <option key={f.id} value={f.id}>{cleanFileName(f.name)}</option>)}
+             </select>
+             <select value={endFileId} onChange={e => setEndFileId(e.target.value)} className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5">
+                 <option value="">End Snapshot...</option>
+                 {uploadedFiles.map(f => <option key={f.id} value={f.id}>{cleanFileName(f.name)}</option>)}
+             </select>
+         </div>
       </div>
 
-      {/* Spielersuche + Verlauf */}
-      <HonorPlayerSearch
-        query={searchQuery}
-        setQuery={setSearchQuery}
-        onSearch={handleSearch}
-        onClear={handleClearSearch}
-        results={searchResults}
-        selectedPlayerHistory={selectedPlayerHistory}
-        onSelectPlayer={handleSelectPlayer}
-        isDataLoaded={isSearchDataLoaded}
+      <HonorPlayerSearch 
+         query={searchQuery} setQuery={setSearchQuery} onSearch={handleSearch} onClear={() => { setSearchQuery(''); setSearchResults(null); setSelectedPlayerHistory(null); }}
+         results={searchResults} selectedPlayerHistory={selectedPlayerHistory} onSelectPlayer={handleSelectPlayer} isDataLoaded={uploadedFiles.length > 0}
       />
 
-      {/* Honor-Übersicht / Ranking */}
-      <HonorOverviewTable
-        stats={comparisonStats}
-        error={comparisonError}
-        startFileName={startFileName ? cleanFileName(startFileName) : undefined}
-        endFileName={endFileName ? cleanFileName(endFileName) : undefined}
+      <HonorOverviewTable 
+         stats={comparisonStats} error={comparisonError}
+         startFileName={cleanFileName(uploadedFiles.find(f => f.id === startFileId)?.name || '')}
+         endFileName={cleanFileName(uploadedFiles.find(f => f.id === endFileId)?.name || '')}
       />
     </div>
   );
