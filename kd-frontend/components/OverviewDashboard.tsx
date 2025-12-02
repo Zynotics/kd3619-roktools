@@ -14,10 +14,10 @@ import type {
 } from '../types';
 
 interface OverviewDashboardProps {
-  isAdmin: boolean; // Ist der eingeloggte User Admin/R5
+  isAdmin: boolean;
   backendUrl: string;
   publicSlug: string | null;
-  isAdminOverride: boolean; // <<< NEU: ADMIN-OVERRIDE FLAG
+  isAdminOverride: boolean;
 }
 
 const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
@@ -30,42 +30,52 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   const role = user?.role;
   const isBasicUser = role === 'user';
   
-  // Logik: isPublicView ist true, wenn Slug da und KEIN User eingeloggt ist
   const isPublicView = !!publicSlug && !user; 
-  
-  // canManageFiles: Erlaubt, wenn Admin Override aktiv ist ODER wenn reguläre Management-Rolle vorliegt UND es kein Public View ist.
   const canManageFiles = isAdminOverride || (!isPublicView && (isAdmin || role === 'r4' || role === 'r5')); 
   
-  const isMinimalView = isPublicView || isBasicUser; // Zeigt nur Chart/kein Management
+  // Minimal View = Public User ODER Basic User (nur Chart)
+  // Admin Override sieht immer alles
+  const isMinimalView = (isPublicView || isBasicUser) && !isAdminOverride;
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [kingdomName, setKingdomName] = useState<string>('Kingdom Analytics');
 
   const [startFileId, setStartFileId] = useState<string>('');
   const [endFileId, setEndFileId] = useState<string>('');
-  const [comparisonStats, setComparisonStats] = useState<ComparisonStats | null>(
-    null
-  );
+  const [comparisonStats, setComparisonStats] = useState<ComparisonStats | null>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [searchResults, setSearchResults] = useState<
-    PlayerStatChange[] | 'not_found' | null
-  >(null);
-  const [selectedPlayer, setSelectedPlayer] = useState<PlayerStatChange | null>(
-    null
-  );
+  const [searchResults, setSearchResults] = useState<PlayerStatChange[] | 'not_found' | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerStatChange | null>(null);
 
-  // 🔑 Verwende atomare Werte aus dem user-Objekt für die Abhängigkeiten
   const userLoggedIn = !!user;
 
-  // ---------------------------------------------------
-  // Dateien laden (Logik für Public/Private/Admin-Override)
-  // ---------------------------------------------------
+  // --- Helper: Titel laden ---
+  const fetchKingdomName = useCallback(async (slug: string) => {
+      try {
+          const res = await fetch(`${backendUrl}/api/public/kingdom/${slug}`);
+          if (res.ok) {
+              const data = await res.json();
+              setKingdomName(data.displayName || 'Kingdom Analytics');
+          }
+      } catch (e) { 
+          setKingdomName(slug.toUpperCase());
+      }
+  }, [backendUrl]);
+
+  // --- Files laden ---
   const fetchFiles = useCallback(async () => {
     const isFetchPublic = !!publicSlug && !userLoggedIn;
     const isFetchOverride = isAdminOverride && !!publicSlug; 
+    
+    if (publicSlug) {
+        fetchKingdomName(publicSlug);
+    } else {
+        setKingdomName('Kingdom Analytics');
+    }
     
     if ((isFetchPublic || isFetchOverride) && !publicSlug) {
         setError('Kingdom slug is missing.');
@@ -79,41 +89,29 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       let response: Response;
       
       if (isFetchPublic || isFetchOverride) {
-        // 1. Öffentlicher Modus ODER Admin Override: Nutze public API mit Slug
         const targetSlug = publicSlug;
         const publicUrl = `${backendUrl}/api/public/kingdom/${targetSlug}/overview-files`;
         response = await fetch(publicUrl);
-        
       } else {
-        // 2. Privater Modus (eingeloggter R5/R4/Basic User): Nutze geschützten Token-Endpunkt
         const token = localStorage.getItem('authToken');
+        if (!token) throw new Error('Authentication token not found.');
         
-        if (!token) {
-          throw new Error('Authentication token not found. Please log in.');
-        }
-        
-        // Backend filtert diese Route automatisch nach der zugewiesenen kingdomId des Users.
         response = await fetch(`${backendUrl}/overview/files-data`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
       }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to fetch files from server (${response.status}).`);
+        throw new Error(errorData.error || `Failed to fetch files (${response.status}).`);
       }
       
       const data: UploadedFile[] = await response.json();
-
       setUploadedFiles(data || []);
 
       if (data.length >= 2) {
-        const last = data[data.length - 1];
-        const secondLast = data[data.length - 2];
-        setStartFileId(secondLast.id);
-        setEndFileId(last.id);
+        setStartFileId(data[data.length - 2].id);
+        setEndFileId(data[data.length - 1].id);
       } else if (data.length === 1) {
         setStartFileId(data[0].id);
         setEndFileId(data[0].id);
@@ -123,162 +121,121 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       }
     } catch (err: any) {
       console.error(err);
-      const message = err.message || 'Error loading files from server.';
-      if ((isFetchPublic || isFetchOverride) && (message.includes('403') || message.includes('404') || message.includes('No data found'))) {
-          setError('No data found for this Kingdom slug.');
+      const msg = err.message || 'Error loading files.';
+      // Im Public Mode "No data" statt Error anzeigen bei 403/404
+      if ((isFetchPublic || isFetchOverride) && (msg.includes('403') || msg.includes('404'))) {
+          // Kein Fehler im State setzen, damit leere View gerendert wird (oder spezieller Hinweis)
+          setUploadedFiles([]);
       } else {
-          setError(message);
+          setError(msg);
       }
     } finally {
       setIsLoading(false);
     }
-  }, [backendUrl, publicSlug, userLoggedIn, isAdminOverride]); // isPublicView entfernt, da vom parent abgeleitet
+  }, [backendUrl, publicSlug, userLoggedIn, isAdminOverride, fetchKingdomName]);
 
   useEffect(() => {
     fetchFiles();
   }, [fetchFiles]);
-  
+
+  // --- Upload / Delete / Reorder ---
+
   const handleUploadComplete = () => {
     fetchFiles();
   };
 
+  const uploadUrl = `${backendUrl}/overview/upload${isAdminOverride && publicSlug ? `?slug=${publicSlug}` : ''}`;
+
   const handleDeleteFile = async (id: string) => {
-    if (!canManageFiles) return; // Nur managen, wenn die Rechte da sind
-    
+    if (!canManageFiles) return;
     try {
       const token = localStorage.getItem('authToken');
-      if (!token) throw new Error('Authentication token missing.');
-
-      const response = await fetch(`${backendUrl}/overview/files/${id}`, {
+      if (!token) throw new Error('Auth token missing');
+      
+      await fetch(`${backendUrl}/overview/files/${id}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-      if (!response.ok) throw new Error('Failed to delete file on server.');
       setUploadedFiles((prev) => (prev || []).filter((f) => f.id !== id));
     } catch (err) {
       console.error(err);
-      setError('Failed to delete file.');
+      alert('Failed to delete file.');
     }
   };
 
   const handleReorderFiles = async (reorderedFiles: UploadedFile[]) => {
-    if (!canManageFiles) return; // Nur managen, wenn die Rechte da sind
-
-    // Frontend-Order sofort aktualisieren
+    if (!canManageFiles) return;
     setUploadedFiles(reorderedFiles);
-
-    // Reihenfolge auch im Backend persistent speichern
     try {
       const token = localStorage.getItem('authToken');
-      if (!token) throw new Error('Authentication token missing.');
-
+      if (!token) throw new Error('Auth token missing');
       const order = reorderedFiles.map((f) => f.id);
       await fetch(`${backendUrl}/overview/files/reorder`, {
         method: 'POST',
         headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({ order }),
       });
     } catch (err) {
-      console.error('Error sending reorder to server:', err);
+      console.error('Reorder error:', err);
     }
   };
 
-  // ---------------------------------------------------
-  // Hilfsfunktion: Datei -> PlayerInfo[] (arbeitet mit headers + data)
-  // ---------------------------------------------------
+  // --- Parsing Logic ---
+
   const parseFileToPlayers = (file: UploadedFile): PlayerInfo[] => {
     if (!file || !file.headers || !file.data) return [];
-
     const headers = file.headers;
 
     const getNumber = (row: any[], keywords: string[]): number => {
       const idx = findColumnIndex(headers, keywords);
       if (idx === undefined || idx < 0 || idx >= row.length) return 0;
-      const raw = row[idx];
-      if (raw === null || raw === undefined) return 0;
-      return parseGermanNumber(String(raw));
+      return parseGermanNumber(String(row[idx]));
     };
-
     const getString = (row: any[], keywords: string[]): string => {
       const idx = findColumnIndex(headers, keywords);
       if (idx === undefined || idx < 0 || idx >= row.length) return '';
-      const v = row[idx];
-      return v === null || v === undefined ? '' : String(v);
+      return String(row[idx] || '');
     };
 
     const players: PlayerInfo[] = [];
-
     file.data.forEach((row: any[]) => {
       const id = getString(row, ['governorid', 'governor id', 'id', 'gov id']);
       const name = getString(row, ['name', 'player name', 'playername']);
-      const alliance = getString(row, ['alliance', 'allianz', 'alliance tag']);
-
-      const power = getNumber(row, ['power', 'macht']);
-      const troopsPower = getNumber(row, ['troopspower', 'troops power']);
-
-      // ❗ FIX: Kill Points nur aus der Spalte "Total Kill Points" lesen
-      const totalKillPoints = getNumber(row, ['total kill points']);
-
-      const deadTroops = getNumber(row, ['deadtroops', 'dead troops', 'dead']);
-
-      const t1Kills = getNumber(row, ['t1', 't1 kills']);
-      const t2Kills = getNumber(row, ['t2', 't2 kills']);
-      const t3Kills = getNumber(row, ['t3', 't3 kills']);
-      const t4Kills = getNumber(row, ['t4', 't4 kills', 'tier4']);
-      const t5Kills = getNumber(row, ['t5', 't5 kills', 'tier5']);
-
-      const cityHall = getNumber(row, ['cityhall', 'city hall', 'ch']);
-      const techPower = getNumber(row, ['techpower', 'tech power']);
-      const buildingPower = getNumber(row, ['buildingpower', 'building power']);
-      const commanderPower = getNumber(row, [
-        'commanderpower',
-        'commander power',
-      ]);
-
-      // offensichtliche leere/summen Zeilen überspringen
-      if (!id && !name && power === 0 && troopsPower === 0) {
-        return;
-      }
+      if (!id && !name) return;
 
       players.push({
         id,
         name,
-        alliance,
-        power,
-        troopsPower,
-        totalKillPoints,
-        deadTroops,
-        t1Kills,
-        t2Kills,
-        t3Kills,
-        t4Kills,
-        t5Kills,
-        cityHall,
-        techPower,
-        buildingPower,
-        commanderPower,
+        alliance: getString(row, ['alliance', 'allianz', 'alliance tag']),
+        power: getNumber(row, ['power', 'macht']),
+        troopsPower: getNumber(row, ['troopspower', 'troops power']),
+        totalKillPoints: getNumber(row, ['total kill points']),
+        deadTroops: getNumber(row, ['deadtroops', 'dead troops', 'dead']),
+        t1Kills: getNumber(row, ['t1', 't1 kills']),
+        t2Kills: getNumber(row, ['t2', 't2 kills']),
+        t3Kills: getNumber(row, ['t3', 't3 kills']),
+        t4Kills: getNumber(row, ['t4', 't4 kills', 'tier4']),
+        t5Kills: getNumber(row, ['t5', 't5 kills', 'tier5']),
+        cityHall: getNumber(row, ['cityhall', 'city hall', 'ch']),
+        techPower: getNumber(row, ['techpower', 'tech power']),
+        buildingPower: getNumber(row, ['buildingpower', 'building power']),
+        commanderPower: getNumber(row, ['commanderpower', 'commander power']),
       });
     });
-
     return players;
   };
 
-  // ---------------------------------------------------
-  // Vergleich berechnen -> ComparisonStats
-  // ---------------------------------------------------
+  // --- Comparison Logic ---
+
   const handleCompare = useCallback(() => {
     setComparisonError(null);
-
     if (!startFileId || !endFileId || startFileId === endFileId) {
       setComparisonStats(null);
       return;
     }
-
     const startFile = uploadedFiles.find((f) => f.id === startFileId);
     const endFile = uploadedFiles.find((f) => f.id === endFileId);
 
@@ -292,111 +249,64 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       const data1 = parseFileToPlayers(startFile);
       const data2 = parseFileToPlayers(endFile);
 
-      const totalPowerFile1 = data1.reduce((sum, p) => sum + (p.power || 0), 0);
-      const totalPowerFile2 = data2.reduce((sum, p) => sum + (p.power || 0), 0);
-
-      const totalTroopsPowerFile1 = data1.reduce(
-        (sum, p) => sum + (p.troopsPower || 0),
-        0
-      );
-      const totalTroopsPowerFile2 = data2.reduce(
-        (sum, p) => sum + (p.troopsPower || 0),
-        0
-      );
-
-      const totalKillPointsFile1 = data1.reduce(
-        (sum, p) => sum + (p.totalKillPoints || 0),
-        0
-      );
-      const totalKillPointsFile2 = data2.reduce(
-        (sum, p) => sum + (p.totalKillPoints || 0),
-        0
-      );
-
-      const totalDeadTroopsFile1 = data1.reduce(
-        (sum, p) => sum + (p.deadTroops || 0),
-        0
-      );
-      const totalDeadTroopsFile2 = data2.reduce(
-        (sum, p) => sum + (p.deadTroops || 0),
-        0
-      );
-
-      const map1 = new Map<string, PlayerInfo>();
-      data1.forEach((p) => {
-        if (p.id) map1.set(p.id, p);
-      });
-
-      const map2 = new Map<string, PlayerInfo>();
-      data2.forEach((p) => {
-        if (p.id) map2.set(p.id, p);
-      });
-
-      const playerStatChanges: PlayerStatChange[] = [];
-
-      data2.forEach((p2) => {
-        if (!p2.id) return;
-        const p1 = map1.get(p2.id);
-        if (!p1) return;
-
-        const diffPower = p2.power - p1.power;
-        const diffTroopsPower = p2.troopsPower - p1.troopsPower;
-        const diffKillPoints = p2.totalKillPoints - p1.totalKillPoints;
-        const diffDeadTroops = p2.deadTroops - p1.deadTroops;
-
-        playerStatChanges.push({
-          id: p2.id,
-          name: p2.name,
-          alliance: p2.alliance,
-          oldPower: p1.power,
-          newPower: p2.power,
-          diffPower,
-          oldKillPoints: p1.totalKillPoints,
-          newKillPoints: p2.totalKillPoints,
-          diffKillPoints,
-          oldDeadTroops: p1.deadTroops,
-          newDeadTroops: p2.deadTroops,
-          diffDeadTroops,
-          oldTroopsPower: p1.troopsPower,
-          newTroopsPower: p2.troopsPower,
-          diffTroopsPower,
-        });
-      });
-
-      const newPlayers: PlayerInfo[] = data2.filter(
-        (p2) => p2.id && !map1.has(p2.id)
-      );
-      const disappearedPlayers: PlayerInfo[] = data1.filter(
-        (p1) => p1.id && !map2.has(p1.id)
-      );
-
+      // Aggregations
+      const sum = (data: PlayerInfo[], key: keyof PlayerInfo) => data.reduce((s, p) => s + (Number(p[key]) || 0), 0);
+      
       const stats: ComparisonStats = {
-        totalPowerFile1,
-        totalPowerFile2,
-        powerDifference: totalPowerFile2 - totalPowerFile1,
+        totalPowerFile1: sum(data1, 'power'),
+        totalPowerFile2: sum(data2, 'power'),
+        powerDifference: sum(data2, 'power') - sum(data1, 'power'),
 
-        totalTroopsPowerFile1,
-        totalTroopsPowerFile2,
-        troopsPowerDifference: totalTroopsPowerFile2 - totalTroopsPowerFile1,
+        totalTroopsPowerFile1: sum(data1, 'troopsPower'),
+        totalTroopsPowerFile2: sum(data2, 'troopsPower'),
+        troopsPowerDifference: sum(data2, 'troopsPower') - sum(data1, 'troopsPower'),
 
-        totalKillPointsFile1,
-        totalKillPointsFile2,
-        killPointsDifference: totalKillPointsFile2 - totalKillPointsFile1,
+        totalKillPointsFile1: sum(data1, 'totalKillPoints'),
+        totalKillPointsFile2: sum(data2, 'totalKillPoints'),
+        killPointsDifference: sum(data2, 'totalKillPoints') - sum(data1, 'totalKillPoints'),
+        
+        totalDeadTroopsFile1: sum(data1, 'deadTroops'),
+        totalDeadTroopsFile2: sum(data2, 'deadTroops'),
+        deadTroopsDifference: sum(data2, 'deadTroops') - sum(data1, 'deadTroops'),
 
-        totalDeadTroopsFile1,
-        totalDeadTroopsFile2,
-        deadTroopsDifference: totalDeadTroopsFile2 - totalDeadTroopsFile1,
-
-        newPlayers,
-        disappearedPlayers,
-        playerStatChanges,
+        newPlayers: [],
+        disappearedPlayers: [],
+        playerStatChanges: [],
       };
+
+      const map1 = new Map(data1.map(p => [p.id, p]));
+      const map2 = new Map(data2.map(p => [p.id, p]));
+
+      stats.newPlayers = data2.filter(p => p.id && !map1.has(p.id));
+      stats.disappearedPlayers = data1.filter(p => p.id && !map2.has(p.id));
+
+      data2.forEach(p2 => {
+          const p1 = map1.get(p2.id);
+          if (p1) {
+              stats.playerStatChanges.push({
+                  id: p2.id,
+                  name: p2.name,
+                  alliance: p2.alliance,
+                  oldPower: p1.power,
+                  newPower: p2.power,
+                  diffPower: p2.power - p1.power,
+                  oldKillPoints: p1.totalKillPoints,
+                  newKillPoints: p2.totalKillPoints,
+                  diffKillPoints: p2.totalKillPoints - p1.totalKillPoints,
+                  oldDeadTroops: p1.deadTroops,
+                  newDeadTroops: p2.deadTroops,
+                  diffDeadTroops: p2.deadTroops - p1.deadTroops,
+                  oldTroopsPower: p1.troopsPower,
+                  newTroopsPower: p2.troopsPower,
+                  diffTroopsPower: p2.troopsPower - p1.troopsPower,
+              });
+          }
+      });
 
       setComparisonStats(stats);
     } catch (err) {
       console.error(err);
       setComparisonError('Error analyzing data.');
-      setComparisonStats(null);
     }
   }, [startFileId, endFileId, uploadedFiles]);
 
@@ -406,29 +316,25 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     }
   }, [startFileId, endFileId, uploadedFiles, handleCompare]);
 
-  // ---------------------------------------------------
-  // Suche nach Spielern (arbeitet auf playerStatChanges)
-  // ---------------------------------------------------
+  // --- Search Logic ---
+
   const handleSearch = () => {
     if (!searchQuery.trim() || !comparisonStats?.playerStatChanges) {
       setSearchResults(null);
       setSelectedPlayer(null);
       return;
     }
-
-    const queryLower = searchQuery.toLowerCase();
-    const results = comparisonStats.playerStatChanges.filter(
-      (p) =>
-        p.name.toLowerCase().includes(queryLower) ||
-        p.id.toLowerCase().includes(queryLower)
+    const q = searchQuery.toLowerCase();
+    const results = comparisonStats.playerStatChanges.filter(p => 
+        p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)
     );
-
+    
     if (results.length === 0) {
-      setSearchResults('not_found');
-      setSelectedPlayer(null);
+        setSearchResults('not_found');
+        setSelectedPlayer(null);
     } else {
-      setSearchResults(results);
-      setSelectedPlayer(results[0]);
+        setSearchResults(results);
+        setSelectedPlayer(results[0]);
     }
   };
 
@@ -438,172 +344,106 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     setSelectedPlayer(null);
   };
 
-  const handleSelectPlayer = (player: PlayerStatChange) => {
-    setSelectedPlayer(player);
+  const handleSelectPlayer = (p: PlayerStatChange) => {
+    setSelectedPlayer(p);
   };
 
-  // ---------------------------------------------------
-  // RENDER LOGIK
-  // ---------------------------------------------------
-  
-  if (isLoading) {
-    return (
-      <div className="p-6 text-center text-gray-300">Loading files…</div>
-    );
-  }
+  // --- RENDER ---
 
-  // ---------------------------------------------------
-  // RENDER: MINIMAL VIEW (Public User / Basic User)
-  // ---------------------------------------------------
-  if (isMinimalView && !isAdminOverride) { // NUR Minimal View, wenn kein Admin Override
+  if (isLoading) return <div className="p-6 text-center text-gray-300">Loading files...</div>;
+
+  // RENDER: MINIMAL VIEW (Public / Basic User)
+  if (isMinimalView) {
     return (
       <div className="space-y-8">
-        {error && (
-          <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">
-            {error}
-          </div>
-        )}
+        {error && <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">{error}</div>}
         
-        {/* Kingdom Power Progression Chart (immer) */}
         <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-          <h3 className="text-lg font-semibold text-gray-200 mb-4">
-            Kingdom Power Progression
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-200 mb-4">{kingdomName} Power Progression</h3>
           <PowerHistoryChart files={uploadedFiles || []} />
         </div>
         
-        {/* HINWEIS, falls keine Daten vorhanden sind */}
         {!error && uploadedFiles.length === 0 && (
             <div className="text-center p-8 text-yellow-400 bg-gray-800 rounded-xl">
-                <h3 className="text-xl font-bold mb-2">No Data Available</h3>
-                <p>The selected Kingdom has not uploaded any files yet.</p>
+                No data available for this Kingdom yet.
             </div>
         )}
       </div>
     );
   }
 
-
-  // ---------------------------------------------------
-  // RENDER: FULL VIEW (R4 / R5 / Admin ODER Admin Override)
-  // ---------------------------------------------------
+  // RENDER: FULL VIEW (Admin / R5 / R4 / Override)
   return (
     <div className="space-y-8">
-      {error && (
-        <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">{error}</div>}
 
-      {/* Upload + File list – nur für R4, R5 & Admin */}
+      {/* File Management (Nur wenn berechtigt) */}
       {canManageFiles && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-            <FileUpload
-              uploadUrl={`${backendUrl}/overview/upload`}
-              onUploadComplete={handleUploadComplete}
-            />
+            <FileUpload uploadUrl={uploadUrl} onUploadComplete={handleUploadComplete} />
           </div>
           <div>
-            <FileList
-              files={uploadedFiles || []}
-              onDeleteFile={handleDeleteFile}
-              onReorder={handleReorderFiles}
-            />
+            <FileList files={uploadedFiles} onDeleteFile={handleDeleteFile} onReorder={handleReorderFiles} />
           </div>
         </div>
       )}
 
+      {/* Chart */}
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-        <PowerHistoryChart files={uploadedFiles || []} />
+        <h3 className="text-lg font-semibold text-gray-200 mb-4">{kingdomName} Power History</h3>
+        <PowerHistoryChart files={uploadedFiles} />
       </div>
 
-      {/* Comparison controls */}
+      {/* Controls */}
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-        <h3 className="text-lg font-semibold text-gray-200 mb-4">
-          Comparison Controls
-        </h3>
+        <h3 className="text-lg font-semibold text-gray-200 mb-4">Comparison Controls</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-          <div className="flex flex-col">
-            <label
-              htmlFor="start-date-select"
-              className="text-sm font-medium text-gray-400 mb-1"
-            >
-              Start Date
-            </label>
-            <select
-              id="start-date-select"
-              value={startFileId}
-              onChange={(e) => setStartFileId(e.target.value)}
-              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
-            >
-              <option value="">Select…</option>
-              {uploadedFiles.map((file) => (
-                <option key={file.id} value={file.id}>
-                  {cleanFileName(file.name)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col">
-            <label
-              htmlFor="end-date-select"
-              className="text-sm font-medium text-gray-400 mb-1"
-            >
-              End Date
-            </label>
-            <select
-              id="end-date-select"
-              value={endFileId}
-              onChange={(e) => setEndFileId(e.target.value)}
-              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
-            >
-              <option value="">Select…</option>
-              {uploadedFiles.map((file) => (
-                <option key={file.id} value={file.id}>
-                  {cleanFileName(file.name)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col">
-            <button
-              onClick={handleCompare}
-              disabled={!startFileId || !endFileId || startFileId === endFileId}
-              className="mt-5 bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-            >
-              Compare
+            <div className="flex flex-col">
+                <label className="text-sm text-gray-400 mb-1">Start Date</label>
+                <select 
+                    value={startFileId} 
+                    onChange={e => setStartFileId(e.target.value)}
+                    className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5"
+                >
+                    <option value="">Select...</option>
+                    {uploadedFiles.map(f => <option key={f.id} value={f.id}>{cleanFileName(f.name)}</option>)}
+                </select>
+            </div>
+            <div className="flex flex-col">
+                <label className="text-sm text-gray-400 mb-1">End Date</label>
+                <select 
+                    value={endFileId} 
+                    onChange={e => setEndFileId(e.target.value)}
+                    className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5"
+                >
+                    <option value="">Select...</option>
+                    {uploadedFiles.map(f => <option key={f.id} value={f.id}>{cleanFileName(f.name)}</option>)}
+                </select>
+            </div>
+            <button onClick={handleCompare} disabled={!startFileId || !endFileId || startFileId===endFileId} className="bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-600">
+                Compare
             </button>
-          </div>
         </div>
       </div>
 
-      {/* Search + Detail view */}
-      <PlayerSearch
-        query={searchQuery}
-        setQuery={setSearchQuery}
-        onSearch={handleSearch}
-        onClear={handleClearSearch}
-        results={searchResults}
-        selectedPlayer={selectedPlayer}
-        onSelectPlayer={handleSelectPlayer}
-        isComparisonLoaded={!!comparisonStats?.playerStatChanges}
+      {/* Search & Tables */}
+      <PlayerSearch 
+          query={searchQuery} 
+          setQuery={setSearchQuery} 
+          onSearch={handleSearch} 
+          onClear={handleClearSearch} 
+          results={searchResults} 
+          selectedPlayer={selectedPlayer} 
+          onSelectPlayer={handleSelectPlayer} 
+          isComparisonLoaded={!!comparisonStats}
       />
 
-      {/* ComparisonSection with summary + tables */}
-      <ComparisonSection
-        stats={comparisonStats}
-        error={comparisonError}
-        file1Name={
-          cleanFileName(
-            uploadedFiles?.find((f) => f.id === startFileId)?.name ?? ''
-          ) || null
-        }
-        file2Name={
-          cleanFileName(
-            uploadedFiles?.find((f) => f.id === endFileId)?.name ?? ''
-          ) || null
-        }
+      <ComparisonSection 
+          stats={comparisonStats} 
+          error={comparisonError} 
+          file1Name={cleanFileName(uploadedFiles.find(f => f.id === startFileId)?.name || '')}
+          file2Name={cleanFileName(uploadedFiles.find(f => f.id === endFileId)?.name || '')}
       />
     </div>
   );
