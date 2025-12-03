@@ -1,4 +1,3 @@
-// App.tsx - KD3619 with Login, Admin & Feature Permissions (Top Navigation)
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -35,22 +34,19 @@ const AppContent: React.FC = () => {
   const isAdminOverrideView = isSuperAdmin && !!publicSlug; // Admin schaut sich spezifisches KD an
 
   // -------------------------------------------------------------------
-  // 1. VIEW & ROUTING LOGIK (BUGFIX)
+  // 1. VIEW & ROUTING LOGIK
   // -------------------------------------------------------------------
   useEffect(() => {
     // Wenn ein Public Slug da ist, aber KEIN User eingeloggt ist:
     // Zwinge die Ansicht auf 'overview', falls 'admin' gewählt wäre.
-    // (Verhindert, dass öffentliche Besucher leere Admin-Seiten sehen)
     if (publicSlug && !user) {
         if (activeView === 'admin') setActiveView('overview');
     } 
     // Wenn Superadmin auf der Root-Seite ist (kein Slug):
-    // Zwinge ihn ins Admin-Panel (seine Zentrale).
+    // Zwinge ihn ins Admin-Panel.
     else if (isSuperAdmin && !publicSlug && activeView !== 'admin') {
         setActiveView('admin');
     }
-    // 💡 WICHTIG: Wenn R5 eingeloggt ist (user && publicSlug), greift keine dieser
-    // Regeln, sodass R5 frei zwischen 'overview' und 'admin' wechseln kann.
   }, [publicSlug, isSuperAdmin, activeView, user]);
 
 
@@ -59,21 +55,17 @@ const AppContent: React.FC = () => {
   // -------------------------------------------------------------------
   useEffect(() => {
     const redirectToSlug = async () => {
-        // Nur weiterleiten, wenn: User da, R5/R4, KEIN Slug aktuell, KEIN Superadmin
         if (user && user.kingdomId && !publicSlug && !isSuperAdmin) {
             try {
                 const token = localStorage.getItem('authToken');
-                // Wir nutzen den Admin-Endpoint (gescoped für R5/R4), um den Slug zu holen
                 const res = await fetch(`${BACKEND_URL}/api/admin/kingdoms`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 if (res.ok) {
                     const kingdoms = await res.json();
-                    // R5/R4 sollten genau 1 Kingdom sehen
                     if (kingdoms && kingdoms.length > 0) {
                         const mySlug = kingdoms[0].slug;
                         if (mySlug) {
-                            // Harte Weiterleitung auf die Slug-URL
                             const newUrl = new URL(window.location.href);
                             newUrl.searchParams.set('slug', mySlug);
                             window.location.href = newUrl.toString();
@@ -95,7 +87,6 @@ const AppContent: React.FC = () => {
   // -------------------------------------------------------------------
   useEffect(() => {
     const fetchTitle = async () => {
-      // Fall A: Public Link oder Admin Override (wir schauen ein spezifisches KD an)
       if (publicSlug) {
         try {
           const res = await fetch(`${BACKEND_URL}/api/public/kingdom/${publicSlug}`);
@@ -105,15 +96,11 @@ const AppContent: React.FC = () => {
           } else {
             setHeaderTitle(publicSlug.toUpperCase());
           }
-        } catch (e) {
-          setHeaderTitle('Kingdom Analytics');
-        }
+        } catch (e) { setHeaderTitle('Kingdom Analytics'); }
         return;
       }
 
-      // Fall B: Eingeloggter R5 oder R4 (sehen ihr eigenes Kingdom)
-      // Falls Redirect noch nicht gegriffen hat, zeigen wir trotzdem den Namen an
-      if (user && (user.role === 'r5' || user.role === 'r4') && user.kingdomId) {
+      if (user && user.kingdomId) {
         try {
           const token = localStorage.getItem('authToken');
           const res = await fetch(`${BACKEND_URL}/api/admin/kingdoms`, {
@@ -125,19 +112,15 @@ const AppContent: React.FC = () => {
               setHeaderTitle(data[0].displayName);
             }
           }
-        } catch (e) {
-          setHeaderTitle('Kingdom Analytics');
-        }
+        } catch (e) { setHeaderTitle('Kingdom Analytics'); }
         return;
       }
 
-      // Fall C: Superadmin im Root (kein Slug)
       if (isSuperAdmin) {
         setHeaderTitle('Superadmin Dashboard');
         return;
       }
 
-      // Fall D: Fallback
       setHeaderTitle('Rise of Stats');
     };
 
@@ -146,7 +129,7 @@ const AppContent: React.FC = () => {
 
 
   // -------------------------------------------------------------------
-  // 4. LANDING PAGE / LOGIN
+  // 4. LANDING PAGE (Nur wenn gar kein Slug und kein User)
   // -------------------------------------------------------------------
   if (!user && !publicSlug && !isLoading) {
     return (
@@ -154,16 +137,16 @@ const AppContent: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <LoginPrompt />
           <div className="mt-8 text-center text-gray-500">
-            <p>Or access a Kingdom directly using a public link (e.g. ?slug=kingdom-name).</p>
+            <p>Or access a Kingdom directly using a public link.</p>
           </div>
         </div>
       </div>
     );
   }
 
-  // Bestimmen, welche Tabs sichtbar sind
-  const showDashboardTabs = !isSuperAdmin || isAdminOverrideView; // Superadmin sieht Tabs nur im Override-Modus
-  const showAdminTab = isAdmin || isSuperAdmin; // Admin-Tab für SA und R5
+  // Tabs bestimmen
+  const showDashboardTabs = !isSuperAdmin || isAdminOverrideView; 
+  const showAdminTab = isAdmin || isSuperAdmin; 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
@@ -186,12 +169,14 @@ const AppContent: React.FC = () => {
               </div>
             </div>
 
-            {/* User Status / Logout */}
+            {/* RECHTS OBEN: User Info ODER Login Button */}
             <div className="flex items-center gap-4">
               {isLoading && <span className="text-xs text-gray-400">Checking login…</span>}
+              
               {user ? (
+                /* Fall A: Eingeloggt -> Zeige Username + Logout */
                 <>
-                  <div className="text-right">
+                  <div className="text-right hidden sm:block">
                     <div className="text-sm font-semibold text-white">
                       {user.username}
                       {(user.role === 'admin' || user.role === 'r5') && (
@@ -211,11 +196,24 @@ const AppContent: React.FC = () => {
                     Log out
                   </button>
                 </>
-              ) : null}
+              ) : (
+                /* Fall B: Nicht eingeloggt (Public View) -> Zeige Login Button */
+                !isLoading && (
+                    <button
+                      onClick={() => (window.location.href = '/')}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                      </svg>
+                      Login
+                    </button>
+                )
+              )}
             </div>
           </div>
 
-          {/* TOP NAVIGATION */}
+          {/* NAVIGATION */}
           <nav className="mt-4">
             <div className="flex flex-wrap gap-2">
               {showDashboardTabs && (
@@ -273,8 +271,7 @@ const AppContent: React.FC = () => {
 
         {/* MAIN CONTENT AREA */}
         <main className="space-y-6">
-          {/* View Switching Logic */}
-
+          
           {activeView === 'overview' && (
             <PublicOrProtectedRoute
               isPublic={isPublicView}
@@ -323,14 +320,14 @@ const AppContent: React.FC = () => {
             </PublicOrProtectedRoute>
           )}
 
-          {/* Admin Panel: Nur sichtbar für Admin/R5, wenn angemeldet */}
+          {/* Admin Panel */}
           {activeView === 'admin' && user && (isAdmin) && (
             <ProtectedRoute>
               <AdminUserManagement />
             </ProtectedRoute>
           )}
 
-          {/* Global Chart: Nur wenn eingeloggt, approved und nicht im Admin/Public Modus */}
+          {/* Global Chart */}
           {user && user.isApproved && activeView !== 'admin' && (!isPublicView || isAdminOverrideView) && (
             <div className="mt-4">
               <PowerHistoryChart />
@@ -358,7 +355,6 @@ const PublicOrProtectedRoute: React.FC<PublicOrProtectedRouteProps> = ({
   accessType,
   isAdminOverride,
 }) => {
-  // Wenn es öffentlich ist oder ein Admin Override vorliegt -> Direkt anzeigen
   if (isPublic || isAdminOverride) {
     if (!publicSlug && isPublic) {
       return (
@@ -369,8 +365,6 @@ const PublicOrProtectedRoute: React.FC<PublicOrProtectedRouteProps> = ({
     }
     return <>{children}</>;
   }
-
-  // Sonst normale Authentifizierung über ProtectedRoute
   return <ProtectedRoute accessType={accessType}>{children}</ProtectedRoute>;
 };
 
