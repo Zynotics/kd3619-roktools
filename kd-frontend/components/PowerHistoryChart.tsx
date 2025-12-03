@@ -7,10 +7,9 @@ declare var Chart: any;
 
 interface PowerHistoryChartProps {
   files: UploadedFile[];
-  kingdomName?: string;
 }
 
-const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files, kingdomName = 'Kingdom' }) => {
+const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
   const totalPowerChartRef = useRef<HTMLCanvasElement | null>(null);
   const troopsPowerChartRef = useRef<HTMLCanvasElement | null>(null);
   const killPointsChartRef = useRef<HTMLCanvasElement | null>(null);
@@ -34,10 +33,6 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files, kingdomNam
     const totalDeadTroopsData: number[] = [];
 
     files.forEach(file => {
-      const headerMap = new Map<string, number>();
-      file.headers.forEach((h, i) => headerMap.set(h.toLowerCase(), i));
-
-      // Helper to find column index
       const getIdx = (candidates: string[]) => findColumnIndex(file.headers, candidates);
 
       const powerIdx = getIdx(['power', 'macht']);
@@ -66,18 +61,8 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files, kingdomNam
     return { labels, totalPowerData, troopsPowerData, totalKillPointsData, totalDeadTroopsData };
   }, [files]);
 
-  // Helper to create/update charts
-  const createChart = (
-    ctx: CanvasRenderingContext2D,
-    instanceRef: React.MutableRefObject<any>,
-    label: string,
-    data: number[],
-    labels: string[],
-    color: string
-  ) => {
-    if (instanceRef.current) {
-      instanceRef.current.destroy();
-    }
+  const createChart = (ctx: CanvasRenderingContext2D, instanceRef: React.MutableRefObject<any>, label: string, data: number[], labels: string[], color: string) => {
+    if (instanceRef.current) instanceRef.current.destroy();
     return new Chart(ctx, {
       type: 'line',
       data: {
@@ -105,47 +90,10 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files, kingdomNam
 
   useEffect(() => {
     if (!chartData) return;
-
-    if (totalPowerChartRef.current) {
-      totalPowerChartInstance.current = createChart(
-        totalPowerChartRef.current.getContext('2d')!,
-        totalPowerChartInstance,
-        'Total Power',
-        chartData.totalPowerData,
-        chartData.labels,
-        'rgba(59, 130, 246, 0.8)'
-      );
-    }
-    if (troopsPowerChartRef.current) {
-      troopsPowerChartInstance.current = createChart(
-        troopsPowerChartRef.current.getContext('2d')!,
-        troopsPowerChartInstance,
-        'Troops Power',
-        chartData.troopsPowerData,
-        chartData.labels,
-        'rgba(16, 185, 129, 0.8)'
-      );
-    }
-    if (killPointsChartRef.current) {
-      killPointsChartInstance.current = createChart(
-        killPointsChartRef.current.getContext('2d')!,
-        killPointsChartInstance,
-        'Kill Points',
-        chartData.totalKillPointsData,
-        chartData.labels,
-        'rgba(239, 68, 68, 0.8)'
-      );
-    }
-    if (deadTroopsChartRef.current) {
-      deadTroopsChartInstance.current = createChart(
-        deadTroopsChartRef.current.getContext('2d')!,
-        deadTroopsChartInstance,
-        'Dead Troops',
-        chartData.totalDeadTroopsData,
-        chartData.labels,
-        'rgba(245, 158, 11, 0.8)'
-      );
-    }
+    if (totalPowerChartRef.current) totalPowerChartInstance.current = createChart(totalPowerChartRef.current.getContext('2d')!, totalPowerChartInstance, 'Total Power', chartData.totalPowerData, chartData.labels, 'rgba(59, 130, 246, 0.8)');
+    if (troopsPowerChartRef.current) troopsPowerChartInstance.current = createChart(troopsPowerChartRef.current.getContext('2d')!, troopsPowerChartInstance, 'Troops Power', chartData.troopsPowerData, chartData.labels, 'rgba(16, 185, 129, 0.8)');
+    if (killPointsChartRef.current) killPointsChartInstance.current = createChart(killPointsChartRef.current.getContext('2d')!, killPointsChartInstance, 'Kill Points', chartData.totalKillPointsData, chartData.labels, 'rgba(239, 68, 68, 0.8)');
+    if (deadTroopsChartRef.current) deadTroopsChartInstance.current = createChart(deadTroopsChartRef.current.getContext('2d')!, deadTroopsChartInstance, 'Dead Troops', chartData.totalDeadTroopsData, chartData.labels, 'rgba(245, 158, 11, 0.8)');
 
     return () => {
       totalPowerChartInstance.current?.destroy();
@@ -159,7 +107,8 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files, kingdomNam
 
   return (
     <div className="space-y-8">
-      <h3 className="text-lg font-semibold text-gray-200 mb-4">{kingdomName} Power Analytics</h3>
+      {/* 👑 STATISCHER TITEL: Kingdom Progression */}
+      <h3 className="text-lg font-semibold text-gray-200 mb-4">Kingdom Progression</h3>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card hover className="p-4">
