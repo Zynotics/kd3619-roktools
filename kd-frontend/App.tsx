@@ -1,3 +1,4 @@
+// App.tsx - FINAL FIX (Admin Access for R5 allowed on Slugs)
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -29,24 +30,40 @@ const AppContent: React.FC = () => {
   const isR5 = user?.role === 'r5';
   const isAdmin = isSuperAdmin || isR5; // R5 hat Admin-Rechte im eigenen KD
 
-  // View-Modi bestimmen
+  // View-Modi
   const isPublicView = !!publicSlug && !user;
   const isAdminOverrideView = isSuperAdmin && !!publicSlug; // Admin schaut sich spezifisches KD an
 
   // -------------------------------------------------------------------
-  // 🔄 AUTOMATISCHE WEITERLEITUNG AUF KINGDOM SLUG NACH LOGIN
+  // 1. VIEW & ROUTING LOGIK (BUGFIX)
+  // -------------------------------------------------------------------
+  useEffect(() => {
+    // Wenn ein Public Slug da ist, aber KEIN User eingeloggt ist:
+    // Zwinge die Ansicht auf 'overview', falls 'admin' gewählt wäre.
+    // (Verhindert, dass öffentliche Besucher leere Admin-Seiten sehen)
+    if (publicSlug && !user) {
+        if (activeView === 'admin') setActiveView('overview');
+    } 
+    // Wenn Superadmin auf der Root-Seite ist (kein Slug):
+    // Zwinge ihn ins Admin-Panel (seine Zentrale).
+    else if (isSuperAdmin && !publicSlug && activeView !== 'admin') {
+        setActiveView('admin');
+    }
+    // 💡 WICHTIG: Wenn R5 eingeloggt ist (user && publicSlug), greift keine dieser
+    // Regeln, sodass R5 frei zwischen 'overview' und 'admin' wechseln kann.
+  }, [publicSlug, isSuperAdmin, activeView, user]);
+
+
+  // -------------------------------------------------------------------
+  // 2. AUTOMATISCHE WEITERLEITUNG FÜR R5 (Redirect)
   // -------------------------------------------------------------------
   useEffect(() => {
     const redirectToSlug = async () => {
-        // Nur weiterleiten, wenn:
-        // 1. User eingeloggt ist
-        // 2. User ein Kingdom hat (R5/R4)
-        // 3. Kein Slug in der URL ist (User ist auf der Root-Seite)
-        // 4. User KEIN Superadmin ist (Superadmin bleibt auf Root/Admin-Panel)
+        // Nur weiterleiten, wenn: User da, R5/R4, KEIN Slug aktuell, KEIN Superadmin
         if (user && user.kingdomId && !publicSlug && !isSuperAdmin) {
             try {
                 const token = localStorage.getItem('authToken');
-                // Wir nutzen den Admin-Endpoint (gescoped für R5/R4), um den Slug zu holen
+                // Hole den eigenen Slug vom Backend
                 const res = await fetch(`${BACKEND_URL}/api/admin/kingdoms`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
@@ -56,7 +73,6 @@ const AppContent: React.FC = () => {
                     if (kingdoms && kingdoms.length > 0) {
                         const mySlug = kingdoms[0].slug;
                         if (mySlug) {
-                            // Harte Weiterleitung auf die Slug-URL
                             const newUrl = new URL(window.location.href);
                             newUrl.searchParams.set('slug', mySlug);
                             window.location.href = newUrl.toString();
@@ -74,24 +90,11 @@ const AppContent: React.FC = () => {
 
 
   // -------------------------------------------------------------------
-  // VIEW LOGIC
-  // -------------------------------------------------------------------
-  useEffect(() => {
-    if (publicSlug) {
-      // Wenn ein Link da ist, zeigen wir standardmäßig die Overview
-      if (activeView === 'admin') setActiveView('overview');
-    } else if (isSuperAdmin && !isAdminOverrideView && activeView !== 'admin') {
-      // Wenn Superadmin OHNE Link eingeloggt ist -> Ab zum Admin Panel
-      setActiveView('admin');
-    }
-  }, [publicSlug, isSuperAdmin, isAdminOverrideView, activeView]);
-
-  // -------------------------------------------------------------------
-  // DYNAMISCHER HEADER TITEL
+  // 3. DYNAMISCHER HEADER TITEL
   // -------------------------------------------------------------------
   useEffect(() => {
     const fetchTitle = async () => {
-      // Fall A: Public Link oder Admin Override (wir schauen ein spezifisches KD an)
+      // Fall A: Public Link oder Admin Override
       if (publicSlug) {
         try {
           const res = await fetch(`${BACKEND_URL}/api/public/kingdom/${publicSlug}`);
@@ -101,14 +104,11 @@ const AppContent: React.FC = () => {
           } else {
             setHeaderTitle(publicSlug.toUpperCase());
           }
-        } catch (e) {
-          setHeaderTitle('Kingdom Analytics');
-        }
+        } catch (e) { setHeaderTitle('Kingdom Analytics'); }
         return;
       }
 
-      // Fall B: Eingeloggter R5 oder R4 (sehen ihr eigenes Kingdom)
-      // Falls Redirect noch nicht gegriffen hat, zeigen wir trotzdem den Namen an
+      // Fall B: Eingeloggter R5 (Fallback, falls Redirect noch lädt)
       if (user && (user.role === 'r5' || user.role === 'r4') && user.kingdomId) {
         try {
           const token = localStorage.getItem('authToken');
@@ -117,23 +117,18 @@ const AppContent: React.FC = () => {
           });
           if (res.ok) {
             const data = await res.json();
-            if (data && data.length > 0) {
-              setHeaderTitle(data[0].displayName);
-            }
+            if (data && data.length > 0) setHeaderTitle(data[0].displayName);
           }
-        } catch (e) {
-          setHeaderTitle('Kingdom Analytics');
-        }
+        } catch (e) { setHeaderTitle('Kingdom Analytics'); }
         return;
       }
 
-      // Fall C: Superadmin im Root (kein Slug)
+      // Fall C: Superadmin Root
       if (isSuperAdmin) {
         setHeaderTitle('Superadmin Dashboard');
         return;
       }
 
-      // Fall D: Fallback
       setHeaderTitle('Rise of Stats');
     };
 
@@ -142,7 +137,7 @@ const AppContent: React.FC = () => {
 
 
   // -------------------------------------------------------------------
-  // LANDING PAGE / LOGIN
+  // 4. LANDING PAGE / LOGIN
   // -------------------------------------------------------------------
   if (!user && !publicSlug && !isLoading) {
     return (
@@ -157,6 +152,7 @@ const AppContent: React.FC = () => {
     );
   }
 
+  // Tabs bestimmen
   const showDashboardTabs = !isSuperAdmin || isAdminOverrideView; 
   const showAdminTab = isAdmin || isSuperAdmin; 
 
@@ -166,7 +162,7 @@ const AppContent: React.FC = () => {
         {/* HEADER */}
         <header className="mb-6 border-b border-gray-800 pb-4">
           <div className="flex items-center justify-between gap-4">
-            {/* Logo + Title */}
+            {/* Logo */}
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg">
                 <span className="font-bold text-xl text-white">KD</span>
@@ -181,7 +177,7 @@ const AppContent: React.FC = () => {
               </div>
             </div>
 
-            {/* User Status / Logout */}
+            {/* User Info */}
             <div className="flex items-center gap-4">
               {isLoading && <span className="text-xs text-gray-400">Checking login…</span>}
               {user && (
@@ -266,8 +262,9 @@ const AppContent: React.FC = () => {
           </nav>
         </header>
 
-        {/* MAIN CONTENT AREA */}
+        {/* CONTENT */}
         <main className="space-y-6">
+          
           {activeView === 'overview' && (
             <PublicOrProtectedRoute
               isPublic={isPublicView}
@@ -316,14 +313,15 @@ const AppContent: React.FC = () => {
             </PublicOrProtectedRoute>
           )}
 
-          {/* Admin Panel: Nur sichtbar für Admin/R5, wenn angemeldet */}
-          {activeView === 'admin' && user && (isSuperAdmin || isR5) && (
+          {/* Admin Panel: Sichtbar für Admin/R5, wenn eingeloggt. 
+              Durch den Fix in useEffect wird dieser View nun nicht mehr blockiert. */}
+          {activeView === 'admin' && user && (isAdmin) && (
             <ProtectedRoute>
               <AdminUserManagement />
             </ProtectedRoute>
           )}
 
-          {/* Global Chart: Nur wenn eingeloggt, approved und nicht im Admin/Public Modus */}
+          {/* Global Chart: Zeigen, wenn NICHT im Admin View */}
           {user && user.isApproved && activeView !== 'admin' && (!isPublicView || isAdminOverrideView) && (
             <div className="mt-4">
               <PowerHistoryChart />
@@ -335,7 +333,7 @@ const AppContent: React.FC = () => {
   );
 };
 
-// Helper Component for Public/Private Routing
+// Helper Component
 interface PublicOrProtectedRouteProps {
   children: React.ReactNode;
   isPublic: boolean;
@@ -351,7 +349,6 @@ const PublicOrProtectedRoute: React.FC<PublicOrProtectedRouteProps> = ({
   accessType,
   isAdminOverride,
 }) => {
-  // Wenn es öffentlich ist oder ein Admin Override vorliegt -> Direkt anzeigen
   if (isPublic || isAdminOverride) {
     if (!publicSlug && isPublic) {
       return (
@@ -362,8 +359,6 @@ const PublicOrProtectedRoute: React.FC<PublicOrProtectedRouteProps> = ({
     }
     return <>{children}</>;
   }
-
-  // Sonst normale Authentifizierung über ProtectedRoute
   return <ProtectedRoute accessType={accessType}>{children}</ProtectedRoute>;
 };
 
