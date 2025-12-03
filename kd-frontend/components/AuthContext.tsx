@@ -1,4 +1,3 @@
-// AuthContext.tsx (VOLLSTÄNDIGER CODE)
 import React, {
   createContext,
   useState,
@@ -16,6 +15,7 @@ interface User {
   isApproved: boolean;
   role: UserRole;
   governorId?: string | null;
+  kingdomId?: string | null;
   canAccessHonor?: boolean;
   canAccessAnalytics?: boolean;
   canAccessOverview?: boolean;
@@ -40,10 +40,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// 🌐 BACKEND_URL auf die neue API-Domain aktualisiert
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
-    ? 'https://api.rise-of-stats.com' // <-- KORRIGIERT
+    ? 'https://api.rise-of-stats.com'
     : 'http://localhost:4000';
 
 interface AuthProviderProps {
@@ -54,7 +53,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Load token & validate user
+  // Initialer Check beim Laden der Seite
   useEffect(() => {
     const initAuth = async () => {
       const token = localStorage.getItem('authToken');
@@ -82,6 +81,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             isApproved: !!data.isApproved,
             role: data.role as UserRole,
             governorId: data.governorId ?? null,
+            kingdomId: data.kingdomId ?? null,
             canAccessHonor: !!data.canAccessHonor,
             canAccessAnalytics: !!data.canAccessAnalytics,
             canAccessOverview: !!data.canAccessOverview,
@@ -130,6 +130,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       isApproved: !!data.user.isApproved,
       role: data.user.role as UserRole,
       governorId: data.user.governorId ?? null,
+      kingdomId: data.user.kingdomId ?? null,
       canAccessHonor: !!data.user.canAccessHonor,
       canAccessAnalytics: !!data.user.canAccessAnalytics,
       canAccessOverview: !!data.user.canAccessOverview,
@@ -199,6 +200,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isApproved: !!data.isApproved,
         role: data.role as UserRole,
         governorId: data.governorId ?? null,
+        kingdomId: data.kingdomId ?? null,
         canAccessHonor: !!data.canAccessHonor,
         canAccessAnalytics: !!data.canAccessAnalytics,
         canAccessOverview: !!data.canAccessOverview,

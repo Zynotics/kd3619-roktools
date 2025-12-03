@@ -6,7 +6,13 @@ import HonorOverviewTable from './HonorOverviewTable';
 import HonorPlayerSearch from './HonorPlayerSearch';
 import { useAuth } from './AuthContext';
 import { cleanFileName, parseGermanNumber, findColumnIndex } from '../utils';
-import type { UploadedFile, HonorPlayerInfo, PlayerHonorChange, HonorComparisonStats, PlayerHonorHistory } from '../types';
+import type {
+  UploadedFile,
+  HonorPlayerInfo,
+  PlayerHonorChange,
+  HonorComparisonStats,
+  PlayerHonorHistory,
+} from '../types';
 
 interface HonorDashboardProps {
   isAdmin: boolean;
@@ -15,9 +21,15 @@ interface HonorDashboardProps {
   isAdminOverride: boolean;
 }
 
-const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, publicSlug, isAdminOverride }) => {
+const HonorDashboard: React.FC<HonorDashboardProps> = ({
+  isAdmin,
+  backendUrl,
+  publicSlug,
+  isAdminOverride,
+}) => {
   const { user } = useAuth();
   const role = user?.role;
+  const isBasicUser = role === 'user';
   
   const isPublicView = !!publicSlug && !user; 
   const canManageFiles = isAdminOverride || (!isPublicView && (isAdmin || role === 'r4' || role === 'r5')); 
@@ -30,15 +42,20 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
 
   const [startFileId, setStartFileId] = useState<string>('');
   const [endFileId, setEndFileId] = useState<string>('');
-  const [comparisonStats, setComparisonStats] = useState<HonorComparisonStats | null>(null);
+  const [comparisonStats, setComparisonStats] =
+    useState<HonorComparisonStats | null>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [searchResults, setSearchResults] = useState<HonorPlayerInfo[] | 'not_found' | null>(null);
-  const [selectedPlayerHistory, setSelectedPlayerHistory] = useState<PlayerHonorHistory | null>(null);
+  const [searchResults, setSearchResults] = useState<
+    HonorPlayerInfo[] | 'not_found' | null
+  >(null);
+  const [selectedPlayerHistory, setSelectedPlayerHistory] =
+    useState<PlayerHonorHistory | null>(null);
     
   const userLoggedIn = !!user;
 
+  // --- Helper: Titel laden ---
   const fetchKingdomName = useCallback(async (slug: string) => {
     try {
         const res = await fetch(`${backendUrl}/api/public/kingdom/${slug}`);
@@ -49,6 +66,10 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
     } catch (e) { setKingdomName(slug.toUpperCase() + ' HONOR'); }
   }, [backendUrl]);
 
+
+  // ----------------------------------------------------
+  // Dateien laden
+  // ----------------------------------------------------
   const fetchFiles = useCallback(async () => {
     const isFetchPublic = !!publicSlug && !userLoggedIn;
     const isFetchOverride = isAdminOverride && !!publicSlug; 
@@ -100,7 +121,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
 
   useEffect(() => {
      if (endFileId && uploadedFiles.length > 0) handleCompare();
-  }, [endFileId, uploadedFiles]);
+  }, [endFileId, uploadedFiles]); // handleCompare wird unten definiert
 
   // --- Upload / Delete / Reorder ---
   const uploadUrl = `${backendUrl}/honor/upload${isAdminOverride && publicSlug ? `?slug=${publicSlug}` : ''}`;
@@ -171,6 +192,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       });
       setComparisonStats({ playerHonorChanges: changes });
   }, [startFileId, endFileId, uploadedFiles, extractHonorPlayersFromFile]);
+
 
   // --- Search Logic ---
   const honorHistories = useMemo(() => {
