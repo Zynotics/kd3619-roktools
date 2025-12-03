@@ -1,132 +1,187 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import FileUpload from './FileUpload';
-import FileList from './FileList';
-import ComparisonSection from './ComparisonSection';
-import PowerHistoryChart from './PowerHistoryChart';
-import PlayerSearch from './PlayerSearch';
-import { useAuth } from './AuthContext';
-import { cleanFileName, parseGermanNumber, findColumnIndex } from '../utils';
-import type { UploadedFile, ComparisonStats, PlayerInfo, PlayerStatChange } from '../types';
+import React, { useEffect, useRef, useMemo } from 'react';
+import type { UploadedFile } from '../types';
+import { parseGermanNumber, cleanFileName, abbreviateNumber, formatNumber, findColumnIndex } from '../utils';
+import { Card } from './Card';
 
-interface OverviewDashboardProps { isAdmin: boolean; backendUrl: string; publicSlug: string | null; isAdminOverride: boolean; }
+declare var Chart: any;
 
-const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendUrl, publicSlug, isAdminOverride }) => {
-  const { user } = useAuth();
-  const role = user?.role;
-  const isBasicUser = role === 'user';
-  const isPublicView = !!publicSlug && !user; 
-  const userLoggedIn = !!user;
+interface PowerHistoryChartProps {
+  files: UploadedFile[];
+  kingdomName?: string; // 👑 NEU
+}
 
-  const canManageFiles = isAdmin || role === 'r4' || role === 'r5'; 
-  const isMinimalView = (isPublicView || isBasicUser) && !isAdminOverride && !canManageFiles;
+const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files, kingdomName = 'Kingdom' }) => {
+  const totalPowerChartRef = useRef<HTMLCanvasElement | null>(null);
+  const troopsPowerChartRef = useRef<HTMLCanvasElement | null>(null);
+  const killPointsChartRef = useRef<HTMLCanvasElement | null>(null);
+  const deadTroopsChartRef = useRef<HTMLCanvasElement | null>(null);
 
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [kingdomName, setKingdomName] = useState<string>('Kingdom');
+  const totalPowerChartInstance = useRef<any>(null);
+  const troopsPowerChartInstance = useRef<any>(null);
+  const killPointsChartInstance = useRef<any>(null);
+  const deadTroopsChartInstance = useRef<any>(null);
 
-  // ... States ...
-  const [startFileId, setStartFileId] = useState<string>('');
-  const [endFileId, setEndFileId] = useState<string>('');
-  const [comparisonStats, setComparisonStats] = useState<ComparisonStats | null>(null);
-  const [comparisonError, setComparisonError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [searchResults, setSearchResults] = useState<PlayerStatChange[] | 'not_found' | null>(null);
-  const [selectedPlayer, setSelectedPlayer] = useState<PlayerStatChange | null>(null);
+  const chartData = useMemo(() => {
+    if (!files || !Array.isArray(files) || files.length < 2) {
+      return null;
+    }
 
-  const fetchKingdomName = useCallback(async (slug: string) => {
-      try {
-          const res = await fetch(`${backendUrl}/api/public/kingdom/${slug}`);
-          if (res.ok) { const data = await res.json(); setKingdomName(data.displayName); }
-      } catch (e) { setKingdomName(slug.toUpperCase()); }
-  }, [backendUrl]);
+    const labels = files.map(file => cleanFileName(file.name));
 
-  const fetchFiles = useCallback(async () => {
-    const shouldUsePublicEndpoint = !!publicSlug;
-    if (publicSlug) fetchKingdomName(publicSlug);
+    const totalPowerData: number[] = [];
+    const troopsPowerData: number[] = [];
+    const totalKillPointsData: number[] = [];
+    const totalDeadTroopsData: number[] = [];
 
-    try {
-      setIsLoading(true); setError(null);
-      let response: Response;
-      
-      if (shouldUsePublicEndpoint) {
-        response = await fetch(`${backendUrl}/api/public/kingdom/${publicSlug}/overview-files`);
-      } else {
-        const token = localStorage.getItem('authToken');
-        if (!token) throw new Error('Authentication token not found.');
-        response = await fetch(`${backendUrl}/overview/files-data`, { headers: { Authorization: `Bearer ${token}` } });
+    files.forEach(file => {
+      const headerMap = new Map<string, number>();
+      file.headers.forEach((h, i) => headerMap.set(h.toLowerCase(), i));
+
+      // Helper to find column index
+      const getIdx = (candidates: string[]) => findColumnIndex(file.headers, candidates);
+
+      const powerIdx = getIdx(['power', 'macht']);
+      const troopsIdx = getIdx(['troopspower', 'troops power']);
+      const kpIdx = getIdx(['total kill points', 'kill points', 'kp']);
+      const deadIdx = getIdx(['deadtroops', 'dead troops', 'dead']);
+
+      let sumPower = 0;
+      let sumTroops = 0;
+      let sumKP = 0;
+      let sumDead = 0;
+
+      file.data.forEach(row => {
+        if (powerIdx !== undefined) sumPower += parseGermanNumber(row[powerIdx]);
+        if (troopsIdx !== undefined) sumTroops += parseGermanNumber(row[troopsIdx]);
+        if (kpIdx !== undefined) sumKP += parseGermanNumber(row[kpIdx]);
+        if (deadIdx !== undefined) sumDead += parseGermanNumber(row[deadIdx]);
+      });
+
+      totalPowerData.push(sumPower);
+      troopsPowerData.push(sumTroops);
+      totalKillPointsData.push(sumKP);
+      totalDeadTroopsData.push(sumDead);
+    });
+
+    return { labels, totalPowerData, troopsPowerData, totalKillPointsData, totalDeadTroopsData };
+  }, [files]);
+
+  // Helper to create/update charts
+  const createChart = (
+    ctx: CanvasRenderingContext2D,
+    instanceRef: React.MutableRefObject<any>,
+    label: string,
+    data: number[],
+    labels: string[],
+    color: string
+  ) => {
+    if (instanceRef.current) {
+      instanceRef.current.destroy();
+    }
+    return new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label,
+          data,
+          borderColor: color,
+          backgroundColor: color.replace('1)', '0.2)').replace('0.8)', '0.2)'),
+          fill: true,
+          tension: 0.2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#9ca3af' }, grid: { display: false } },
+          y: { ticks: { color: '#9ca3af', callback: (v: any) => abbreviateNumber(v) }, grid: { color: 'rgba(255, 255, 255, 0.05)' } }
+        }
       }
-
-      if (!response.ok) throw new Error(`Failed to fetch files`);
-      const data = await response.json();
-      setUploadedFiles(data || []);
-
-      if (data.length >= 2) { setStartFileId(data[data.length-2].id); setEndFileId(data[data.length-1].id); }
-      else if (data.length === 1) { setStartFileId(data[0].id); setEndFileId(data[0].id); }
-    } catch (err: any) {
-      if (shouldUsePublicEndpoint && (err.message.includes('403') || err.message.includes('404'))) setUploadedFiles([]);
-      else setError(err.message);
-    } finally { setIsLoading(false); }
-  }, [backendUrl, publicSlug, userLoggedIn, isAdminOverride, fetchKingdomName]);
-
-  useEffect(() => { fetchFiles(); }, [fetchFiles]);
-
-  // ... Actions ...
-  const handleUploadComplete = () => fetchFiles();
-  const uploadUrl = `${backendUrl}/overview/upload${isAdminOverride && publicSlug ? `?slug=${publicSlug}` : ''}`;
-  const handleDeleteFile = async (id: string) => {
-    if (!canManageFiles) return;
-    try {
-      const token = localStorage.getItem('authToken');
-      await fetch(`${backendUrl}/overview/files/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-      setUploadedFiles(p => p.filter(f => f.id !== id));
-    } catch (err) {}
-  };
-  const handleReorderFiles = async (reorderedFiles: UploadedFile[]) => {
-    if (!canManageFiles) return;
-    setUploadedFiles(reorderedFiles);
-    try {
-      const token = localStorage.getItem('authToken');
-      const order = reorderedFiles.map(f => f.id);
-      await fetch(`${backendUrl}/overview/files/reorder`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ order }) });
-    } catch (err) {}
+    });
   };
 
-  // ... Parsing Logic (Dummy) ...
-  const parseFileToPlayers = (f: any) => [];
-  const handleCompare = () => {}; 
-  const handleSearch = () => {};
-  const handleClearSearch = () => {};
-  const handleSelectPlayer = (p: any) => {};
+  useEffect(() => {
+    if (!chartData) return;
 
-  if (isLoading) return <div>Loading...</div>;
+    if (totalPowerChartRef.current) {
+      totalPowerChartInstance.current = createChart(
+        totalPowerChartRef.current.getContext('2d')!,
+        totalPowerChartInstance,
+        'Total Power',
+        chartData.totalPowerData,
+        chartData.labels,
+        'rgba(59, 130, 246, 0.8)'
+      );
+    }
+    if (troopsPowerChartRef.current) {
+      troopsPowerChartInstance.current = createChart(
+        troopsPowerChartRef.current.getContext('2d')!,
+        troopsPowerChartInstance,
+        'Troops Power',
+        chartData.troopsPowerData,
+        chartData.labels,
+        'rgba(16, 185, 129, 0.8)'
+      );
+    }
+    if (killPointsChartRef.current) {
+      killPointsChartInstance.current = createChart(
+        killPointsChartRef.current.getContext('2d')!,
+        killPointsChartInstance,
+        'Kill Points',
+        chartData.totalKillPointsData,
+        chartData.labels,
+        'rgba(239, 68, 68, 0.8)'
+      );
+    }
+    if (deadTroopsChartRef.current) {
+      deadTroopsChartInstance.current = createChart(
+        deadTroopsChartRef.current.getContext('2d')!,
+        deadTroopsChartInstance,
+        'Dead Troops',
+        chartData.totalDeadTroopsData,
+        chartData.labels,
+        'rgba(245, 158, 11, 0.8)'
+      );
+    }
 
-  if (isMinimalView) {
-    return (
-      <div className="space-y-8">
-        <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-          <h3 className="text-lg font-semibold text-gray-200 mb-4">{kingdomName} Power History</h3>
-          <PowerHistoryChart files={uploadedFiles} kingdomName={kingdomName} />
-        </div>
-      </div>
-    );
-  }
+    return () => {
+      totalPowerChartInstance.current?.destroy();
+      troopsPowerChartInstance.current?.destroy();
+      killPointsChartInstance.current?.destroy();
+      deadTroopsChartInstance.current?.destroy();
+    };
+  }, [chartData]);
+
+  if (!chartData) return null;
 
   return (
     <div className="space-y-8">
-      {canManageFiles && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg"><FileUpload uploadUrl={uploadUrl} onUploadComplete={handleUploadComplete} /></div>
-          <div><FileList files={uploadedFiles} onDeleteFile={handleDeleteFile} onReorder={handleReorderFiles} /></div>
-        </div>
-      )}
-
-      <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-         {/* 👑 Chart Titel in der Komponente ist jetzt dynamisch */}
-         <PowerHistoryChart files={uploadedFiles} kingdomName={kingdomName} />
+      {/* 👑 Dynamischer Titel */}
+      <h3 className="text-lg font-semibold text-gray-200 mb-4">{kingdomName} Power Analytics</h3>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card hover className="p-4">
+          <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">Total Power</h4>
+          <div className="relative h-64"><canvas ref={totalPowerChartRef}></canvas></div>
+        </Card>
+        <Card hover className="p-4">
+          <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">Troops Power</h4>
+          <div className="relative h-64"><canvas ref={troopsPowerChartRef}></canvas></div>
+        </Card>
+        <Card hover className="p-4">
+          <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">Kill Points</h4>
+          <div className="relative h-64"><canvas ref={killPointsChartRef}></canvas></div>
+        </Card>
+        <Card hover className="p-4">
+          <h4 className="text-md font-semibold text-gray-300 mb-3 text-center">Dead Troops</h4>
+          <div className="relative h-64"><canvas ref={deadTroopsChartRef}></canvas></div>
+        </Card>
       </div>
-      {/* Rest... */}
     </div>
   );
 };
-export default OverviewDashboard;
+
+export default PowerHistoryChart;
