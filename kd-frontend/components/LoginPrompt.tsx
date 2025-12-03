@@ -4,7 +4,6 @@ import { Card } from './Card';
 
 type GovIdStatus = 'idle' | 'checking' | 'valid' | 'invalid';
 
-// Sicherstellen, dass die URL korrekt ist
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
     ? 'https://api.rise-of-stats.com'
@@ -36,7 +35,7 @@ const LoginPrompt: React.FC = () => {
     }
 
     setGovIdStatus('checking');
-    setGovIdMessage('Checking Governor ID against uploaded data...');
+    setGovIdMessage('Checking availability...');
 
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/check-gov-id`, {
@@ -50,16 +49,13 @@ const LoginPrompt: React.FC = () => {
         throw new Error(data.error || 'Server error during ID validation');
       }
 
-      if (data.exists) {
-        setGovIdStatus('valid');
-        setGovIdMessage(
-          'Governor ID found in data. Registration is allowed.'
-        );
-      } else {
+      // Wenn isTaken true ist, ist die ID bereits vergeben -> Fehler
+      if (data.isTaken) {
         setGovIdStatus('invalid');
-        setGovIdMessage(
-          'Governor ID not found in current data. Registration is not allowed.'
-        );
+        setGovIdMessage('This Governor ID is already registered by another user.');
+      } else {
+        setGovIdStatus('valid');
+        setGovIdMessage('Governor ID is available for registration.');
       }
     } catch (err: any) {
       setGovIdStatus('invalid');
@@ -86,20 +82,17 @@ const LoginPrompt: React.FC = () => {
     try {
       if (isLogin) {
         await login(username, password);
-        // Successful login handled by AuthContext redirect automatically
+        // Successful login handled by AuthContext redirect
       } else {
         // 1. Registrieren
-        await register(email, username, password, governorId);
+        const result = await register(email, username, password, governorId);
+        setSuccessMessage(result.message);
         
-        // 2. ✨ AUTO-LOGIN direkt nach Registrierung
-        // Da kein Fehler geworfen wurde, war die Registrierung erfolgreich.
-        // Wir loggen den User sofort mit den eben eingegebenen Daten ein.
+        // 2. Auto-Login nach erfolgreicher Registrierung
         await login(username, password);
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.');
-      // Bei Fehler im Login nach Registrierung bleiben wir im Formular,
-      // aber der User ist theoretisch registriert.
     } finally {
       setIsLoading(false);
     }
@@ -226,8 +219,7 @@ const LoginPrompt: React.FC = () => {
               </p>
             )}
             <p className="mt-1 text-xs text-gray-500">
-              *Your Gov ID must be present in the uploaded Kingdom data for
-              approval.
+              *Any valid Governor ID is accepted for new accounts.
             </p>
           </div>
         )}
@@ -283,7 +275,7 @@ const LoginPrompt: React.FC = () => {
           {isLoading
             ? isLogin
               ? 'Signing in...'
-              : 'Creating account & Signing in...'
+              : 'Creating account & signing in...'
             : isLogin
             ? 'Sign In'
             : 'Register'}
