@@ -24,7 +24,7 @@ const AppContent: React.FC = () => {
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
 
-  // Rollen-Definitionen
+  // Rollen
   const isSuperAdmin = user?.role === 'admin';
   const isR5 = user?.role === 'r5';
   const isAdmin = isSuperAdmin || isR5; // R5 hat Admin-Rechte im eigenen KD
@@ -33,11 +33,52 @@ const AppContent: React.FC = () => {
   const isPublicView = !!publicSlug && !user;
   const isAdminOverrideView = isSuperAdmin && !!publicSlug; // Admin schaut sich spezifisches KD an
 
-  // 1. Initiale Routing-Logik
+  // -------------------------------------------------------------------
+  // 🔄 AUTOMATISCHE WEITERLEITUNG AUF KINGDOM SLUG NACH LOGIN
+  // -------------------------------------------------------------------
+  useEffect(() => {
+    const redirectToSlug = async () => {
+        // Nur weiterleiten, wenn:
+        // 1. User eingeloggt ist
+        // 2. User ein Kingdom hat (R5/R4)
+        // 3. Kein Slug in der URL ist (User ist auf der Root-Seite)
+        // 4. User KEIN Superadmin ist (Superadmin bleibt auf Root/Admin-Panel)
+        if (user && user.kingdomId && !publicSlug && !isSuperAdmin) {
+            try {
+                const token = localStorage.getItem('authToken');
+                // Wir nutzen den Admin-Endpoint (gescoped für R5/R4), um den Slug zu holen
+                const res = await fetch(`${BACKEND_URL}/api/admin/kingdoms`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const kingdoms = await res.json();
+                    // R5/R4 sollten genau 1 Kingdom sehen
+                    if (kingdoms && kingdoms.length > 0) {
+                        const mySlug = kingdoms[0].slug;
+                        if (mySlug) {
+                            // Harte Weiterleitung auf die Slug-URL
+                            const newUrl = new URL(window.location.href);
+                            newUrl.searchParams.set('slug', mySlug);
+                            window.location.href = newUrl.toString();
+                        }
+                    }
+                }
+            } catch (e) { console.error('Redirect failed', e); }
+        }
+    };
+    
+    if (!isLoading) {
+        redirectToSlug();
+    }
+  }, [user, isLoading, publicSlug, isSuperAdmin]);
+
+
+  // -------------------------------------------------------------------
+  // VIEW LOGIC
+  // -------------------------------------------------------------------
   useEffect(() => {
     if (publicSlug) {
       // Wenn ein Link da ist, zeigen wir standardmäßig die Overview
-      // (verhindert, dass man im Admin-Panel "hängen bleibt" wenn man einen Link klickt)
       if (activeView === 'admin') setActiveView('overview');
     } else if (isSuperAdmin && !isAdminOverrideView && activeView !== 'admin') {
       // Wenn Superadmin OHNE Link eingeloggt ist -> Ab zum Admin Panel
@@ -45,7 +86,9 @@ const AppContent: React.FC = () => {
     }
   }, [publicSlug, isSuperAdmin, isAdminOverrideView, activeView]);
 
-  // 2. Dynamischer Header Titel
+  // -------------------------------------------------------------------
+  // DYNAMISCHER HEADER TITEL
+  // -------------------------------------------------------------------
   useEffect(() => {
     const fetchTitle = async () => {
       // Fall A: Public Link oder Admin Override (wir schauen ein spezifisches KD an)
@@ -65,10 +108,10 @@ const AppContent: React.FC = () => {
       }
 
       // Fall B: Eingeloggter R5 oder R4 (sehen ihr eigenes Kingdom)
+      // Falls Redirect noch nicht gegriffen hat, zeigen wir trotzdem den Namen an
       if (user && (user.role === 'r5' || user.role === 'r4') && user.kingdomId) {
         try {
           const token = localStorage.getItem('authToken');
-          // Wir nutzen den Admin-Endpoint, der für R5 gescoped ist und nur das eigene KD liefert
           const res = await fetch(`${BACKEND_URL}/api/admin/kingdoms`, {
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -97,23 +140,25 @@ const AppContent: React.FC = () => {
     fetchTitle();
   }, [publicSlug, user, isSuperAdmin]);
 
-  // 3. Landing Page (Nicht eingeloggt, kein Link)
+
+  // -------------------------------------------------------------------
+  // LANDING PAGE / LOGIN
+  // -------------------------------------------------------------------
   if (!user && !publicSlug && !isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <LoginPrompt />
           <div className="mt-8 text-center text-gray-500">
-            <p>Or access a Kingdom directly using a public link (e.g. ?slug=kingdom-name).</p>
+            <p>Or access a Kingdom directly using a public link.</p>
           </div>
         </div>
       </div>
     );
   }
 
-  // Bestimmen, welche Tabs sichtbar sind
-  const showDashboardTabs = !isSuperAdmin || isAdminOverrideView; // Superadmin sieht Tabs nur im Override-Modus
-  const showAdminTab = isAdmin || isSuperAdmin; // Admin-Tab für SA und R5
+  const showDashboardTabs = !isSuperAdmin || isAdminOverrideView; 
+  const showAdminTab = isAdmin || isSuperAdmin; 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
@@ -139,7 +184,7 @@ const AppContent: React.FC = () => {
             {/* User Status / Logout */}
             <div className="flex items-center gap-4">
               {isLoading && <span className="text-xs text-gray-400">Checking login…</span>}
-              {user ? (
+              {user && (
                 <>
                   <div className="text-right">
                     <div className="text-sm font-semibold text-white">
@@ -161,11 +206,11 @@ const AppContent: React.FC = () => {
                     Log out
                   </button>
                 </>
-              ) : null}
+              )}
             </div>
           </div>
 
-          {/* TOP NAVIGATION */}
+          {/* NAVIGATION */}
           <nav className="mt-4">
             <div className="flex flex-wrap gap-2">
               {showDashboardTabs && (
@@ -223,8 +268,6 @@ const AppContent: React.FC = () => {
 
         {/* MAIN CONTENT AREA */}
         <main className="space-y-6">
-          {/* View Switching Logic */}
-
           {activeView === 'overview' && (
             <PublicOrProtectedRoute
               isPublic={isPublicView}
