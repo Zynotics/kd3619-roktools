@@ -1,4 +1,3 @@
-// HonorHistoryChart.tsx - KORRIGIERT
 import React, { useEffect, useRef, useMemo } from 'react';
 import type { UploadedFile } from '../types';
 import { parseGermanNumber, cleanFileName, abbreviateNumber, formatNumber, findColumnIndex } from '../utils';
@@ -8,14 +7,14 @@ declare var Chart: any;
 
 interface HonorHistoryChartProps {
     files: UploadedFile[];
+    kingdomName?: string; // 👑 NEU
 }
 
-const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
+const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files, kingdomName = 'Kingdom' }) => {
     const chartRef = useRef<HTMLCanvasElement>(null);
     const chartInstanceRef = useRef<any>(null);
 
     const chartData = useMemo(() => {
-        // NULL/UNDEFINED CHECK HINZUGEFÜGT
         if (!files || !Array.isArray(files) || files.length < 1) return null;
         
         const labels = files.map(file => cleanFileName(file.name));
@@ -35,8 +34,7 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
 
         return {
             labels,
-            datasets: [{
-                label: 'Total Honor Points',
+            datasets: [{\n                label: 'Total Honor Points',
                 data: totalHonorData,
                 borderColor: 'rgba(250, 204, 21, 0.8)', // yellow-400
                 backgroundColor: 'rgba(250, 204, 21, 0.2)',
@@ -47,18 +45,12 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
     }, [files]);
 
     useEffect(() => {
-        if (!chartData || !chartRef.current) {
-            if (chartInstanceRef.current) {
-                chartInstanceRef.current.destroy();
-                chartInstanceRef.current = null;
-            }
-            return;
-        }
+        if (!chartRef.current || !chartData) return;
 
         if (chartInstanceRef.current) {
             chartInstanceRef.current.destroy();
         }
-        
+
         const ctx = chartRef.current.getContext('2d');
         if (!ctx) return;
 
@@ -69,7 +61,7 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'top', labels: { color: '#d1d5db' } },
+                    legend: { labels: { color: '#e5e7eb' } },
                     tooltip: {
                         callbacks: {
                             label: (context: any) => `Total Honor: ${formatNumber(context.parsed.y)}`
@@ -91,11 +83,11 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
         };
     }, [chartData]);
 
-    // NULL/UNDEFINED CHECK HINZUGEFÜGT
+    // Anzeige wenn keine Daten da sind (mit dynamischem Namen)
     if (!files || !Array.isArray(files) || files.length < 1) {
         return (
             <Card gradient className="p-6 text-center text-gray-400">
-                <h3 className="text-lg font-semibold text-gray-200 mb-2">KD 3619 Honor History</h3>
+                <h3 className="text-lg font-semibold text-gray-200 mb-2">{kingdomName} Honor History</h3>
                 <p>Upload at least one file to see the honor progression.</p>
             </Card>
         );
@@ -103,7 +95,7 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
     
     return (
         <Card gradient className="p-6">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">KD 3619 Honor History</h3>
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">{kingdomName} Honor History</h3>
             <div className="relative h-72">
                 <canvas ref={chartRef}></canvas>
             </div>
