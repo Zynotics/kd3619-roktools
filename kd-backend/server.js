@@ -159,27 +159,36 @@ const overviewUpload = multer({
   storage: overviewStorage,
   fileFilter: (req, file, cb) => {
     if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
-    else cb(new Error('Nur Excel/CSV'), false);
-  }, limits: { fileSize: 10 * 1024 * 1024 },
+    else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
+  },
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 const honorUpload = multer({
   storage: honorStorage,
   fileFilter: (req, file, cb) => {
     if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
-    else cb(new Error('Nur Excel/CSV'), false);
-  }, limits: { fileSize: 10 * 1024 * 1024 },
+    else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
+  },
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
 
 // ==================== AUTH-MIDDLEWARES ====================
 
+function getKingdomId(req) {
+  return req.user.role === 'admin' ? null : req.user.kingdomId;
+}
+
 function authenticateToken(req, res, next) {
   const header = req.headers['authorization'];
   const token = header && header.split(' ')[1];
+
   if (!token) return res.status(401).json({ error: 'Kein Token vorhanden' });
 
   jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) return res.status(403).json({ error: 'Ungültiger Token' });
+    
+    // Hole kingdom_id aus der DB für den aktuellsten Zustand
     const dbUser = await get('SELECT role, kingdom_id FROM users WHERE id = $1', [user.id]);
     if (!dbUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
     
@@ -202,23 +211,38 @@ async function requireAdmin(req, res, next) {
 app.post('/api/auth/check-gov-id', async (req, res) => {
   try {
     const { governorId } = req.body;
-    if (!governorId || !String(governorId).trim()) return res.status(400).json({ exists: false, error: 'Gov ID fehlt' });
+    if (!governorId || !String(governorId).trim()) {
+      return res.status(400).json({ exists: false, error: 'Gov ID wird benötigt' });
+    }
+    // Prüft nur, ob ID bereits von einem User registriert ist
     const isTaken = await userGovIdExists(governorId);
     res.json({ isTaken });
-  } catch (err) { res.status(500).json({ error: 'Check failed' }); }
+  } catch (err) {
+    console.error('check-gov-id error:', err);
+    res.status(500).json({ error: 'Gov ID check failed' });
+  }
 });
 
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, username, password, governorId } = req.body;
-    if (!email || !username || !password || !governorId) return res.status(400).json({ error: 'Fehlende Felder' });
-    if (password.length < 6) return res.status(400).json({ error: 'Passwort zu kurz' });
-    
+
+    if (!email || !username || !password || !governorId) {
+      return res.status(400).json({ error: 'Alle Felder werden benötigt' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
+    }
     const normalizedGovId = String(governorId).trim();
-    if (await userGovIdExists(normalizedGovId)) return res.status(400).json({ error: 'Gov ID bereits registriert' });
+
+    if (await userGovIdExists(normalizedGovId)) {
+      return res.status(400).json({ error: 'Für diese Gov ID existiert bereits ein Account.' });
+    }
 
     const existingUser = await get('SELECT id FROM users WHERE email = $1 OR username = $2 LIMIT 1', [email, username]);
-    if (existingUser) return res.status(400).json({ error: 'Email/Username vergeben' });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email oder Benutzername ist bereits vergeben' });
+    }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = 'user-' + Date.now();
@@ -228,73 +252,92 @@ app.post('/api/auth/register', async (req, res) => {
       [userId, email, username, passwordHash, false, 'user', normalizedGovId, false, false, false]
     );
 
-    res.json({ message: 'Registrierung erfolgreich.', user: { id: userId, email, username, isApproved: false, role: 'user', governorId: normalizedGovId } });
-  } catch (error) { res.status(500).json({ error: 'Fehler bei Registrierung' }); }
+    return res.json({
+      message: 'Registrierung erfolgreich.',
+      user: { id: userId, email, username, isApproved: false, role: 'user', governorId: normalizedGovId }
+    });
+  } catch (error) {
+    console.error('❌ Error during registration:', error);
+    return res.status(500).json({ error: 'Registrierung fehlgeschlagen' });
+  }
 });
 
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Daten fehlen' });
+    if (!username || !password) return res.status(400).json({ error: 'Benutzername und Passwort benötigt' });
 
     const user = await get('SELECT * FROM users WHERE username = $1', [username]);
-    if (!user) return res.status(401).json({ error: 'Ungültig' });
+    if (!user) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
 
     const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) return res.status(401).json({ error: 'Ungültig' });
+    if (!validPassword) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
 
     const tokenPayload = {
-      id: user.id, username: user.username, role: user.role, isApproved: !!user.is_approved,
-      governorId: user.governor_id || null, kingdomId: user.kingdom_id || null, 
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      isApproved: !!user.is_approved,
+      governorId: user.governor_id || null,
+      kingdomId: user.kingdom_id || null, 
     };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ token, user: { ...tokenPayload, email: user.email } });
-  } catch (error) { res.status(500).json({ error: 'Login fehlgeschlagen' }); }
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login fehlgeschlagen' });
+  }
 });
 
 app.get('/api/auth/validate', authenticateToken, async (req, res) => {
   try {
     const user = await get('SELECT * FROM users WHERE id = $1', [req.user.id]);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
 
     res.json({
-      id: user.id, email: user.email, username: user.username, isApproved: !!user.is_approved, role: user.role,
-      governorId: user.governor_id || null, canAccessHonor: !!user.can_access_honor, canAccessAnalytics: !!user.can_access_analytics,
-      canAccessOverview: !!user.can_access_overview, kingdomId: user.kingdom_id || null, 
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      isApproved: !!user.is_approved,
+      role: user.role,
+      governorId: user.governor_id || null,
+      canAccessHonor: !!user.can_access_honor,
+      canAccessAnalytics: !!user.can_access_analytics,
+      canAccessOverview: !!user.can_access_overview,
+      kingdomId: user.kingdom_id || null, 
     });
-  } catch (err) { res.status(500).json({ error: 'Validierung fehlgeschlagen' }); }
+  } catch (err) {
+    res.status(500).json({ error: 'Token-Validierung fehlgeschlagen' });
+  }
 });
 
-// ==================== ADMIN ENDPOINTS (User Management) ====================
+// ==================== ADMIN ENDPOINTS (Users) ====================
 
 app.post('/api/admin/create-admin', async (req, res) => {
   try {
-    const hash = bcrypt.hashSync('*3619rocks!', 10);
+    const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
     await query(
       `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id) 
        VALUES ($1,$2,$3,$4,$5,$6,$7)
        ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash`,
-      ['admin-001', 'admin@kd3619.com', 'Stadmin', hash, true, 'admin', null]
+      ['admin-001', 'admin@kd3619.com', 'Stadmin', adminPasswordHash, true, 'admin', null]
     );
-    res.json({ message: 'Admin created' });
-  } catch (e) { res.status(500).json({ error: 'Error creating admin' }); }
+    res.json({ message: 'Admin user created successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create admin user' });
+  }
 });
 
-// 🚩 GEÄNDERT: Strikte Trennung von Admin und R5/R4
 app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     let whereClause = '';
     const params = [];
+    const userKingdomId = getKingdomId(req);
     
-    // Wenn NICHT Admin, MUSS kingdom_id gefiltert werden
-    if (req.user.role !== 'admin') {
-        if (!req.user.kingdomId) {
-             // Sicherheitsnetz: R5 ohne Kingdom darf niemanden sehen
-             return res.json([]);
-        }
+    if (userKingdomId) {
         whereClause = 'WHERE kingdom_id = $1';
-        params.push(req.user.kingdomId);
+        params.push(userKingdomId);
     }
     
     const users = await all(
@@ -302,38 +345,52 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
     );
 
     res.json(users.map((user) => ({
-        id: user.id, email: user.email, username: user.username, isApproved: !!user.is_approved, role: user.role,
-        createdAt: user.created_at, kingdomId: user.kingdom_id || null, governorId: user.governor_id || null,
-        canAccessHonor: !!user.can_access_honor, canAccessAnalytics: !!user.can_access_analytics, canAccessOverview: !!user.can_access_overview,
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        isApproved: !!user.is_approved,
+        role: user.role,
+        createdAt: user.created_at,
+        kingdomId: user.kingdom_id || null, 
+        governorId: user.governor_id || null,
+        canAccessHonor: !!user.can_access_honor,
+        canAccessAnalytics: !!user.can_access_analytics,
+        canAccessOverview: !!user.can_access_overview,
     })));
-  } catch (error) { res.status(500).json({ error: 'Error fetching users' }); }
+  } catch (error) {
+    res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
+  }
 });
 
 app.post('/api/admin/users/approve', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { userId, approved } = req.body;
-    if (!userId || typeof approved !== 'boolean') return res.status(400).json({ error: 'Invalid input' });
+    const currentUserKingdomId = getKingdomId(req);
+    const currentUserRole = req.user.role;
 
-    // Scoping Check
-    if (req.user.role !== 'admin') {
+    if (!userId || typeof approved !== 'boolean') return res.status(400).json({ error: 'Ungültige Eingabe' });
+    
+    if (currentUserKingdomId) {
         const target = await get('SELECT kingdom_id, role FROM users WHERE id = $1', [userId]);
-        if (!target || target.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden: User not in your kingdom' });
-        if (target.role === 'admin') return res.status(403).json({ error: 'Forbidden: Cannot manage admins' });
+        if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Zugriff verweigert' });
+        if (target.role === 'admin') return res.status(403).json({ error: 'Kein Zugriff auf Admin' });
     }
 
     await query('UPDATE users SET is_approved = $1 WHERE id = $2', [approved, userId]);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: 'Error' }); }
+  } catch (error) {
+    res.status(500).json({ error: 'Interner Server Fehler' });
+  }
 });
 
 app.post('/api/admin/users/access', authenticateToken, requireAdmin, async (req, res) => {
     try {
       const { userId, canAccessHonor, canAccessAnalytics, canAccessOverview } = req.body;
+      const currentUserKingdomId = getKingdomId(req);
       
-      if (req.user.role !== 'admin') {
-          const target = await get('SELECT kingdom_id, role FROM users WHERE id = $1', [userId]);
-          if (!target || target.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
-          if (target.role === 'admin') return res.status(403).json({ error: 'Forbidden' });
+      if (currentUserKingdomId) {
+        const target = await get('SELECT kingdom_id, role FROM users WHERE id = $1', [userId]);
+        if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Zugriff verweigert' });
       }
       
       await query(`UPDATE users SET can_access_honor=$1, can_access_analytics=$2, can_access_overview=$3 WHERE id=$4`, [!!canAccessHonor, !!canAccessAnalytics, !!canAccessOverview, userId]);
@@ -345,26 +402,26 @@ app.post('/api/admin/users/role', authenticateToken, requireAdmin, async (req, r
     try {
       const { userId, role } = req.body;
       const currentUserRole = req.user.role;
+      const currentUserKingdomId = getKingdomId(req);
 
-      // R5 darf nur bestimmte Rollen setzen
       if (currentUserRole === 'r5' && !['user', 'r4', 'r5'].includes(role)) {
           return res.status(403).json({ error: 'R5 darf nur user/r4/r5 vergeben.' });
       }
 
-      // Scoping Check
-      if (currentUserRole !== 'admin') {
+      if (currentUserKingdomId) {
           const target = await get('SELECT kingdom_id, role FROM users WHERE id = $1', [userId]);
-          if (!target || target.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
-          if (target.role === 'admin') return res.status(403).json({ error: 'Forbidden' });
+          if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Zugriff verweigert' });
+          if (currentUserRole === 'r5' && target.role === 'admin') return res.status(403).json({ error: 'Kein Zugriff auf Admin.' });
       }
 
       let sql = 'UPDATE users SET role = $1 WHERE id = $2';
       let p = [role, userId];
       
-      // Wenn R5 eine Rolle vergibt, sicherstellen, dass kingdom_id gesetzt bleibt/wird
-      if (currentUserRole !== 'admin') {
+      // Wenn R5/Admin eine Rolle (nicht-admin) vergibt, sicherstellen, dass kingdom_id gesetzt bleibt/wird
+      if (role === 'user' || role === 'r4' || (role === 'r5' && currentUserRole !== 'admin')) {
           sql = 'UPDATE users SET role = $1, kingdom_id = $3 WHERE id = $2';
-          p = [role, userId, req.user.kingdomId];
+          const targetK = currentUserKingdomId || (await get('SELECT kingdom_id FROM users WHERE id = $1', [userId]))?.kingdom_id;
+          p = [role, userId, targetK];
       }
       
       await query(sql, p);
@@ -375,10 +432,12 @@ app.post('/api/admin/users/role', authenticateToken, requireAdmin, async (req, r
 app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const userId = req.params.id;
-        if (req.user.role !== 'admin') {
+        const currentUserKingdomId = getKingdomId(req);
+
+        if (currentUserKingdomId) {
             const target = await get('SELECT kingdom_id, role FROM users WHERE id = $1', [userId]);
-            if (!target || target.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
-            if (target.role === 'admin' || target.role === 'r5') return res.status(403).json({ error: 'R5 cannot delete Admin or R5' });
+            if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Zugriff verweigert' });
+            if (req.user.role === 'r5' && (target.role === 'r5' || target.role === 'admin')) return res.status(403).json({ error: 'Kein Zugriff' });
         }
         await query('DELETE FROM users WHERE id = $1', [userId]);
         res.json({ success: true });
@@ -391,13 +450,8 @@ app.get('/api/admin/kingdoms', authenticateToken, requireAdmin, async (req, res)
   try {
       let where = '';
       const p = [];
-      
-      // Wenn NICHT Admin, filtere ZWINGEND nach eigenem Kingdom
-      if (req.user.role !== 'admin') {
-          if (!req.user.kingdomId) return res.json([]);
-          where = 'WHERE k.id = $1';
-          p.push(req.user.kingdomId);
-      }
+      const kId = getKingdomId(req);
+      if (kId) { where = 'WHERE k.id = $1'; p.push(kId); }
       
       const kingdoms = await all(`
         SELECT k.id, k.display_name, k.slug, k.rok_identifier, k.status, k.plan, k.created_at, k.updated_at, k.owner_user_id, u.username AS owner_username, u.email AS owner_email 
@@ -425,7 +479,7 @@ app.post('/api/admin/kingdoms/:id/assign-r5', authenticateToken, requireAdmin, a
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
     try {
         await assignR5(req.body.r5UserId, req.params.id);
-        res.json({ success: true });
+        res.json({ success: true, message: `R5 zugewiesen.` });
     } catch(e) { res.status(500).json({error: e.message}); }
 });
 
@@ -469,11 +523,11 @@ app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
     res.json(rows.map(r => ({...r, headers: JSON.parse(r.headers||'[]'), data: JSON.parse(r.data||'[]')})));
 });
 
+
 // ==================== AUTH DATA (Overview/Honor) ====================
 
 app.get('/overview/files-data', authenticateToken, async (req, res) => {
     const { role, kingdomId } = req.user;
-    // Admin darf Default sehen, alle anderen müssen Kingdom haben
     const kId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
     if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
     
@@ -483,9 +537,9 @@ app.get('/overview/files-data', authenticateToken, async (req, res) => {
 
 app.post('/overview/upload', authenticateToken, overviewUpload.single('file'), async (req, res) => {
     const { role, kingdomId, id: userId } = req.user;
-    if (role !== 'admin' && role !== 'r5' && role !== 'r4') return res.status(403).json({ error: 'Forbidden' });
+    if (!['admin','r5','r4'].includes(role)) return res.status(403).json({ error: 'Forbidden' });
     
-    // Admin Override Logic
+    // 👑 ADMIN OVERRIDE LOGIC
     let targetK = kingdomId;
     if (role === 'admin' && req.query.slug) {
         const k = await findKingdomBySlug(req.query.slug);
@@ -493,7 +547,8 @@ app.post('/overview/upload', authenticateToken, overviewUpload.single('file'), a
     }
     const finalK = targetK || (role === 'admin' ? 'kdm-default' : null);
     
-    if (!finalK || !req.file) return res.status(400).json({ error: 'Error' });
+    if (!finalK) return res.status(403).json({ error: 'Kein Ziel-Königreich' });
+    if (!req.file) return res.status(400).json({ error: 'No file' });
 
     try {
         const { headers, data } = await parseExcel(req.file.path);
@@ -507,29 +562,23 @@ app.post('/overview/upload', authenticateToken, overviewUpload.single('file'), a
 });
 
 app.delete('/overview/files/:id', authenticateToken, async (req, res) => {
-    const { role, kingdomId } = req.user;
-    if (role !== 'admin' && role !== 'r5' && role !== 'r4') return res.status(403).json({ error: 'Forbidden' });
+    const f = await get('SELECT kingdom_id, path FROM overview_files WHERE id=$1', [req.params.id]);
+    if (!f) return res.status(404).json({ error: 'Not found' });
     
-    const file = await get('SELECT kingdom_id, path FROM overview_files WHERE id=$1', [req.params.id]);
-    if (!file) return res.status(404).json({ error: 'Not found' });
-    
-    if (role !== 'admin' && file.kingdom_id !== kingdomId) return res.status(403).json({ error: 'Forbidden' });
+    if (req.user.role !== 'admin' && f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
 
-    if (file.path && fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
     await query('DELETE FROM overview_files WHERE id=$1', [req.params.id]);
     res.json({ success: true });
 });
 
 app.post('/overview/files/reorder', authenticateToken, async (req, res) => {
-    const { role, kingdomId } = req.user;
-    if (role !== 'admin' && role !== 'r5' && role !== 'r4') return res.status(403).json({ error: 'Forbidden' });
-    
     const { order } = req.body;
-    if (!order || !Array.isArray(order)) return res.status(400).json({ error: 'Invalid' });
+    if (!order || !Array.isArray(order) || order.length === 0) return res.status(400).json({ error: 'Invalid' });
     
-    if (order.length > 0 && role !== 'admin') {
+    if (order.length > 0 && req.user.role !== 'admin') {
         const f = await get('SELECT kingdom_id FROM overview_files WHERE id=$1', [order[0]]);
-        if (!f || f.kingdom_id !== kingdomId) return res.status(403).json({ error: 'Forbidden' });
+        if (!f || f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
     }
 
     for (let i = 0; i < order.length; i++) {
@@ -549,7 +598,7 @@ app.get('/honor/files-data', authenticateToken, async (req, res) => {
 
 app.post('/honor/upload', authenticateToken, honorUpload.single('file'), async (req, res) => {
     const { role, kingdomId, id: userId } = req.user;
-    if (role !== 'admin' && role !== 'r5' && role !== 'r4') return res.status(403).json({ error: 'Forbidden' });
+    if (!['admin','r5','r4'].includes(role)) return res.status(403).json({ error: 'Forbidden' });
     
     let targetK = kingdomId;
     if (role === 'admin' && req.query.slug) {
@@ -557,7 +606,6 @@ app.post('/honor/upload', authenticateToken, honorUpload.single('file'), async (
         if (k) targetK = k.id;
     }
     const finalK = targetK || (role === 'admin' ? 'kdm-default' : null);
-    
     if (!finalK || !req.file) return res.status(400).json({ error: 'Error' });
 
     try {
@@ -572,57 +620,33 @@ app.post('/honor/upload', authenticateToken, honorUpload.single('file'), async (
 });
 
 app.delete('/honor/files/:id', authenticateToken, async (req, res) => {
-    const { role, kingdomId } = req.user;
-    if (role !== 'admin' && role !== 'r5' && role !== 'r4') return res.status(403).json({ error: 'Forbidden' });
-    
-    const file = await get('SELECT kingdom_id, path FROM honor_files WHERE id=$1', [req.params.id]);
-    if (!file) return res.status(404).json({ error: 'Not found' });
-    if (role !== 'admin' && file.kingdom_id !== kingdomId) return res.status(403).json({ error: 'Forbidden' });
+    const f = await get('SELECT kingdom_id, path FROM honor_files WHERE id=$1', [req.params.id]);
+    if (!f) return res.status(404).json({ error: 'Not found' });
+    if (req.user.role !== 'admin' && f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
 
-    if (file.path && fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
     await query('DELETE FROM honor_files WHERE id=$1', [req.params.id]);
     res.json({ success: true });
 });
 
 app.post('/honor/files/reorder', authenticateToken, async (req, res) => {
-    const { role, kingdomId } = req.user;
-    if (role !== 'admin' && role !== 'r5' && role !== 'r4') return res.status(403).json({ error: 'Forbidden' });
-    
     const { order } = req.body;
-    if (!order || !Array.isArray(order)) return res.status(400).json({ error: 'Invalid' });
-
-    if (order.length > 0 && role !== 'admin') {
+    if (!order || !Array.isArray(order) || order.length === 0) return res.status(400).json({ error: 'Invalid' });
+    if (req.user.role !== 'admin') {
         const f = await get('SELECT kingdom_id FROM honor_files WHERE id=$1', [order[0]]);
-        if (!f || f.kingdom_id !== kingdomId) return res.status(403).json({ error: 'Forbidden' });
+        if (!f || f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
     }
-    for (let i = 0; i < order.length; i++) {
-        await query('UPDATE honor_files SET fileOrder = $1 WHERE id = $2', [i, order[i]]);
-    }
+    for (let i = 0; i < order.length; i++) await query('UPDATE honor_files SET fileOrder = $1 WHERE id = $2', [i, order[i]]);
     res.json({ success: true });
 });
 
 
-// ==================== HEALTH & ROOT ====================
-
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'Backend läuft',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    database: 'Postgres via DATABASE_URL',
-  });
-});
+app.get('/health', (req, res) => res.json({ status: 'Backend läuft', time: new Date() }));
 
 app.get('/', (req, res) => {
   res.json({ message: 'KD3619 Backend API', version: '2.5.0-FULL-FEATURE' });
 });
 
-
-// ==================== SERVER START ====================
-
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Backend Server läuft auf Port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`💾 Datenbank: Postgres via DATABASE_URL`);
-  console.log(`🔐 JWT Secret: ${JWT_SECRET.substring(0, 10)}...`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
