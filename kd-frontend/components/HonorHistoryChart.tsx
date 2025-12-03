@@ -7,7 +7,7 @@ declare var Chart: any;
 
 interface HonorHistoryChartProps {
     files: UploadedFile[];
-    kingdomName?: string; // 👑 NEU
+    kingdomName?: string; // 👑 NEU: Dynamischer Name
 }
 
 const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files, kingdomName = 'Kingdom' }) => {
@@ -15,13 +15,15 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files, kingdomNam
     const chartInstanceRef = useRef<any>(null);
 
     const chartData = useMemo(() => {
+        // Check if files exist and contain data
         if (!files || !Array.isArray(files) || files.length < 1) return null;
         
         const labels = files.map(file => cleanFileName(file.name));
         const totalHonorData: number[] = [];
 
         files.forEach(file => {
-            const honorIdx = findColumnIndex(file.headers, ['honor', 'honour']);
+            // Try to find the honor column
+            const honorIdx = findColumnIndex(file.headers, ['honor', 'honour', 'points']);
             let totalHonor = 0;
 
             if (honorIdx !== undefined) {
@@ -34,7 +36,8 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files, kingdomNam
 
         return {
             labels,
-            datasets: [{\n                label: 'Total Honor Points',
+            datasets: [{
+                label: 'Total Honor Points',
                 data: totalHonorData,
                 borderColor: 'rgba(250, 204, 21, 0.8)', // yellow-400
                 backgroundColor: 'rgba(250, 204, 21, 0.2)',
@@ -69,8 +72,14 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files, kingdomNam
                     }
                 },
                 scales: {
-                    x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
-                    y: { ticks: { color: '#9ca3af', callback: (v: any) => abbreviateNumber(v) }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+                    x: { 
+                        ticks: { color: '#9ca3af' }, 
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' } 
+                    },
+                    y: { 
+                        ticks: { color: '#9ca3af', callback: (v: any) => abbreviateNumber(v) }, 
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' } 
+                    }
                 }
             }
         });
@@ -83,7 +92,7 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files, kingdomNam
         };
     }, [chartData]);
 
-    // Anzeige wenn keine Daten da sind (mit dynamischem Namen)
+    // Render "No Data" state if necessary
     if (!files || !Array.isArray(files) || files.length < 1) {
         return (
             <Card gradient className="p-6 text-center text-gray-400">

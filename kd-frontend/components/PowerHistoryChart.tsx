@@ -7,7 +7,7 @@ declare var Chart: any;
 
 interface PowerHistoryChartProps {
   files: UploadedFile[];
-  kingdomName?: string; // 👑 NEU
+  kingdomName?: string;
 }
 
 const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files, kingdomName = 'Kingdom' }) => {
@@ -159,7 +159,6 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files, kingdomNam
 
   return (
     <div className="space-y-8">
-      {/* 👑 Dynamischer Titel */}
       <h3 className="text-lg font-semibold text-gray-200 mb-4">{kingdomName} Power Analytics</h3>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
