@@ -2,15 +2,28 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { cleanFileName, parseGermanNumber, findColumnIndex, formatNumber, abbreviateNumber } from '../utils';
-import { useAuth } from './AuthContext'; // Import useAuth
-import type { UploadedFile } from '../types'; // Import UploadedFile type
+import { useAuth } from './AuthContext';
+import type { UploadedFile } from '../types';
 
-// Interfaces kopiert aus types.ts
 interface PlayerAnalyticsRecord {
-  fileName: string; power: number; troopsPower: number; totalKillPoints: number; deadTroops: number; t1Kills: number; t2Kills: number; t3Kills: number; t4Kills: number; t5Kills: number; totalKills: number; 
+  fileName: string;
+  power: number;
+  troopsPower: number;
+  totalKillPoints: number;
+  deadTroops: number;
+  t1Kills: number;
+  t2Kills: number;
+  t3Kills: number;
+  t4Kills: number;
+  t5Kills: number;
+  totalKills: number;
 }
+
 interface PlayerAnalyticsHistory {
-  id: string; name: string; alliance: string; history: PlayerAnalyticsRecord[];
+  id: string;
+  name: string;
+  alliance: string;
+  history: PlayerAnalyticsRecord[];
 }
 
 declare var Chart: any;
@@ -18,12 +31,12 @@ declare var Chart: any;
 interface PowerAnalyticsDashboardProps {
   isAdmin: boolean;
   backendUrl: string;
-  publicSlug: string | null; // <<< NEU: FÜR ÖFFENTLICHEN ZUGRIFF
-  isAdminOverride: boolean; // <<< NEU: ADMIN OVERRIDE FLAG
+  publicSlug: string | null;
+  isAdminOverride: boolean;
 }
 
 // ----------------------------------------------------
-// NEUE KOMPONENTE: Chart-Anzeige für die Spielerhistorie
+// INTERNE KOMPONENTE: Chart für einzelnen Spieler
 // ----------------------------------------------------
 interface PlayerAnalyticsHistoryChartProps {
     history: PlayerAnalyticsHistory;
@@ -40,7 +53,7 @@ const PlayerAnalyticsHistoryChart: React.FC<PlayerAnalyticsHistoryChartProps> = 
             labels: history.history.map(h => h.fileName),
             datasets: [
                 {
-                    label: 'Power (Macht)',
+                    label: 'Power',
                     data: history.history.map(h => h.power),
                     borderColor: 'rgba(59, 130, 246, 0.9)', // blue-500
                     backgroundColor: 'rgba(59, 130, 246, 0.2)',
@@ -68,14 +81,28 @@ const PlayerAnalyticsHistoryChart: React.FC<PlayerAnalyticsHistoryChartProps> = 
         if (!ctx) return;
         
         chartInstanceRef.current = new Chart(ctx, {
-            type: 'line', data: chartData,
+            type: 'line', 
+            data: chartData,
             options: {
-                responsive: true, maintainAspectRatio: false,
+                responsive: true, 
+                maintainAspectRatio: false,
                 plugins: { legend: { labels: { color: '#e5e7eb' } } },
                 scales: {
                     x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
-                    y: { type: 'linear', display: true, position: 'left', ticks: { color: 'rgba(59, 130, 246, 1)', callback: (v: any) => abbreviateNumber(v) }, grid: { color: 'rgba(59, 130, 246, 0.2)' } },
-                    y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: 'rgba(16, 185, 129, 1)', callback: (v: any) => abbreviateNumber(v) } }
+                    y: { 
+                        type: 'linear', 
+                        display: true, 
+                        position: 'left', 
+                        ticks: { color: 'rgba(59, 130, 246, 1)', callback: (v: any) => abbreviateNumber(v) }, 
+                        grid: { color: 'rgba(59, 130, 246, 0.2)' } 
+                    },
+                    y1: { 
+                        type: 'linear', 
+                        display: true, 
+                        position: 'right', 
+                        grid: { drawOnChartArea: false }, 
+                        ticks: { color: 'rgba(16, 185, 129, 1)', callback: (v: any) => abbreviateNumber(v) } 
+                    }
                 }
             }
         });
@@ -92,6 +119,9 @@ const PlayerAnalyticsHistoryChart: React.FC<PlayerAnalyticsHistoryChartProps> = 
 };
 
 
+// ----------------------------------------------------
+// HAUPTKOMPONENTE
+// ----------------------------------------------------
 const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdmin, backendUrl, publicSlug, isAdminOverride }) => {
   const { user } = useAuth();
   
@@ -106,25 +136,27 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchMatches, setSearchMatches] = useState<PlayerAnalyticsHistory[] | 'not_found' | null>(null);
   const [selectedPlayerHistory, setSelectedPlayerHistory] = useState<PlayerAnalyticsHistory | null>(null);
-  const [kingdomName, setKingdomName] = useState<string>('Player Analytics');
+  const [kingdomName, setKingdomName] = useState<string>('Kingdom Analytics');
 
-  // --- FETCH ---
+  // 1. Titel abrufen
   const fetchKingdomName = useCallback(async (slug: string) => {
     try {
         const res = await fetch(`${backendUrl}/api/public/kingdom/${slug}`);
         if (res.ok) {
             const data = await res.json();
-            setKingdomName(data.displayName + ' Analytics');
+            setKingdomName(data.displayName || 'Kingdom Analytics');
         }
-    } catch (e) { setKingdomName('Analytics'); }
+    } catch (e) { setKingdomName(slug.toUpperCase()); }
   }, [backendUrl]);
 
+  // 2. Daten abrufen
   const fetchFiles = useCallback(async () => {
     const isFetchPublic = !!publicSlug && !userLoggedIn;
     const isFetchOverride = isAdminOverride && !!publicSlug; 
+    const shouldUsePublicEndpoint = !!publicSlug; // Konsistente Logik: Slug vorhanden = Public Endpoint
     
     if (publicSlug) fetchKingdomName(publicSlug);
-    else setKingdomName('Player Analytics');
+    else setKingdomName('Kingdom Analytics');
 
     if ((isFetchPublic || isFetchOverride) && !publicSlug) {
         setError('Slug missing'); setIsLoading(false); return;
@@ -133,26 +165,33 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
     try {
       setIsLoading(true); setError(null);
       let response: Response;
-      if (isFetchPublic || isFetchOverride) {
+      
+      if (shouldUsePublicEndpoint) {
         response = await fetch(`${backendUrl}/api/public/kingdom/${publicSlug}/overview-files`);
       } else {
         const token = localStorage.getItem('authToken');
-        if (!token) throw new Error('Authentication token not found. Please log in.');
+        if (!token) throw new Error('Authentication token not found.');
         response = await fetch(`${backendUrl}/overview/files-data`, {
           headers: { Authorization: `Bearer ${token}` },
         });
       }
 
-      if (!response.ok) throw new Error('Fetch failed');
+      if (!response.ok) {
+          // Leere Daten bei 404/403 sind okay im Public Mode
+          if (shouldUsePublicEndpoint && (response.status === 404 || response.status === 403)) {
+              setUploadedFiles([]);
+              setIsDataLoaded(true);
+              return;
+          }
+          throw new Error('Fetch failed');
+      }
       
       const data = await response.json();
       setUploadedFiles(data || []);
       setIsDataLoaded(true);
       
     } catch (err: any) {
-      const message = err.message;
-      if ((isFetchPublic || isFetchOverride) && (message.includes('403') || message.includes('404'))) setError('No data found.');
-      else setError(message);
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -163,7 +202,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
     fetchFiles();
   }, [fetchFiles]);
   
-  // --- PARSING ---
+  // 3. Parsing Logik (Wichtig für die Suche)
   const parseFileToPlayers = (file: UploadedFile): any[] => {
       if (!file || !file.headers || !file.data) return [];
       const headers = file.headers.map(h => String(h));
@@ -205,11 +244,12 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       return res;
   };
 
-  // --- SEARCH ---
+  // 4. Datenaufbereitung für Suche
   const playerHistories = useMemo(() => {
       const map = new Map<string, PlayerAnalyticsHistory>();
       if (!uploadedFiles || uploadedFiles.length === 0) return map;
 
+      // Sort by date asc
       const sortedFiles = [...uploadedFiles].sort((a,b) => new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime());
 
       for (const file of sortedFiles) {
@@ -217,10 +257,15 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
           const players = parseFileToPlayers(file);
 
           for (const p of players) {
-              const key = p.id || p.name;
+              const key = p.id || p.name; // Prefer ID
               if (!key) continue;
+              
               let h = map.get(key);
-              if (!h) { h = { id: p.id || 'Unknown', name: p.name || 'Unknown', alliance: p.alliance, history: [] }; map.set(key, h); }
+              if (!h) { 
+                  h = { id: p.id || 'Unknown', name: p.name || 'Unknown', alliance: p.alliance, history: [] }; 
+                  map.set(key, h); 
+              }
+              // Update info to latest
               if (p.name) h.name = p.name;
               if (p.alliance) h.alliance = p.alliance;
               
@@ -234,7 +279,11 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       if (!isDataLoaded || !searchQuery.trim()) { setSearchMatches(null); setSelectedPlayerHistory(null); return; }
       const q = searchQuery.toLowerCase().trim();
       const all = Array.from(playerHistories.values());
-      const res = all.filter(p => (p.id && p.id.toLowerCase().includes(q)) || (p.name && p.name.toLowerCase().includes(q)));
+      
+      const res = all.filter(p => 
+          (p.id && p.id.toLowerCase().includes(q)) || 
+          (p.name && p.name.toLowerCase().includes(q))
+      );
 
       if (res.length === 0) setSearchMatches('not_found');
       else if (res.length === 1) { setSelectedPlayerHistory(res[0]); setSearchMatches(null); }
@@ -247,37 +296,73 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   return (
     <div className="space-y-8">
       <Card className="p-6">
-        <h3 className="text-lg font-semibold text-gray-200 mb-4">{kingdomName} Search</h3>
+        <h3 className="text-lg font-semibold text-gray-200 mb-4">{kingdomName} Player Search</h3>
         <div className="flex flex-col sm:flex-row gap-4">
-          <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} placeholder="Name or ID..." className="flex-grow bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5" />
-          <button onClick={handleSearch} className="bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700">Search</button>
-          <button onClick={() => { setSearchQuery(''); setSearchMatches(null); setSelectedPlayerHistory(null); }} className="bg-gray-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-gray-700">Clear</button>
+          <input 
+             type="text" 
+             value={searchQuery} 
+             onChange={e => setSearchQuery(e.target.value)} 
+             onKeyDown={e => e.key === 'Enter' && handleSearch()} 
+             placeholder="Enter Name or Governor ID..." 
+             className="flex-grow bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5 focus:ring-blue-500 focus:border-blue-500" 
+          />
+          <button onClick={handleSearch} className="bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700 transition-colors">Search</button>
+          <button onClick={() => { setSearchQuery(''); setSearchMatches(null); setSelectedPlayerHistory(null); }} className="bg-gray-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-gray-700 transition-colors">Clear</button>
         </div>
       </Card>
 
       <div className="space-y-4">
         {searchMatches === 'not_found' && <div className="p-4 text-center text-amber-400 bg-amber-900/50 rounded-lg">Player not found.</div>}
+        
         {Array.isArray(searchMatches) && (
             <Card className="p-4">
-                <h4 className="text-md font-semibold text-gray-300 mb-3">Select Player:</h4>
-                <ul className="space-y-2">{searchMatches.map(p => <li key={p.id}><button onClick={() => { setSelectedPlayerHistory(p); setSearchMatches(null); }} className="w-full text-left p-3 rounded-lg bg-gray-700 hover:bg-gray-600"><p className="font-semibold text-white">{p.name}</p><p className="text-sm text-gray-400">ID: {p.id}</p></button></li>)}</ul>
+                <h4 className="text-md font-semibold text-gray-300 mb-3">Multiple matches found. Please select:</h4>
+                <ul className="space-y-2 max-h-60 overflow-y-auto">
+                    {searchMatches.map(p => (
+                        <li key={p.id}>
+                            <button onClick={() => { setSelectedPlayerHistory(p); setSearchMatches(null); }} className="w-full text-left p-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors">
+                                <p className="font-semibold text-white">{p.name}</p>
+                                <p className="text-sm text-gray-400">ID: {p.id} | Alliance: {p.alliance}</p>
+                            </button>
+                        </li>
+                    ))}
+                </ul>
             </Card>
         )}
       </div>
 
       {selectedPlayerHistory && (
         <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row gap-4 items-baseline mb-4 p-2">
-                <h4 className="text-xl font-bold text-white">{selectedPlayerHistory.name}</h4>
+            <div className="flex flex-col sm:flex-row gap-4 items-baseline mb-4 p-2 bg-gray-800 rounded-lg border border-gray-700">
+                <h4 className="text-xl font-bold text-white pl-4">{selectedPlayerHistory.name}</h4>
                 <span className="text-sm text-gray-400">ID: {selectedPlayerHistory.id} | Alliance: {selectedPlayerHistory.alliance}</span>
             </div>
+            
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Chart Component */}
                 <PlayerAnalyticsHistoryChart history={selectedPlayerHistory} />
+                
                 <Card gradient className="p-4">
                     <div className="overflow-x-auto relative border border-gray-700 rounded-lg max-h-96">
                         <Table>
-                        <TableHeader><tr><TableCell header>Snapshot</TableCell><TableCell header align="right">Power</TableCell><TableCell header align="right">Kill Points</TableCell><TableCell header align="right">Dead</TableCell></tr></TableHeader>
-                        <tbody>{selectedPlayerHistory.history.map((r, i) => (<TableRow key={i}><TableCell>{r.fileName}</TableCell><TableCell align="right">{formatNumber(r.power)}</TableCell><TableCell align="right">{formatNumber(r.totalKillPoints)}</TableCell><TableCell align="right">{formatNumber(r.deadTroops)}</TableCell></TableRow>))}</tbody>
+                        <TableHeader>
+                            <tr>
+                                <TableCell header>Snapshot</TableCell>
+                                <TableCell header align="right">Power</TableCell>
+                                <TableCell header align="right">Kill Points</TableCell>
+                                <TableCell header align="right">Dead</TableCell>
+                            </tr>
+                        </TableHeader>
+                        <tbody>
+                            {selectedPlayerHistory.history.map((r, i) => (
+                                <TableRow key={i}>
+                                    <TableCell>{r.fileName}</TableCell>
+                                    <TableCell align="right">{formatNumber(r.power)}</TableCell>
+                                    <TableCell align="right">{formatNumber(r.totalKillPoints)}</TableCell>
+                                    <TableCell align="right">{formatNumber(r.deadTroops)}</TableCell>
+                                </TableRow>
+                            ))}
+                        </tbody>
                         </Table>
                     </div>
                 </Card>
@@ -285,8 +370,10 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
         </div>
       )}
       
-      {!selectedPlayerHistory && uploadedFiles.length === 0 && isPublicView && (
-          <div className="text-center p-8 text-yellow-400 bg-gray-800 rounded-xl">No Data Available</div>
+      {!selectedPlayerHistory && uploadedFiles.length === 0 && isPublicView && !error && (
+          <div className="text-center p-8 text-gray-500 bg-gray-800/50 rounded-xl">
+            No data available for {kingdomName} yet.
+          </div>
       )}
     </div>
   );
