@@ -4,7 +4,7 @@ import FileList from './FileList';
 import ComparisonSection from './ComparisonSection';
 import PowerHistoryChart from './PowerHistoryChart';
 import PlayerSearch from './PlayerSearch';
-import { useAuth } from './AuthContext';
+import { useAuth } from '../components/AuthContext';
 import { cleanFileName, parseGermanNumber, findColumnIndex } from '../utils';
 import type { UploadedFile, ComparisonStats, PlayerInfo, PlayerStatChange } from '../types';
 
@@ -230,7 +230,6 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       <div className="space-y-8">
         {error && <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">{error}</div>}
         <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-          <h3 className="text-lg font-semibold text-gray-200 mb-4">Kingdom Progression</h3>
           <PowerHistoryChart files={uploadedFiles || []} />
         </div>
         {!error && uploadedFiles.length === 0 && (<div className="text-center p-8 text-yellow-400 bg-gray-800 rounded-xl"><h3 className="text-xl font-bold mb-2">No Data Available</h3><p>The selected Kingdom has not uploaded any files yet.</p></div>)}

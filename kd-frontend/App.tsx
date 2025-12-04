@@ -36,19 +36,18 @@ const AppContent: React.FC = () => {
   // 1. VIEW ROUTING
   useEffect(() => {
     // Wenn ein Public Slug da ist, aber KEIN User eingeloggt ist:
-    // Zwinge die Ansicht auf 'overview', falls 'admin' gewählt wäre.
     if (publicSlug && !user) {
         if (activeView === 'admin') setActiveView('overview');
     } 
     // Wenn Superadmin auf der Root-Seite ist (kein Slug):
-    // Zwinge ihn ins Admin-Panel.
     else if (isSuperAdmin && !publicSlug && activeView !== 'admin') {
         setActiveView('admin');
     }
+    // R5 darf nun frei zwischen seinen Tabs wechseln.
   }, [publicSlug, isSuperAdmin, activeView, user]);
 
 
-  // 2. AUTOMATISCHE WEITERLEITUNG FÜR R5 (Redirect)
+  // 2. R5 REDIRECT
   useEffect(() => {
     const redirectToSlug = async () => {
         if (user && user.kingdomId && !publicSlug && !isSuperAdmin) {
@@ -81,22 +80,23 @@ const AppContent: React.FC = () => {
   // 3. DYNAMISCHER HEADER TITEL (Main Header)
   useEffect(() => {
     const fetchTitle = async () => {
-      // Priorität 1: Der Slug in der URL bestimmt den Titel
+      // Fall A: Slug vorhanden (Public oder eingeloggt)
       if (publicSlug) {
         try {
           const res = await fetch(`${BACKEND_URL}/api/public/kingdom/${publicSlug}`);
           if (res.ok) {
             const data = await res.json();
-            // 👑 NEU: Füge den Slug zum Titel hinzu
-            setHeaderTitle(`${data.displayName} - ${publicSlug}`);
+            // 👑 FIX: Sicherstellen, dass data.displayName ein String ist, sonst wird der Slug verwendet.
+            const displayName = data.displayName || publicSlug.toUpperCase();
+            setHeaderTitle(`${displayName} - ${publicSlug}`);
           } else {
             setHeaderTitle(`Kingdom Analytics - ${publicSlug}`);
           }
-        } catch (e) { setHeaderTitle('Kingdom Analytics'); }
+        } catch (e) { setHeaderTitle(`Kingdom Analytics - ${publicSlug}`); }
         return;
       }
 
-      // Priorität 2: Eingeloggter R5 (Fallback/Home-Ansicht)
+      // Fall B: Eingeloggter R5 (Root-Ansicht, die durch den Redirect nur kurz sichtbar ist)
       if (user && user.kingdomId) {
         try {
           const token = localStorage.getItem('authToken');
@@ -106,7 +106,7 @@ const AppContent: React.FC = () => {
           if (res.ok) {
             const data = await res.json();
             if (data && data.length > 0) {
-                // 👑 NEU: Titel basierend auf dem Kingdom des Users
+                // 👑 Titel basierend auf dem Kingdom des Users
                 setHeaderTitle(`${data[0].displayName} - ${data[0].slug}`);
             }
           }
@@ -114,7 +114,7 @@ const AppContent: React.FC = () => {
         return;
       }
 
-      // Priorität 3: Superadmin Root
+      // Fall C: Superadmin Root
       if (isSuperAdmin) {
         setHeaderTitle('Superadmin Dashboard');
         return;
@@ -323,7 +323,6 @@ const AppContent: React.FC = () => {
             </ProtectedRoute>
           )}
 
-          {/* Global Chart (im Overview Dashboard gerendert) */}
         </main>
       </div>
     </div>
