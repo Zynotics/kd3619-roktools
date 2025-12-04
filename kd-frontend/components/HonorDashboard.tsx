@@ -37,14 +37,19 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       setIsLoading(true); setError(null);
       let response: Response;
       if (shouldUsePublic) {
+        // 👑 Public Endpoint
         response = await fetch(`${backendUrl}/api/public/kingdom/${publicSlug}/honor-files`);
       } else {
+        // Private Endpoint
         const token = localStorage.getItem('authToken');
+        if (!token) throw new Error('Authentication token not found.');
         response = await fetch(`${backendUrl}/honor/files-data`, { headers: { Authorization: `Bearer ${token}` } });
       }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        // HIER FEHLTE die 404/403 Prüfung für Public Pages, was zur Blockade führen konnte.
+        if (shouldUsePublic && (response.status === 404 || response.status === 403)) { setUploadedFiles([]); return; }
         throw new Error(errorData.error || 'Fetch failed');
       }
       const data = await response.json();
@@ -53,13 +58,13 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       if (data.length >= 2) { setStartFileId(data[data.length-2].id); setEndFileId(data[data.length-1].id); }
       else if (data.length === 1) { setStartFileId(data[0].id); setEndFileId(data[0].id); }
     } catch (err: any) {
-       if (shouldUsePublic && (err.message.includes('404') || err.message.includes('403'))) setUploadedFiles([]);
-       else setError(err.message);
+       setError(err.message);
     } finally { setIsLoading(false); }
   }, [backendUrl, publicSlug]);
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
+  // --- Logic ---
   const extractHonorPlayersFromFile = useCallback((file: UploadedFile): HonorPlayerInfo[] => {
       if (!file || !file.headers || !file.data) return [];
       const headers = file.headers.map(h => String(h));
@@ -187,7 +192,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
          results={searchResults} selectedPlayerHistory={selectedPlayerHistory} onSelectPlayer={handleSelectPlayer} isDataLoaded={uploadedFiles.length > 0}
       />
 
-      <HonorOverviewTable stats={comparisonStats} error={error} startFileName={cleanFileName(uploadedFiles.find(f => f.id === startFileId)?.name || '')} endFileName={cleanFileName(uploadedFiles.find(f => f.id === endFileId)?.name || '')} />
+      <HonorOverviewTable stats={comparisonStats} error={comparisonError} startFileName={cleanFileName(uploadedFiles.find(f => f.id === startFileId)?.name || '')} endFileName={cleanFileName(uploadedFiles.find(f => f.id === endFileId)?.name || '')} />
     </div>
   );
 };

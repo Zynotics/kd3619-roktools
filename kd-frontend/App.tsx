@@ -43,7 +43,6 @@ const AppContent: React.FC = () => {
     else if (isSuperAdmin && !publicSlug && activeView !== 'admin') {
         setActiveView('admin');
     }
-    // R5 darf nun frei zwischen seinen Tabs wechseln.
   }, [publicSlug, isSuperAdmin, activeView, user]);
 
 
@@ -86,8 +85,8 @@ const AppContent: React.FC = () => {
           const res = await fetch(`${BACKEND_URL}/api/public/kingdom/${publicSlug}`);
           if (res.ok) {
             const data = await res.json();
-            // 👑 FIX: Sicherstellen, dass data.displayName ein String ist, sonst wird der Slug verwendet.
-            const displayName = data.displayName || publicSlug.toUpperCase();
+            // 👑 FIX: Sicherstellen, dass data.displayName ein String ist, sonst wird der Slug als Fallback verwendet.
+            const displayName = data.displayName && data.displayName.trim() ? data.displayName : publicSlug.toUpperCase();
             setHeaderTitle(`${displayName} - ${publicSlug}`);
           } else {
             setHeaderTitle(`Kingdom Analytics - ${publicSlug}`);
@@ -106,8 +105,8 @@ const AppContent: React.FC = () => {
           if (res.ok) {
             const data = await res.json();
             if (data && data.length > 0) {
-                // 👑 Titel basierend auf dem Kingdom des Users
-                setHeaderTitle(`${data[0].displayName} - ${data[0].slug}`);
+                const displayName = data[0].displayName || data[0].slug.toUpperCase();
+                setHeaderTitle(`${displayName} - ${data[0].slug}`);
             }
           }
         } catch (e) { setHeaderTitle('Kingdom Analytics'); }
