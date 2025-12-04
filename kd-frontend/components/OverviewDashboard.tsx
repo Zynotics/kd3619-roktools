@@ -8,16 +8,28 @@ import { useAuth } from './AuthContext';
 import { cleanFileName, parseGermanNumber, findColumnIndex } from '../utils';
 import type { UploadedFile, ComparisonStats, PlayerInfo, PlayerStatChange } from '../types';
 
-interface OverviewDashboardProps { isAdmin: boolean; backendUrl: string; publicSlug: string | null; isAdminOverride: boolean; }
+interface OverviewDashboardProps {
+  isAdmin: boolean;
+  backendUrl: string;
+  publicSlug: string | null;
+  isAdminOverride: boolean;
+}
 
-const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendUrl, publicSlug, isAdminOverride }) => {
+const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
+  isAdmin,
+  backendUrl,
+  publicSlug,
+  isAdminOverride,
+}) => {
   const { user } = useAuth();
   const role = user?.role;
   const isBasicUser = role === 'user';
   
   const isPublicView = !!publicSlug && !user; 
   const userLoggedIn = !!user;
+
   const canManageFiles = isAdmin || role === 'r4' || role === 'r5'; 
+  
   const isMinimalView = (isPublicView || isBasicUser) && !isAdminOverride && !canManageFiles;
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -26,16 +38,28 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
 
   const [startFileId, setStartFileId] = useState<string>('');
   const [endFileId, setEndFileId] = useState<string>('');
-  const [comparisonStats, setComparisonStats] = useState<ComparisonStats | null>(null);
+  const [comparisonStats, setComparisonStats] = useState<ComparisonStats | null>(
+    null
+  );
   const [comparisonError, setComparisonError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [searchResults, setSearchResults] = useState<PlayerStatChange[] | 'not_found' | null>(null);
-  const [selectedPlayer, setSelectedPlayer] = useState<PlayerStatChange | null>(null);
 
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<
+    PlayerStatChange[] | 'not_found' | null
+  >(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerStatChange | null>(
+    null
+  );
+
+  // ---------------------------------------------------
+  // FETCH FILES LOGIK
+  // ---------------------------------------------------
   const fetchFiles = useCallback(async () => {
     const shouldUsePublicEndpoint = !!publicSlug;
+
     try {
-      setIsLoading(true); setError(null);
+      setIsLoading(true);
+      setError(null);
       let response: Response;
       
       if (shouldUsePublicEndpoint) {
@@ -43,48 +67,81 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
       } else {
         const token = localStorage.getItem('authToken');
         if (!token) throw new Error('Authentication token not found.');
-        response = await fetch(`${backendUrl}/overview/files-data`, { headers: { Authorization: `Bearer ${token}` } });
+        
+        response = await fetch(`${backendUrl}/overview/files-data`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
       }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `Failed to fetch files`);
       }
-      const data = await response.json();
+      
+      const data: UploadedFile[] = await response.json();
       setUploadedFiles(data || []);
 
-      if (data.length >= 2) { setStartFileId(data[data.length-2].id); setEndFileId(data[data.length-1].id); }
-      else if (data.length === 1) { setStartFileId(data[0].id); setEndFileId(data[0].id); }
+      if (data.length >= 2) {
+        setStartFileId(data[data.length - 2].id);
+        setEndFileId(data[data.length - 1].id);
+      } else if (data.length === 1) {
+        setStartFileId(data[0].id);
+        setEndFileId(data[0].id);
+      } else {
+        setStartFileId('');
+        setEndFileId('');
+      }
     } catch (err: any) {
-      if (shouldUsePublicEndpoint && (err.message.includes('403') || err.message.includes('404'))) setUploadedFiles([]);
-      else setError(err.message);
-    } finally { setIsLoading(false); }
+      console.error(err);
+      const msg = err.message || 'Error loading files.';
+      if (shouldUsePublicEndpoint && (msg.includes('403') || msg.includes('404'))) {
+          setUploadedFiles([]);
+      } else {
+          setError(msg);
+      }
+    } finally {
+      setIsLoading(false);
+    }
   }, [backendUrl, publicSlug, userLoggedIn, isAdminOverride]);
 
-  useEffect(() => { fetchFiles(); }, [fetchFiles]);
+  useEffect(() => {
+    fetchFiles();
+  }, [fetchFiles]);
 
-  const handleUploadComplete = () => fetchFiles();
+  // ---------------------------------------------------
+  // ACTIONS
+  // ---------------------------------------------------
+  const handleUploadComplete = () => { fetchFiles(); };
   const uploadUrl = `${backendUrl}/overview/upload${isAdminOverride && publicSlug ? `?slug=${publicSlug}` : ''}`;
 
   const handleDeleteFile = async (id: string) => {
     if (!canManageFiles) return;
     try {
       const token = localStorage.getItem('authToken');
+      if (!token) throw new Error('Auth token missing');
+      
       await fetch(`${backendUrl}/overview/files/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-      setUploadedFiles(p => p.filter(f => f.id !== id));
-    } catch (err) {}
+      setUploadedFiles((prev) => (prev || []).filter((f) => f.id !== id));
+    } catch (err) { alert('Failed to delete file.'); }
   };
+
   const handleReorderFiles = async (reorderedFiles: UploadedFile[]) => {
     if (!canManageFiles) return;
     setUploadedFiles(reorderedFiles);
     try {
       const token = localStorage.getItem('authToken');
-      const order = reorderedFiles.map(f => f.id);
-      await fetch(`${backendUrl}/overview/files/reorder`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ order }) });
-    } catch (err) {}
+      const order = reorderedFiles.map((f) => f.id);
+      await fetch(`${backendUrl}/overview/files/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ order }),
+      });
+    } catch (err) { console.error('Reorder error:', err); }
   };
 
-  // Parsing & Logic (Ungekürzt)
+  // ---------------------------------------------------
+  // PARSING & COMPARISON LOGIC (Ungekürzt)
+  // ---------------------------------------------------
   const parseFileToPlayers = (file: UploadedFile): PlayerInfo[] => {
     if (!file || !file.headers || !file.data) return [];
     const headers = file.headers;
@@ -99,16 +156,16 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
     const players: PlayerInfo[] = [];
     file.data.forEach((row: any[]) => {
       const id = getString(row, ['governorid', 'governor id', 'id']);
-      const name = getString(row, ['name', 'playername']);
+      const name = getString(row, ['name', 'player name']);
       if (!id && !name) return;
       players.push({
         id, name, alliance: getString(row, ['alliance', 'tag']),
         power: getNumber(row, ['power', 'macht']),
         troopsPower: getNumber(row, ['troopspower']),
-        totalKillPoints: getNumber(row, ['kill points', 'kp']),
+        totalKillPoints: getNumber(row, ['total kill points', 'kp']),
         deadTroops: getNumber(row, ['dead']),
         t1Kills: getNumber(row, ['t1']), t2Kills: getNumber(row, ['t2']), t3Kills: getNumber(row, ['t3']), t4Kills: getNumber(row, ['t4']), t5Kills: getNumber(row, ['t5']),
-        cityHall: getNumber(row, ['cityhall']), techPower: getNumber(row, ['techpower']), buildingPower: getNumber(row, ['building']), commanderPower: getNumber(row, ['commander'])
+        cityHall: getNumber(row, ['cityhall']), techPower: getNumber(row, ['techpower']), buildingPower: getNumber(row, ['building']), commanderPower: getNumber(row, ['commander']),
       });
     });
     return players;
@@ -151,34 +208,40 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
           }
       });
       setComparisonStats(stats);
-    } catch (err) { setComparisonError('Error analyzing data.'); }
+    } catch (err) { console.error(err); setComparisonError('Error analyzing data.'); }
   }, [startFileId, endFileId, uploadedFiles]);
 
-  useEffect(() => { if (startFileId && endFileId) handleCompare(); }, [startFileId, endFileId, handleCompare]);
+  useEffect(() => { if (startFileId && endFileId) handleCompare(); }, [startFileId, endFileId, uploadedFiles, handleCompare]);
 
   const handleSearch = () => {
     if (!searchQuery.trim() || !comparisonStats) { setSearchResults(null); setSelectedPlayer(null); return; }
     const q = searchQuery.toLowerCase();
-    const res = comparisonStats.playerStatChanges.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q));
-    setSearchResults(res.length ? res : 'not_found');
-    if (res.length === 1) setSelectedPlayer(res[0]);
+    const results = comparisonStats.playerStatChanges.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q));
+    setSearchResults(results.length ? results : 'not_found');
+    if (results.length === 1) setSelectedPlayer(results[0]);
   };
-
-  if (isLoading) return <div>Loading...</div>;
+  const handleClearSearch = () => { setSearchQuery(''); setSearchResults(null); setSelectedPlayer(null); };
+  const handleSelectPlayer = (p: PlayerStatChange) => { setSelectedPlayer(p); };
+  
+  if (isLoading) return <div className="p-6 text-center text-gray-300">Loading files...</div>;
 
   if (isMinimalView) {
     return (
       <div className="space-y-8">
+        {error && <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">{error}</div>}
         <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-          {/* Title moved inside Chart Component */}
-          <PowerHistoryChart files={uploadedFiles} />
+          <h3 className="text-lg font-semibold text-gray-200 mb-4">Kingdom Progression</h3>
+          <PowerHistoryChart files={uploadedFiles || []} />
         </div>
+        {!error && uploadedFiles.length === 0 && (<div className="text-center p-8 text-yellow-400 bg-gray-800 rounded-xl"><h3 className="text-xl font-bold mb-2">No Data Available</h3><p>The selected Kingdom has not uploaded any files yet.</p></div>)}
       </div>
     );
   }
 
   return (
     <div className="space-y-8">
+      {error && <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">{error}</div>}
+
       {canManageFiles && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg"><FileUpload uploadUrl={uploadUrl} onUploadComplete={handleUploadComplete} /></div>
@@ -208,14 +271,14 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ isAdmin, backendU
                 </select>
             </div>
             <div className="flex flex-col">
-                <button onClick={handleCompare} disabled={!startFileId || !endFileId} className="mt-5 bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700">Compare</button>
+                <button onClick={handleCompare} disabled={!startFileId || !endFileId || startFileId===endFileId} className="mt-5 bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-600">Compare</button>
             </div>
         </div>
       </div>
 
       <PlayerSearch 
-          query={searchQuery} setQuery={setSearchQuery} onSearch={handleSearch} onClear={() => { setSearchQuery(''); setSearchResults(null); setSelectedPlayer(null); }}
-          results={searchResults} selectedPlayer={selectedPlayer} onSelectPlayer={setSelectedPlayer} 
+          query={searchQuery} setQuery={setSearchQuery} onSearch={handleSearch} onClear={handleClearSearch} 
+          results={searchResults} selectedPlayer={selectedPlayer} onSelectPlayer={handleSelectPlayer} 
           isComparisonLoaded={!!comparisonStats}
       />
 

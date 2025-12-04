@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { cleanFileName, parseGermanNumber, findColumnIndex, formatNumber, abbreviateNumber } from '../utils';
-import { useAuth } from './AuthContext';
+import { useAuth } from '../components/AuthContext';
 import type { UploadedFile } from '../types';
 
 interface PlayerAnalyticsRecord {
@@ -65,12 +65,13 @@ const PlayerAnalyticsHistoryChart: React.FC<{ history: PlayerAnalyticsHistory }>
 
     return (
         <Card hover className="p-4" gradient>
-            <h5 className="text-md font-semibold text-gray-300 mb-3 text-center">Power & Kill Points</h5>
+            <h5 className="text-md font-semibold text-gray-300 mb-3 text-center">Power & Kill Points Progression</h5>
             <div className="relative h-96"><canvas ref={chartRef}></canvas></div>
         </Card>
     );
 };
 
+// Hauptkomponente
 const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdmin, backendUrl, publicSlug, isAdminOverride }) => {
   const { user } = useAuth();
   const isPublicView = !!publicSlug && !user; 
@@ -84,6 +85,40 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchMatches, setSearchMatches] = useState<PlayerAnalyticsHistory[] | 'not_found' | null>(null);
   const [selectedPlayerHistory, setSelectedPlayerHistory] = useState<PlayerAnalyticsHistory | null>(null);
+
+  const parseFileToPlayers = (file: UploadedFile): any[] => {
+      if (!file || !file.headers || !file.data) return [];
+      const headers = file.headers.map(h => String(h));
+      const getIdx = (keys: string[]) => findColumnIndex(headers, keys);
+      const getVal = (row: any[], idx: number | undefined) => (idx !== undefined && row[idx] != null) ? String(row[idx]).trim() : '';
+      const getNum = (row: any[], idx: number | undefined) => parseGermanNumber(getVal(row, idx));
+
+      const idxId = getIdx(['governorid', 'governor id', 'id', 'gov id']);
+      const idxName = getIdx(['name', 'playername', 'player name']);
+      const idxAlly = getIdx(['alliance', 'allianz', 'tag']);
+      const idxPower = getIdx(['power', 'macht']);
+      const idxTroops = getIdx(['troopspower', 'troops power']);
+      const idxKP = getIdx(['total kill points', 'kill points', 'kp']);
+      const idxDead = getIdx(['deadtroops', 'dead troops', 'dead']);
+      const idxT1 = getIdx(['t1', 't1 kills']);
+      const idxT2 = getIdx(['t2', 't2 kills']);
+      const idxT3 = getIdx(['t3', 't3 kills']);
+      const idxT4 = getIdx(['t4', 't4 kills', 'tier4']);
+      const idxT5 = getIdx(['t5', 't5 kills', 'tier5']);
+
+      const res: any[] = [];
+      file.data.forEach(row => {
+          const id = getVal(row, idxId);
+          const name = getVal(row, idxName);
+          if (!id && !name) return;
+          const t1 = getNum(row, idxT1); const t2 = getNum(row, idxT2); const t3 = getNum(row, idxT3); const t4 = getNum(row, idxT4); const t5 = getNum(row, idxT5);
+          res.push({
+              id, name, alliance: getVal(row, idxAlly), power: getNum(row, idxPower), troopsPower: getNum(row, idxTroops), totalKillPoints: getNum(row, idxKP), deadTroops: getNum(row, idxDead),
+              t1Kills: t1, t2Kills: t2, t3Kills: t3, t4Kills: t4, t5Kills: t5, totalKills: t1+t2+t3+t4+t5
+          });
+      });
+      return res;
+  };
 
   const fetchFiles = useCallback(async () => {
     const shouldUsePublicEndpoint = !!publicSlug;
@@ -113,46 +148,11 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
   
-  const parseFileToPlayers = (file: UploadedFile): any[] => {
-      if (!file || !file.headers || !file.data) return [];
-      const headers = file.headers.map(h => String(h));
-      const getIdx = (keys: string[]) => findColumnIndex(headers, keys);
-      const getVal = (row: any[], idx: number | undefined) => (idx !== undefined && row[idx] != null) ? String(row[idx]).trim() : '';
-      const getNum = (row: any[], idx: number | undefined) => parseGermanNumber(getVal(row, idx));
-
-      const idxId = getIdx(['governorid', 'governor id', 'id', 'gov id']);
-      const idxName = getIdx(['name', 'playername']);
-      const idxAlly = getIdx(['alliance', 'allianz', 'tag']);
-      const idxPower = getIdx(['power', 'macht']);
-      const idxTroops = getIdx(['troopspower', 'troops power']);
-      const idxKP = getIdx(['total kill points', 'kill points']);
-      const idxDead = getIdx(['deadtroops', 'dead troops']);
-      const idxT1 = getIdx(['t1', 't1 kills']);
-      const idxT2 = getIdx(['t2', 't2 kills']);
-      const idxT3 = getIdx(['t3', 't3 kills']);
-      const idxT4 = getIdx(['t4', 't4 kills']);
-      const idxT5 = getIdx(['t5', 't5 kills']);
-
-      const res: any[] = [];
-      file.data.forEach(row => {
-          const id = getVal(row, idxId);
-          const name = getVal(row, idxName);
-          if (!id && !name) return;
-          const t1 = getNum(row, idxT1); const t2 = getNum(row, idxT2); const t3 = getNum(row, idxT3); const t4 = getNum(row, idxT4); const t5 = getNum(row, idxT5);
-          res.push({
-              id, name, alliance: getVal(row, idxAlly),
-              power: getNum(row, idxPower), troopsPower: getNum(row, idxTroops),
-              totalKillPoints: getNum(row, idxKP), deadTroops: getNum(row, idxDead),
-              t1Kills: t1, t2Kills: t2, t3Kills: t3, t4Kills: t4, t5Kills: t5, totalKills: t1+t2+t3+t4+t5
-          });
-      });
-      return res;
-  };
-
   const playerHistories = useMemo(() => {
       const map = new Map<string, PlayerAnalyticsHistory>();
       if (!uploadedFiles.length) return map;
-      [...uploadedFiles].sort((a,b) => new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime()).forEach(file => {
+      const sortedFiles = [...uploadedFiles].sort((a,b) => new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime());
+      for (const file of sortedFiles) {
           const fileName = cleanFileName(file.name);
           parseFileToPlayers(file).forEach(p => {
               const key = p.id || p.name;
@@ -163,15 +163,14 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
               if (p.alliance) h.alliance = p.alliance;
               h.history.push({ fileName, ...p });
           });
-      });
+      }
       return map;
   }, [uploadedFiles]);
 
   const handleSearch = () => {
       if (!isDataLoaded || !searchQuery.trim()) { setSearchMatches(null); setSelectedPlayerHistory(null); return; }
       const q = searchQuery.toLowerCase().trim();
-      const all = Array.from(playerHistories.values());
-      const res = all.filter(p => (p.id && p.id.toLowerCase().includes(q)) || (p.name && p.name.toLowerCase().includes(q)));
+      const res = Array.from(playerHistories.values()).filter(p => (p.id && p.id.toLowerCase().includes(q)) || (p.name && p.name.toLowerCase().includes(q)));
       if (res.length === 0) setSearchMatches('not_found');
       else if (res.length === 1) { setSelectedPlayerHistory(res[0]); setSearchMatches(null); }
       else setSearchMatches(res);
@@ -181,8 +180,8 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
 
   return (
     <div className="space-y-8">
+      {error && <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">{error}</div>}
       <Card className="p-6">
-        {/* 👑 Statischer Titel */}
         <h3 className="text-lg font-semibold text-gray-200 mb-4">Player Analytics - Search</h3>
         <div className="flex flex-col sm:flex-row gap-4">
           <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} placeholder="Enter Name or Governor ID..." className="flex-grow bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5" />
@@ -193,6 +192,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
 
       <div className="space-y-4">
         {searchMatches === 'not_found' && <div className="p-4 text-center text-amber-400 bg-amber-900/50 rounded-lg">Player not found.</div>}
+        
         {Array.isArray(searchMatches) && (
             <Card className="p-4">
                 <h4 className="text-md font-semibold text-gray-300 mb-3">Multiple matches found:</h4>
@@ -216,8 +216,10 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
                 <h4 className="text-xl font-bold text-white pl-4">{selectedPlayerHistory.name}</h4>
                 <span className="text-sm text-gray-400">ID: {selectedPlayerHistory.id} | Alliance: {selectedPlayerHistory.alliance}</span>
             </div>
+            
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <PlayerAnalyticsHistoryChart history={selectedPlayerHistory} />
+                
                 <Card gradient className="p-4">
                     <div className="overflow-x-auto relative border border-gray-700 rounded-lg max-h-96">
                         <Table>

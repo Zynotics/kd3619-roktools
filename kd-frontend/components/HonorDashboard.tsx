@@ -13,6 +13,7 @@ interface HonorDashboardProps { isAdmin: boolean; backendUrl: string; publicSlug
 const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, publicSlug, isAdminOverride }) => {
   const { user } = useAuth();
   const role = user?.role;
+  
   const canManageFiles = isAdmin || role === 'r4' || role === 'r5';
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -22,12 +23,15 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
   const [startFileId, setStartFileId] = useState<string>('');
   const [endFileId, setEndFileId] = useState<string>('');
   const [comparisonStats, setComparisonStats] = useState<HonorComparisonStats | null>(null);
+
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<HonorPlayerInfo[] | 'not_found' | null>(null);
   const [selectedPlayerHistory, setSelectedPlayerHistory] = useState<PlayerHonorHistory | null>(null);
 
+
   const fetchFiles = useCallback(async () => {
     const shouldUsePublic = !!publicSlug;
+
     try {
       setIsLoading(true); setError(null);
       let response: Response;
@@ -37,9 +41,14 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
         const token = localStorage.getItem('authToken');
         response = await fetch(`${backendUrl}/honor/files-data`, { headers: { Authorization: `Bearer ${token}` } });
       }
-      if (!response.ok) throw new Error('Fetch failed');
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Fetch failed');
+      }
       const data = await response.json();
       setUploadedFiles(data || []);
+
       if (data.length >= 2) { setStartFileId(data[data.length-2].id); setEndFileId(data[data.length-1].id); }
       else if (data.length === 1) { setStartFileId(data[0].id); setEndFileId(data[0].id); }
     } catch (err: any) {
@@ -50,6 +59,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
+  // --- Logic ---
   const extractHonorPlayersFromFile = useCallback((file: UploadedFile): HonorPlayerInfo[] => {
       if (!file || !file.headers || !file.data) return [];
       const headers = file.headers.map(h => String(h));
@@ -73,18 +83,23 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       if (!endFileId) return;
       const sFile = uploadedFiles.find(f => f.id === startFileId);
       const eFile = uploadedFiles.find(f => f.id === endFileId);
-      if (!eFile) return;
+      if (!eFile) { setComparisonStats(null); setComparisonError('End Snapshot not found.'); return; }
+      
       const sP = sFile ? extractHonorPlayersFromFile(sFile) : [];
       const eP = extractHonorPlayersFromFile(eFile);
       const mapS = new Map(sP.map(p => [p.governorId, p]));
       const mapE = new Map(eP.map(p => [p.governorId, p]));
       const changes: PlayerHonorChange[] = [];
+      
       new Set([...mapS.keys(), ...mapE.keys()]).forEach(id => {
           const s = mapS.get(id);
           const e = mapE.get(id);
-          changes.push({ governorId: id, name: (e || s)?.name || '', oldHonor: s?.honorPoint || 0, newHonor: e?.honorPoint || 0, diffHonor: (e?.honorPoint || 0) - (s?.honorPoint || 0) });
+          changes.push({
+              governorId: id, name: (e || s)?.name || '', oldHonor: s?.honorPoint || 0, newHonor: e?.honorPoint || 0, diffHonor: (e?.honorPoint || 0) - (s?.honorPoint || 0)
+          });
       });
       setComparisonStats({ playerHonorChanges: changes });
+      setComparisonError(null);
   }, [startFileId, endFileId, uploadedFiles, extractHonorPlayersFromFile]);
 
   useEffect(() => { if (endFileId) handleCompare(); }, [endFileId, handleCompare]);
@@ -95,8 +110,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
             extractHonorPlayersFromFile(f).forEach(p => {
                 let h = map.get(p.governorId);
                 if (!h) { h = { id: p.governorId, name: p.name, history: [] }; map.set(p.governorId, h); }
-                h.name = p.name;
-                h.history.push({ fileName: cleanFileName(f.name), honorPoint: p.honorPoint });
+                h.name = p.name; h.history.push({ fileName: cleanFileName(f.name), honorPoint: p.honorPoint });
             });
         });
       return map;
@@ -110,6 +124,9 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       else if (res.length === 1) { setSelectedPlayerHistory(res[0]); setSearchResults(null); }
       else setSearchResults(res.map(h => ({ governorId: h.id, name: h.name, honorPoint: h.history[h.history.length-1].honorPoint })));
   };
+  
+  const handleClearSearch = () => { setSearchQuery(''); setSearchResults(null); setSelectedPlayerHistory(null); };
+  const handleSelectPlayer = (player: HonorPlayerInfo) => { setSelectedPlayerHistory(honorHistories.get(player.governorId) || null); setSearchResults(null); };
 
   const uploadUrl = `${backendUrl}/honor/upload${isAdminOverride && publicSlug ? `?slug=${publicSlug}` : ''}`;
   const handleUploadComplete = () => fetchFiles();
@@ -132,11 +149,13 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       } catch(e) {}
   };
 
+
   if (isLoading) return <div>Loading...</div>;
 
   return (
     <div className="space-y-8">
       {error && <div className="text-center text-red-400 p-4 bg-red-900/50 rounded-lg">{error}</div>}
+      
       {canManageFiles && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg"><FileUpload uploadUrl={uploadUrl} onUploadComplete={handleUploadComplete} /></div>
@@ -145,7 +164,6 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       )}
 
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-        {/* Titel innerhalb des Charts ist statisch */}
         <HonorHistoryChart files={uploadedFiles} />
       </div>
 
@@ -164,11 +182,11 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       </div>
 
       <HonorPlayerSearch 
-         query={searchQuery} setQuery={setSearchQuery} onSearch={handleSearch} onClear={() => { setSearchQuery(''); setSearchResults(null); setSelectedPlayerHistory(null); }}
-         results={searchResults} selectedPlayerHistory={selectedPlayerHistory} onSelectPlayer={p => { setSelectedPlayerHistory(honorHistories.get(p.governorId) || null); setSearchResults(null); }} isDataLoaded={uploadedFiles.length > 0}
+         query={searchQuery} setQuery={setSearchQuery} onSearch={handleSearch} onClear={handleClearSearch}
+         results={searchResults} selectedPlayerHistory={selectedPlayerHistory} onSelectPlayer={handleSelectPlayer} isDataLoaded={uploadedFiles.length > 0}
       />
 
-      <HonorOverviewTable stats={comparisonStats} error={null} startFileName={cleanFileName(uploadedFiles.find(f => f.id === startFileId)?.name || '')} endFileName={cleanFileName(uploadedFiles.find(f => f.id === endFileId)?.name || '')} />
+      <HonorOverviewTable stats={comparisonStats} error={comparisonError} startFileName={cleanFileName(uploadedFiles.find(f => f.id === startFileId)?.name || '')} endFileName={cleanFileName(uploadedFiles.find(f => f.id === endFileId)?.name || '')} />
     </div>
   );
 };
