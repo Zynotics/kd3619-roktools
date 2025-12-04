@@ -85,7 +85,7 @@ const AppContent: React.FC = () => {
           const res = await fetch(`${BACKEND_URL}/api/public/kingdom/${publicSlug}`);
           if (res.ok) {
             const data = await res.json();
-            // 👑 FIX: Sicherstellen, dass data.displayName ein String ist, sonst wird der Slug als Fallback verwendet.
+            // 👑 FIX: Sicherstellen, dass data.displayName ein valider, nicht leerer String ist.
             const displayName = data.displayName && data.displayName.trim() ? data.displayName : publicSlug.toUpperCase();
             setHeaderTitle(`${displayName} - ${publicSlug}`);
           } else {
@@ -105,8 +105,9 @@ const AppContent: React.FC = () => {
           if (res.ok) {
             const data = await res.json();
             if (data && data.length > 0) {
-                const displayName = data[0].displayName || data[0].slug.toUpperCase();
-                setHeaderTitle(`${displayName} - ${data[0].slug}`);
+                const slug = data[0].slug.trim();
+                const displayName = data[0].displayName && data[0].displayName.trim() ? data[0].displayName : slug.toUpperCase();
+                setHeaderTitle(`${displayName} - ${slug}`);
             }
           }
         } catch (e) { setHeaderTitle('Kingdom Analytics'); }
