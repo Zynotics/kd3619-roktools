@@ -86,6 +86,34 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   const [searchMatches, setSearchMatches] = useState<PlayerAnalyticsHistory[] | 'not_found' | null>(null);
   const [selectedPlayerHistory, setSelectedPlayerHistory] = useState<PlayerAnalyticsHistory | null>(null);
 
+  const fetchFiles = useCallback(async () => {
+    const shouldUsePublicEndpoint = !!publicSlug;
+    if ((isPublicView || isAdminOverride) && !publicSlug) { setError('Slug missing'); setIsLoading(false); return; }
+
+    try {
+      setIsLoading(true); setError(null);
+      let response: Response;
+      
+      if (shouldUsePublicEndpoint) {
+        response = await fetch(`${backendUrl}/api/public/kingdom/${publicSlug}/overview-files`);
+      } else {
+        const token = localStorage.getItem('authToken');
+        if (!token) throw new Error('Authentication token not found.');
+        response = await fetch(`${backendUrl}/overview/files-data`, { headers: { Authorization: `Bearer ${token}` } });
+      }
+
+      if (!response.ok) {
+          if (shouldUsePublicEndpoint && (response.status === 404 || response.status === 403)) { setUploadedFiles([]); setIsDataLoaded(true); return; }
+          throw new Error('Fetch failed');
+      }
+      const data = await response.json();
+      setUploadedFiles(data || []);
+      setIsDataLoaded(true);
+    } catch (err: any) { setError(err.message); } finally { setIsLoading(false); }
+  }, [backendUrl, publicSlug, userLoggedIn, isAdminOverride]);
+
+  useEffect(() => { fetchFiles(); }, [fetchFiles]);
+  
   const parseFileToPlayers = (file: UploadedFile): any[] => {
       if (!file || !file.headers || !file.data) return [];
       const headers = file.headers.map(h => String(h));
@@ -120,34 +148,6 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       return res;
   };
 
-  const fetchFiles = useCallback(async () => {
-    const shouldUsePublicEndpoint = !!publicSlug;
-    if ((isPublicView || isAdminOverride) && !publicSlug) { setError('Slug missing'); setIsLoading(false); return; }
-
-    try {
-      setIsLoading(true); setError(null);
-      let response: Response;
-      
-      if (shouldUsePublicEndpoint) {
-        response = await fetch(`${backendUrl}/api/public/kingdom/${publicSlug}/overview-files`);
-      } else {
-        const token = localStorage.getItem('authToken');
-        if (!token) throw new Error('Authentication token not found.');
-        response = await fetch(`${backendUrl}/overview/files-data`, { headers: { Authorization: `Bearer ${token}` } });
-      }
-
-      if (!response.ok) {
-          if (shouldUsePublicEndpoint && (response.status === 404 || response.status === 403)) { setUploadedFiles([]); setIsDataLoaded(true); return; }
-          throw new Error('Fetch failed');
-      }
-      const data = await response.json();
-      setUploadedFiles(data || []);
-      setIsDataLoaded(true);
-    } catch (err: any) { setError(err.message); } finally { setIsLoading(false); }
-  }, [backendUrl, publicSlug, userLoggedIn, isAdminOverride]);
-
-  useEffect(() => { fetchFiles(); }, [fetchFiles]);
-  
   const playerHistories = useMemo(() => {
       const map = new Map<string, PlayerAnalyticsHistory>();
       if (!uploadedFiles.length) return map;
@@ -170,11 +170,13 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   const handleSearch = () => {
       if (!isDataLoaded || !searchQuery.trim()) { setSearchMatches(null); setSelectedPlayerHistory(null); return; }
       const q = searchQuery.toLowerCase().trim();
-      const res = Array.from(playerHistories.values()).filter(p => (p.id && p.id.toLowerCase().includes(q)) || (p.name && p.name.toLowerCase().includes(q)));
+      const all = Array.from(playerHistories.values());
+      const res = all.filter(p => (p.id && p.id.toLowerCase().includes(q)) || (p.name && p.name.toLowerCase().includes(q)));
       if (res.length === 0) setSearchMatches('not_found');
       else if (res.length === 1) { setSelectedPlayerHistory(res[0]); setSearchMatches(null); }
       else setSearchMatches(res);
   };
+  const handleClearSearch = () => { setSearchQuery(''); setSearchMatches(null); setSelectedPlayerHistory(null); };
 
   if (isLoading) return <div className="p-6 text-center text-gray-300">Loading...</div>;
 
@@ -184,9 +186,9 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
       <Card className="p-6">
         <h3 className="text-lg font-semibold text-gray-200 mb-4">Player Analytics - Search</h3>
         <div className="flex flex-col sm:flex-row gap-4">
-          <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} placeholder="Enter Name or Governor ID..." className="flex-grow bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5" />
+          <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} placeholder="Enter Name or Governor ID..." className="flex-grow bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5 focus:ring-blue-500 focus:border-blue-500" />
           <button onClick={handleSearch} className="bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700 transition-colors">Search</button>
-          <button onClick={() => { setSearchQuery(''); setSearchMatches(null); setSelectedPlayerHistory(null); }} className="bg-gray-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-gray-700 transition-colors">Clear</button>
+          <button onClick={handleClearSearch} className="bg-gray-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-gray-700 transition-colors">Clear</button>
         </div>
       </Card>
 
@@ -223,8 +225,24 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
                 <Card gradient className="p-4">
                     <div className="overflow-x-auto relative border border-gray-700 rounded-lg max-h-96">
                         <Table>
-                        <TableHeader><tr><TableCell header>Snapshot</TableCell><TableCell header align="right">Power</TableCell><TableCell header align="right">Kill Points</TableCell><TableCell header align="right">Dead</TableCell></tr></TableHeader>
-                        <tbody>{selectedPlayerHistory.history.map((r, i) => (<TableRow key={i}><TableCell>{r.fileName}</TableCell><TableCell align="right">{formatNumber(r.power)}</TableCell><TableCell align="right">{formatNumber(r.totalKillPoints)}</TableCell><TableCell align="right">{formatNumber(r.deadTroops)}</TableCell></TableRow>))}</tbody>
+                        <TableHeader>
+                            <tr>
+                                <TableCell header>Snapshot</TableCell>
+                                <TableCell header align="right">Power</TableCell>
+                                <TableCell header align="right">Kill Points</TableCell>
+                                <TableCell header align="right">Dead</TableCell>
+                            </tr>
+                        </TableHeader>
+                        <tbody>
+                            {selectedPlayerHistory.history.map((r, i) => (
+                                <TableRow key={i}>
+                                    <TableCell>{r.fileName}</TableCell>
+                                    <TableCell align="right">{formatNumber(r.power)}</TableCell>
+                                    <TableCell align="right">{formatNumber(r.totalKillPoints)}</TableCell>
+                                    <TableCell align="right">{formatNumber(r.deadTroops)}</TableCell>
+                                </TableRow>
+                            ))}
+                        </tbody>
                         </Table>
                     </div>
                 </Card>

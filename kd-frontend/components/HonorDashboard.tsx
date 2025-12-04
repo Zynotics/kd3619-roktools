@@ -4,7 +4,7 @@ import FileList from './FileList';
 import HonorHistoryChart from './HonorHistoryChart';
 import HonorOverviewTable from './HonorOverviewTable';
 import HonorPlayerSearch from './HonorPlayerSearch';
-import { useAuth } from './AuthContext';
+import { useAuth } from '../components/AuthContext';
 import { cleanFileName, findColumnIndex, parseGermanNumber } from '../utils';
 import type { UploadedFile, HonorPlayerInfo, PlayerHonorChange, HonorComparisonStats, PlayerHonorHistory } from '../types';
 
@@ -23,6 +23,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
   const [startFileId, setStartFileId] = useState<string>('');
   const [endFileId, setEndFileId] = useState<string>('');
   const [comparisonStats, setComparisonStats] = useState<HonorComparisonStats | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<HonorPlayerInfo[] | 'not_found' | null>(null);
@@ -59,7 +60,6 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
-  // --- Logic ---
   const extractHonorPlayersFromFile = useCallback((file: UploadedFile): HonorPlayerInfo[] => {
       if (!file || !file.headers || !file.data) return [];
       const headers = file.headers.map(h => String(h));
@@ -102,7 +102,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       setComparisonError(null);
   }, [startFileId, endFileId, uploadedFiles, extractHonorPlayersFromFile]);
 
-  useEffect(() => { if (endFileId) handleCompare(); }, [endFileId, handleCompare]);
+  useEffect(() => { if (endFileId) handleCompare(); }, [endFileId, uploadedFiles, handleCompare]);
 
   const honorHistories = useMemo(() => {
       const map = new Map<string, PlayerHonorHistory>();
@@ -137,8 +137,9 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
           const token = localStorage.getItem('authToken');
           await fetch(`${backendUrl}/honor/files/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
           setUploadedFiles(p => p.filter(f => f.id !== id));
-      } catch(e) {}
+      } catch(e) { console.error('Delete failed', e); }
   };
+
   const handleReorderFiles = async (files: UploadedFile[]) => {
       if(!canManageFiles) return;
       setUploadedFiles(files);
@@ -146,7 +147,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
           const token = localStorage.getItem('authToken');
           const order = files.map(f => f.id);
           await fetch(`${backendUrl}/honor/files/reorder`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ order }) });
-      } catch(e) {}
+      } catch(e) { console.error('Reorder failed', e); }
   };
 
 
@@ -186,7 +187,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
          results={searchResults} selectedPlayerHistory={selectedPlayerHistory} onSelectPlayer={handleSelectPlayer} isDataLoaded={uploadedFiles.length > 0}
       />
 
-      <HonorOverviewTable stats={comparisonStats} error={comparisonError} startFileName={cleanFileName(uploadedFiles.find(f => f.id === startFileId)?.name || '')} endFileName={cleanFileName(uploadedFiles.find(f => f.id === endFileId)?.name || '')} />
+      <HonorOverviewTable stats={comparisonStats} error={error} startFileName={cleanFileName(uploadedFiles.find(f => f.id === startFileId)?.name || '')} endFileName={cleanFileName(uploadedFiles.find(f => f.id === endFileId)?.name || '')} />
     </div>
   );
 };
