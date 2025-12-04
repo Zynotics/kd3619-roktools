@@ -178,6 +178,7 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   };
   const handleClearSearch = () => { setSearchQuery(''); setSearchMatches(null); setSelectedPlayerHistory(null); };
 
+
   if (isLoading) return <div className="p-6 text-center text-gray-300">Loading...</div>;
 
   return (

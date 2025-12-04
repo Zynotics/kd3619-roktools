@@ -37,10 +37,8 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       setIsLoading(true); setError(null);
       let response: Response;
       if (shouldUsePublic) {
-        // 👑 Public Endpoint
         response = await fetch(`${backendUrl}/api/public/kingdom/${publicSlug}/honor-files`);
       } else {
-        // Private Endpoint
         const token = localStorage.getItem('authToken');
         if (!token) throw new Error('Authentication token not found.');
         response = await fetch(`${backendUrl}/honor/files-data`, { headers: { Authorization: `Bearer ${token}` } });
@@ -64,7 +62,6 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
-  // --- Logic ---
   const extractHonorPlayersFromFile = useCallback((file: UploadedFile): HonorPlayerInfo[] => {
       if (!file || !file.headers || !file.data) return [];
       const headers = file.headers.map(h => String(h));

@@ -75,6 +75,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (shouldUsePublicEndpoint && (response.status === 404 || response.status === 403)) { setUploadedFiles([]); return; }
         throw new Error(errorData.error || `Failed to fetch files`);
       }
       
@@ -140,7 +141,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   };
 
   // ---------------------------------------------------
-  // PARSING & COMPARISON LOGIC (Ungekürzt)
+  // PARSING & COMPARISON LOGIC
   // ---------------------------------------------------
   const parseFileToPlayers = (file: UploadedFile): PlayerInfo[] => {
     if (!file || !file.headers || !file.data) return [];
