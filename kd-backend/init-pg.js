@@ -29,6 +29,13 @@ async function init() {
       REFERENCES kingdoms(id);
   `);
 
+  // 📝 NEU: Granulare File Management Rechte zur users-Tabelle hinzufügen (Fix für Fehler)
+  await query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS can_manage_overview_files BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS can_manage_honor_files BOOLEAN DEFAULT FALSE;
+  `);
+
   // OVERVIEW FILES
   await query(`
     CREATE TABLE IF NOT EXISTS overview_files (
