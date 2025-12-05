@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// LoginPrompt.tsx (VOLLSTÄNDIGER CODE MIT INVITE LOGIK)
+import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { Card } from './Card';
 
@@ -21,8 +22,23 @@ const LoginPrompt: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  
+  // 🆕 Invite Slug State
+  const [inviteSlug, setInviteSlug] = useState<string | null>(null);
 
   const { login, register } = useAuth();
+
+  // 🆕 URL beim Laden prüfen
+  useEffect(() => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const slug = searchParams.get('slug');
+      if (slug) {
+          setInviteSlug(slug);
+          // Wenn Slug da ist, vermutlich eher Registrierung gewünscht:
+          setIsLogin(false);
+      }
+  }, []);
+
 
   const validateGovId = async () => {
     if (isLogin) return;
@@ -84,8 +100,8 @@ const LoginPrompt: React.FC = () => {
         await login(username, password);
         // Successful login handled by AuthContext redirect
       } else {
-        // 1. Registrieren
-        const result = await register(email, username, password, governorId);
+        // 1. Registrieren (inkl. Slug falls vorhanden)
+        const result = await register(email, username, password, governorId, inviteSlug);
         setSuccessMessage(result.message);
         
         // 2. Auto-Login nach erfolgreicher Registrierung
@@ -116,8 +132,17 @@ const LoginPrompt: React.FC = () => {
   return (
     <Card className="max-w-lg mx-auto p-8">
       <h2 className="text-2xl font-bold text-white mb-6">
-        {isLogin ? 'Sign in to Rise of Stats' : 'Register New Account'}
+        {isLogin ? 'Sign in to your KD' : 'Register New Account'}
       </h2>
+      
+      {/* 🆕 Invite Hinweis */}
+      {!isLogin && inviteSlug && (
+          <div className="mb-6 p-3 bg-blue-900/30 border border-blue-700 rounded text-center">
+              <p className="text-sm text-blue-300 mb-1">INVITED TO KINGDOM:</p>
+              <p className="text-lg font-bold text-white tracking-wide">{inviteSlug.toUpperCase()}</p>
+              <p className="text-xs text-gray-400 mt-1">You will be assigned to this kingdom automatically.</p>
+          </div>
+      )}
 
       {error && (
         <div className="mb-4 text-sm text-red-400 bg-red-900/30 border border-red-700 px-3 py-2 rounded">

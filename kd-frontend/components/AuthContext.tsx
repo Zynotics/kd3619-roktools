@@ -1,10 +1,5 @@
-import React, {
-  createContext,
-  useState,
-  useContext,
-  useEffect,
-  ReactNode,
-} from 'react';
+// AuthContext.tsx (VOLLSTÄNDIGER CODE MIT INVITE-SLUG SUPPORT)
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 type UserRole = 'user' | 'r4' | 'r5' | 'admin';
 
@@ -15,26 +10,18 @@ interface User {
   isApproved: boolean;
   role: UserRole;
   governorId?: string | null;
-  kingdomId?: string | null;
   canAccessHonor?: boolean;
   canAccessAnalytics?: boolean;
   canAccessOverview?: boolean;
+  kingdomId?: string | null; // NEU
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string) => Promise<void>;
-  register: (
-    email: string,
-    username: string,
-    password: string,
-    governorId: string
-  ) => Promise<any>;
+  token: string | null;
+  login: (username: string, pass: string) => Promise<void>;
+  register: (email: string, username: string, pass: string, govId: string, slug?: string | null) => Promise<{ message: string }>; // 🆕 slug hinzugefügt
   logout: () => void;
-  isLoading: boolean;
-  hasOverviewAccess: boolean;
-  hasHonorAccess: boolean;
-  hasAnalyticsAccess: boolean;
   refreshUser: () => Promise<void>;
 }
 
@@ -45,204 +32,107 @@ const BACKEND_URL =
     ? 'https://api.rise-of-stats.com'
     : 'http://localhost:4000';
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [token, setToken] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
-  // Initialer Check beim Laden der Seite
   useEffect(() => {
-    const initAuth = async () => {
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/auth/validate`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!res.ok) {
-          localStorage.removeItem('authToken');
-          setUser(null);
-        } else {
-          const data = await res.json();
-          setUser({
-            id: data.id,
-            email: data.email,
-            username: data.username,
-            isApproved: !!data.isApproved,
-            role: data.role as UserRole,
-            governorId: data.governorId ?? null,
-            kingdomId: data.kingdomId ?? null,
-            canAccessHonor: !!data.canAccessHonor,
-            canAccessAnalytics: !!data.canAccessAnalytics,
-            canAccessOverview: !!data.canAccessOverview,
-          });
-        }
-      } catch (err) {
-        console.error('Auth init error:', err);
-        localStorage.removeItem('authToken');
-        setUser(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initAuth();
+    const storedToken = localStorage.getItem('authToken');
+    if (storedToken) {
+      setToken(storedToken);
+      validateToken(storedToken);
+    } else {
+      setIsReady(true);
+    }
   }, []);
 
-  const login = async (username: string, password: string) => {
+  const validateToken = async (t: string) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/auth/validate`, {
+        headers: { Authorization: `Bearer ${t}` },
+      });
+      if (res.ok) {
+        const u = await res.json();
+        setUser(u);
+      } else {
+        logout();
+      }
+    } catch {
+      logout();
+    } finally {
+      setIsReady(true);
+    }
+  };
+
+  const login = async (username: string, pass: string) => {
     const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password: pass }),
     });
+    const data = await res.json();
 
     if (!res.ok) {
-      const text = await res.text();
-      let message = 'Login failed';
-      try {
-        const errJson = JSON.parse(text);
-        message = errJson.error || message;
-      } catch {
-        // ignore
-      }
-      throw new Error(message);
+      throw new Error(data.error || 'Login failed');
     }
 
-    const data = await res.json();
-    if (data.token) {
-      localStorage.setItem('authToken', data.token);
-    }
-
-    setUser({
-      id: data.user.id,
-      email: data.user.email,
-      username: data.user.username,
-      isApproved: !!data.user.isApproved,
-      role: data.user.role as UserRole,
-      governorId: data.user.governorId ?? null,
-      kingdomId: data.user.kingdomId ?? null,
-      canAccessHonor: !!data.user.canAccessHonor,
-      canAccessAnalytics: !!data.user.canAccessAnalytics,
-      canAccessOverview: !!data.user.canAccessOverview,
-    });
+    localStorage.setItem('authToken', data.token);
+    setToken(data.token);
+    setUser(data.user);
   };
 
+  // 🆕 register mit slug Parameter
   const register = async (
-    email: string,
-    username: string,
-    password: string,
-    governorId: string
+    email: string, 
+    username: string, 
+    pass: string, 
+    govId: string,
+    slug?: string | null
   ) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, username, password, governorId }),
-      });
-
-      const text = await res.text();
-      let json: any = {};
-      try {
-        json = text ? JSON.parse(text) : {};
-      } catch {
-        // Plain text
-      }
-
-      if (!res.ok) {
-        const message = json.error || 'Registration failed';
-        throw new Error(message);
-      }
-
-      return json;
-    } finally {
-      setIsLoading(false);
+    const body: any = { email, username, password: pass, governorId: govId };
+    if (slug) {
+        body.slug = slug;
     }
+
+    const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Registration failed');
+    }
+    return data;
   };
 
   const logout = () => {
     localStorage.removeItem('authToken');
+    setToken(null);
     setUser(null);
   };
 
   const refreshUser = async () => {
-    const token = localStorage.getItem('authToken');
-    if (!token) return;
-
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/auth/validate`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        localStorage.removeItem('authToken');
-        setUser(null);
-        return;
-      }
-
-      const data = await res.json();
-      setUser({
-        id: data.id,
-        email: data.email,
-        username: data.username,
-        isApproved: !!data.isApproved,
-        role: data.role as UserRole,
-        governorId: data.governorId ?? null,
-        kingdomId: data.kingdomId ?? null,
-        canAccessHonor: !!data.canAccessHonor,
-        canAccessAnalytics: !!data.canAccessAnalytics,
-        canAccessOverview: !!data.canAccessOverview,
-      });
-    } catch (err) {
-      console.error('refreshUser error:', err);
+    if (token) {
+      await validateToken(token);
     }
   };
 
-  const isElevated =
-    user?.role === 'admin' || user?.role === 'r4' || user?.role === 'r5';
-
-  const hasOverviewAccess =
-    !!user && (isElevated || (user.isApproved && !!user.canAccessOverview));
-  const hasHonorAccess =
-    !!user && (isElevated || (user.isApproved && !!user.canAccessHonor));
-  const hasAnalyticsAccess =
-    !!user && (isElevated || (user.isApproved && !!user.canAccessAnalytics));
+  if (!isReady) return null; // or loading spinner
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        login,
-        register,
-        logout,
-        isLoading,
-        hasOverviewAccess,
-        hasHonorAccess,
-        hasAnalyticsAccess,
-        refreshUser,
-      }}
-    >
+    <AuthContext.Provider value={{ user, token, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = (): AuthContextType => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  return ctx;
+  return context;
 };
