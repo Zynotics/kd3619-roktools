@@ -188,16 +188,27 @@ function authenticateToken(req, res, next) {
   jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) return res.status(403).json({ error: 'Ungültiger Token' });
     
-    // Hole kingdom_id aus der DB für den aktuellsten Zustand
-    const dbUser = await get('SELECT role, kingdom_id FROM users WHERE id = $1', [user.id]);
+    // Hole ALLE user fields aus der DB für den aktuellsten Zustand
+    // 📝 ERWEITERT: Hole die neuen can_manage_* Felder
+    const dbUser = await get('SELECT role, kingdom_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files FROM users WHERE id = $1', [user.id]);
     if (!dbUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
     
-    req.user = { ...user, role: dbUser.role, kingdomId: dbUser.kingdom_id || null };
+    req.user = { 
+      ...user, 
+      role: dbUser.role, 
+      kingdomId: dbUser.kingdom_id || null,
+      canAccessHonor: !!dbUser.can_access_honor,
+      canAccessAnalytics: !!dbUser.can_access_analytics,
+      canAccessOverview: !!dbUser.can_access_overview,
+      // 📝 NEU: Füge die neuen Felder hinzu
+      canManageOverviewFiles: !!dbUser.can_manage_overview_files,
+      canManageHonorFiles: !!dbUser.can_manage_honor_files
+    };
     next();
   });
 }
 
-// 📝 NEU: Middleware für Lesezugriff auf Kingdoms für R4/R5/Admin (für Redirect-Zwecke)
+// Middleware für Lesezugriff auf Kingdoms für R4/R5/Admin (für Redirect-Zwecke)
 function requireReadAccess(req, res, next) {
     if (!req.user) return res.status(401).json({ error: 'Nicht authentifiziert' });
     const role = req.user.role;
@@ -274,9 +285,10 @@ app.post('/api/auth/register', async (req, res) => {
     const userId = 'user-' + Date.now();
 
     // 🆕 kingdom_id in Insert einfügen
+    // 📝 ERWEITERT: Fügt die neuen can_manage_* Felder hinzu (default: false)
     await query(
-      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview, kingdom_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [userId, email, username, passwordHash, false, 'user', normalizedGovId, false, false, false, assignedKingdomId]
+      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview, kingdom_id, can_manage_overview_files, can_manage_honor_files) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [userId, email, username, passwordHash, false, 'user', normalizedGovId, false, false, false, assignedKingdomId, false, false]
     );
 
     return res.json({
@@ -288,7 +300,9 @@ app.post('/api/auth/register', async (req, res) => {
           isApproved: false, 
           role: 'user', 
           governorId: normalizedGovId,
-          kingdomId: assignedKingdomId 
+          kingdomId: assignedKingdomId,
+          canManageOverviewFiles: false,
+          canManageHonorFiles: false, 
       }
     });
   } catch (error) {
@@ -302,7 +316,8 @@ app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Benutzername und Passwort benötigt' });
 
-    const user = await get('SELECT * FROM users WHERE username = $1', [username]);
+    // 📝 ERWEITERT: Selectiere die neuen can_manage_* Felder
+    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files FROM users WHERE username = $1', [username]);
     if (!user) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
 
     const validPassword = await bcrypt.compare(password, user.password_hash);
@@ -318,7 +333,15 @@ app.post('/api/auth/login', async (req, res) => {
     };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
 
-    res.json({ token, user: { ...tokenPayload, email: user.email } });
+    res.json({ 
+        token, 
+        user: { 
+            ...tokenPayload, 
+            email: user.email,
+            canManageOverviewFiles: !!user.can_manage_overview_files,
+            canManageHonorFiles: !!user.can_manage_honor_files,
+        } 
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Login fehlgeschlagen' });
@@ -327,7 +350,8 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/validate', authenticateToken, async (req, res) => {
   try {
-    const user = await get('SELECT * FROM users WHERE id = $1', [req.user.id]);
+    // 📝 ERWEITERT: Selectiere die neuen can_manage_* Felder
+    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files FROM users WHERE id = $1', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
 
     res.json({
@@ -340,7 +364,10 @@ app.get('/api/auth/validate', authenticateToken, async (req, res) => {
       canAccessHonor: !!user.can_access_honor,
       canAccessAnalytics: !!user.can_access_analytics,
       canAccessOverview: !!user.can_access_overview,
-      kingdomId: user.kingdom_id || null, 
+      kingdomId: user.kingdom_id || null,
+      // 📝 NEU: Füge die neuen Felder hinzu
+      canManageOverviewFiles: !!user.can_manage_overview_files,
+      canManageHonorFiles: !!user.can_manage_honor_files,
     });
   } catch (err) {
     res.status(500).json({ error: 'Token-Validierung fehlgeschlagen' });
@@ -352,11 +379,12 @@ app.get('/api/auth/validate', authenticateToken, async (req, res) => {
 app.post('/api/admin/create-admin', async (req, res) => {
   try {
     const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
+    // 📝 NEU: Fügt die neuen can_manage_* Felder hinzu (default: true für Admin)
     await query(
-      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id) 
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_manage_overview_files, can_manage_honor_files) 
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash`,
-      ['admin-001', 'admin@kd3619.com', 'Stadmin', adminPasswordHash, true, 'admin', null]
+      ['admin-001', 'admin@kd3619.com', 'Stadmin', adminPasswordHash, true, 'admin', null, true, true]
     );
     res.json({ message: 'Admin user created successfully' });
   } catch (error) {
@@ -375,8 +403,9 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
         params.push(userKingdomId);
     }
     
+    // 📝 ERWEITERT: Selectiere die neuen can_manage_* Felder
     const users = await all(
-      `SELECT id, email, username, is_approved, role, created_at, kingdom_id, governor_id, can_access_honor, can_access_analytics, can_access_overview FROM users ${whereClause} ORDER BY created_at DESC`, params
+      `SELECT id, email, username, is_approved, role, created_at, kingdom_id, governor_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files FROM users ${whereClause} ORDER BY created_at DESC`, params
     );
 
     res.json(users.map((user) => ({
@@ -391,6 +420,9 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
         canAccessHonor: !!user.can_access_honor,
         canAccessAnalytics: !!user.can_access_analytics,
         canAccessOverview: !!user.can_access_overview,
+        // 📝 NEU: Füge die neuen Felder hinzu
+        canManageOverviewFiles: !!user.can_manage_overview_files,
+        canManageHonorFiles: !!user.can_manage_honor_files,
     })));
   } catch (error) {
     res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
@@ -432,6 +464,34 @@ app.post('/api/admin/users/access', authenticateToken, requireAdmin, async (req,
       res.json({ success: true });
     } catch(e) { res.status(500).json({error: 'Error'}); }
 });
+
+// 📝 NEU: Endpoint zur Verwaltung der File Management Rechte (nur Superadmin)
+app.post('/api/admin/users/access-files', authenticateToken, requireAdmin, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+
+    try {
+      const { userId, canManageOverviewFiles, canManageHonorFiles } = req.body;
+      
+      if (!userId) return res.status(400).json({ error: 'Benutzer ID wird benötigt' });
+
+      // Verhindere, dass Admins ihre eigenen Rechte ändern oder die Rechte anderer Admins ändern
+      const targetUser = await get('SELECT role FROM users WHERE id = $1', [userId]);
+      if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+      if (targetUser.role === 'admin' || userId === req.user.id) {
+          return res.status(403).json({ error: 'Kein Zugriff, um diese Benutzerrechte zu ändern.' });
+      }
+      
+      await query(
+        `UPDATE users SET can_manage_overview_files=$1, can_manage_honor_files=$2 WHERE id=$3`, 
+        [!!canManageOverviewFiles, !!canManageHonorFiles, userId]
+      );
+      res.json({ success: true });
+    } catch(e) { 
+        console.error('Error in /api/admin/users/access-files:', e);
+        res.status(500).json({error: 'Error'}); 
+    }
+});
+
 
 app.post('/api/admin/users/role', authenticateToken, requireAdmin, async (req, res) => {
     try {
@@ -498,7 +558,8 @@ app.post('/api/admin/users/assign-r4', authenticateToken, requireAdmin, async (r
         }
         
         // 2. Setze die Rolle auf R4, die Kingdom ID und setze is_approved auf true (um den Approval-Prozess zu überspringen)
-        await query('UPDATE users SET role = $1, kingdom_id = $2, is_approved = true WHERE id = $3', ['r4', kingdomId, userId]);
+        // 📝 Setze die neuen can_manage_* Felder auf false (Superadmin muss sie bei Bedarf manuell setzen)
+        await query('UPDATE users SET role = $1, kingdom_id = $2, is_approved = true, can_manage_overview_files = false, can_manage_honor_files = false WHERE id = $3', ['r4', kingdomId, userId]);
         
         return res.json({ success: true, message: `Benutzer ${userId} wurde Rolle R4 und Königreich ${kingdomId} zugewiesen.` });
         
@@ -536,7 +597,7 @@ app.post('/api/admin/kingdoms', authenticateToken, requireAdmin, async (req, res
         const id = 'kdm-' + Date.now();
         const nSlug = String(slug).trim().toLowerCase().replace(/[^a-z0-9\-]/g, '-');
         
-        // 📝 NEU: Slug Eindeutigkeitsprüfung
+        // 📝 Slug Eindeutigkeitsprüfung
         const existingBySlug = await findKingdomBySlug(nSlug);
         if (existingBySlug) {
              return res.status(400).json({ error: `Slug '${nSlug}' ist bereits für das Königreich '${existingBySlug.display_name}' vergeben.` });
@@ -556,7 +617,7 @@ app.put('/api/admin/kingdoms/:id', authenticateToken, requireAdmin, async (req, 
 
         const normalizedSlug = String(slug).trim().toLowerCase().replace(/[^a-z0-9\-]/g, '-');
 
-        // 📝 NEU: Slug Eindeutigkeitsprüfung (außer für das aktuelle Königreich)
+        // 📝 Slug Eindeutigkeitsprüfung (außer für das aktuelle Königreich)
         const existingBySlug = await get('SELECT id, display_name FROM kingdoms WHERE LOWER(slug) = $1 AND id != $2 LIMIT 1', [normalizedSlug, req.params.id]);
         if (existingBySlug) {
              return res.status(400).json({ error: `Slug '${normalizedSlug}' ist bereits für das Königreich '${existingBySlug.display_name}' vergeben.` });
@@ -645,6 +706,18 @@ app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
 
 // ==================== AUTH DATA (Overview/Honor) ====================
 
+// Hilfsfunktion zur Prüfung der File Management Rechte
+function hasFileManagementAccess(req, type) {
+    const { role, canManageOverviewFiles, canManageHonorFiles } = req.user;
+    if (role === 'admin') return true;
+    if (role === 'r5' || role === 'r4') {
+        if (type === 'overview') return canManageOverviewFiles;
+        if (type === 'honor') return canManageHonorFiles;
+    }
+    return false;
+}
+
+
 app.get('/overview/files-data', authenticateToken, async (req, res) => {
     const { role, kingdomId } = req.user;
     const kId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
@@ -654,9 +727,13 @@ app.get('/overview/files-data', authenticateToken, async (req, res) => {
     res.json(rows.map(r => ({...r, headers: JSON.parse(r.headers||'[]'), data: JSON.parse(r.data||'[]')})));
 });
 
+// 📝 UPDATED: Uploads sind jetzt an die neuen can_manage_* flags gebunden (Superadmin hat immer Zugriff)
 app.post('/overview/upload', authenticateToken, overviewUpload.single('file'), async (req, res) => {
     const { role, kingdomId, id: userId } = req.user;
-    if (!['admin','r5','r4'].includes(role)) return res.status(403).json({ error: 'Forbidden' });
+    
+    if (!hasFileManagementAccess(req, 'overview') && role !== 'admin') {
+         return res.status(403).json({ error: 'Keine Berechtigung zum Hochladen von Overview-Dateien.' });
+    }
     
     // 👑 ADMIN OVERRIDE LOGIC
     let targetK = kingdomId;
@@ -680,10 +757,15 @@ app.post('/overview/upload', authenticateToken, overviewUpload.single('file'), a
     } catch(e) { res.status(500).json({ error: 'Upload failed' }); }
 });
 
+// 📝 UPDATED: Delete ist jetzt an die neuen can_manage_* flags gebunden (Superadmin hat immer Zugriff)
 app.delete('/overview/files/:id', authenticateToken, async (req, res) => {
     const f = await get('SELECT kingdom_id, path FROM overview_files WHERE id=$1', [req.params.id]);
     if (!f) return res.status(404).json({ error: 'Not found' });
     
+    if (!hasFileManagementAccess(req, 'overview') && req.user.role !== 'admin') {
+         return res.status(403).json({ error: 'Keine Berechtigung zum Löschen von Overview-Dateien.' });
+    }
+    // Zusätzlich muss der Benutzer zum Kingdom gehören (außer Admin)
     if (req.user.role !== 'admin' && f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
 
     if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
@@ -691,10 +773,16 @@ app.delete('/overview/files/:id', authenticateToken, async (req, res) => {
     res.json({ success: true });
 });
 
+// 📝 UPDATED: Reorder ist jetzt an die neuen can_manage_* flags gebunden (Superadmin hat immer Zugriff)
 app.post('/overview/files/reorder', authenticateToken, async (req, res) => {
     const { order } = req.body;
     if (!order || !Array.isArray(order) || order.length === 0) return res.status(400).json({ error: 'Invalid' });
     
+    if (!hasFileManagementAccess(req, 'overview') && req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Keine Berechtigung zum Neuordnen von Overview-Dateien.' });
+    }
+    
+    // Zusätzlicher Check, dass das Kingdom übereinstimmt (außer Admin)
     if (order.length > 0 && req.user.role !== 'admin') {
         const f = await get('SELECT kingdom_id FROM overview_files WHERE id=$1', [order[0]]);
         if (!f || f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
@@ -715,9 +803,13 @@ app.get('/honor/files-data', authenticateToken, async (req, res) => {
     res.json(rows.map(r => ({...r, headers: JSON.parse(r.headers||'[]'), data: JSON.parse(r.data||'[]')})));
 });
 
+// 📝 UPDATED: Uploads sind jetzt an die neuen can_manage_* flags gebunden (Superadmin hat immer Zugriff)
 app.post('/honor/upload', authenticateToken, honorUpload.single('file'), async (req, res) => {
     const { role, kingdomId, id: userId } = req.user;
-    if (!['admin','r5','r4'].includes(role)) return res.status(403).json({ error: 'Forbidden' });
+    
+    if (!hasFileManagementAccess(req, 'honor') && role !== 'admin') {
+         return res.status(403).json({ error: 'Keine Berechtigung zum Hochladen von Honor-Dateien.' });
+    }
     
     let targetK = kingdomId;
     if (role === 'admin' && req.query.slug) {
@@ -738,9 +830,15 @@ app.post('/honor/upload', authenticateToken, honorUpload.single('file'), async (
     } catch(e) { res.status(500).json({ error: 'Upload failed' }); }
 });
 
+// 📝 UPDATED: Delete ist jetzt an die neuen can_manage_* flags gebunden (Superadmin hat immer Zugriff)
 app.delete('/honor/files/:id', authenticateToken, async (req, res) => {
     const f = await get('SELECT kingdom_id, path FROM honor_files WHERE id=$1', [req.params.id]);
     if (!f) return res.status(404).json({ error: 'Not found' });
+    
+    if (!hasFileManagementAccess(req, 'honor') && req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Keine Berechtigung zum Löschen von Honor-Dateien.' });
+    }
+    // Zusätzlich muss der Benutzer zum Kingdom gehören (außer Admin)
     if (req.user.role !== 'admin' && f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
 
     if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
@@ -748,13 +846,21 @@ app.delete('/honor/files/:id', authenticateToken, async (req, res) => {
     res.json({ success: true });
 });
 
+// 📝 UPDATED: Reorder ist jetzt an die neuen can_manage_* flags gebunden (Superadmin hat immer Zugriff)
 app.post('/honor/files/reorder', authenticateToken, async (req, res) => {
     const { order } = req.body;
     if (!order || !Array.isArray(order) || order.length === 0) return res.status(400).json({ error: 'Invalid' });
+    
+    if (!hasFileManagementAccess(req, 'honor') && req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Keine Berechtigung zum Neuordnen von Honor-Dateien.' });
+    }
+    
+    // Zusätzlicher Check, dass das Kingdom übereinstimmt (außer Admin)
     if (req.user.role !== 'admin') {
         const f = await get('SELECT kingdom_id FROM honor_files WHERE id=$1', [order[0]]);
         if (!f || f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
     }
+    
     for (let i = 0; i < order.length; i++) await query('UPDATE honor_files SET fileOrder = $1 WHERE id = $2', [i, order[i]]);
     res.json({ success: true });
 });
