@@ -712,11 +712,12 @@ const AdminUserManagement: React.FC = () => {
   // 🆕 NEU: Funktion zum Kopieren des Registrierungslinks
   const handleCopyInviteLink = () => {
     if (inviteLink) {
+      // Nutzt das native Clipboard API
       navigator.clipboard.writeText(inviteLink).then(() => {
-        showSuccessMessage('Einladungslink wurde in die Zwischenablage kopiert!');
+        showSuccessMessage('Invite link copied to clipboard!');
       }).catch(err => {
-        console.error('Kopieren fehlgeschlagen:', err);
-        alert('Kopieren fehlgeschlagen. Bitte manuell kopieren.');
+        console.error('Copy failed:', err);
+        alert('Copy failed. Please copy manually.');
       });
     }
   };
@@ -725,10 +726,10 @@ const AdminUserManagement: React.FC = () => {
   const handleCopyPublicLink = () => {
     if (publicLink) {
       navigator.clipboard.writeText(publicLink).then(() => {
-        showSuccessMessage('Öffentlicher Link wurde in die Zwischenablage kopiert!');
+        showSuccessMessage('Public link copied to clipboard!');
       }).catch(err => {
-        console.error('Kopieren fehlgeschlagen:', err);
-        alert('Kopieren fehlgeschlagen. Bitte manuell kopieren.');
+        console.error('Copy failed:', err);
+        alert('Copy failed. Please copy manually.');
       });
     }
   };
@@ -776,7 +777,7 @@ const AdminUserManagement: React.FC = () => {
         {showInviteLinkCard && (
           <Card className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-purple-900/30 border-purple-700 mb-6">
             <div>
-              <p className="text-sm font-semibold text-purple-300 mb-1">Einladungslink (Registrierung R4) für {kingdomDisplayName || 'das Königreich'}:</p>
+              <p className="text-sm font-semibold text-purple-300 mb-1">Invite Link (Registration) for {kingdomDisplayName || 'the Kingdom'}:</p>
               <p className="text-xs break-all text-white bg-gray-800 p-2 rounded max-w-full sm:max-w-lg">
                   {inviteLink}
               </p>
@@ -785,7 +786,7 @@ const AdminUserManagement: React.FC = () => {
               onClick={handleCopyInviteLink}
               className="mt-3 sm:mt-0 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
             >
-              Link kopieren
+              Copy Link
             </button>
           </Card>
         )}
@@ -794,7 +795,7 @@ const AdminUserManagement: React.FC = () => {
         {showPublicLinkCard && (
             <Card className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-800/50 border-gray-700 mb-6">
                 <div>
-                    <p className="text-sm font-semibold text-gray-300 mb-1">Öffentlicher Link (Dashboard) für {kingdomDisplayName || 'das Königreich'}:</p>
+                    <p className="text-sm font-semibold text-gray-300 mb-1">Public Link (Dashboard) for {kingdomDisplayName || 'the Kingdom'}:</p>
                     <p className="text-xs break-all text-white bg-gray-700 p-2 rounded max-w-full sm:max-w-lg">
                         {publicLink}
                     </p>
@@ -803,7 +804,7 @@ const AdminUserManagement: React.FC = () => {
                     onClick={handleCopyPublicLink}
                     className="mt-3 sm:mt-0 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                 >
-                    Link kopieren
+                    Copy Link
                 </button>
             </Card>
         )}
@@ -1267,8 +1268,8 @@ const AdminUserManagement: React.FC = () => {
                     Kingdom Management
                   </h2>
                   <p className="text-sm text-gray-400">
-                    Manage Rise of Kingdoms kingdoms, slugs and RoK IDs. Each slug
-                    will later map to its own URL (z.B.
+                    Manage Rise of Kingdoms kingdoms, slugs, and RoK IDs. Each slug
+                    will later map to its own URL (e.g.,
                     <span className="text-blue-300"> {FRONTEND_URL}/?slug=3619-vikings</span>).
                   </p>
                 </div>
