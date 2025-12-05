@@ -776,7 +776,7 @@ const AdminUserManagement: React.FC = () => {
         {showInviteLinkCard && (
           <Card className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-purple-900/30 border-purple-700 mb-6">
             <div>
-              <p className="text-sm font-semibold text-purple-300 mb-1">Einladungslink (Registrierung) für {kingdomDisplayName || 'das Königreich'}:</p>
+              <p className="text-sm font-semibold text-purple-300 mb-1">Einladungslink (Registrierung R4) für {kingdomDisplayName || 'das Königreich'}:</p>
               <p className="text-xs break-all text-white bg-gray-800 p-2 rounded max-w-full sm:max-w-lg">
                   {inviteLink}
               </p>
