@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 
 interface ColumnFilterProps<T extends string> {
@@ -7,7 +6,8 @@ interface ColumnFilterProps<T extends string> {
   setVisibleColumns: (cols: T[]) => void;
 }
 
-const ColumnFilter = <T extends string>({ allColumns, visibleColumns, setVisibleColumns }: ColumnFilterProps<T>) => {
+// 🟢 HIER: "export const" hinzugefügt für Named Import
+export const ColumnFilter = <T extends string>({ allColumns, visibleColumns, setVisibleColumns }: ColumnFilterProps<T>) => {
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -69,4 +69,5 @@ const ColumnFilter = <T extends string>({ allColumns, visibleColumns, setVisible
   );
 };
 
+// Default Export ebenfalls beibehalten für Kompatibilität
 export default ColumnFilter;
