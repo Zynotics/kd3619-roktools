@@ -1,1 +1,19 @@
-﻿
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 📝 NEU: Benutzerdefinierte Utility-Klassen für das Layout */
+@layer utilities {
+    .main-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        min-height: 100vh;
+    }
+    
+    /* Desktop / Large Screen Layout */
+    @screen lg {
+        .main-grid-desktop {
+            grid-template-columns: 16rem 1fr; /* 256px breite Sidebar */
+        }
+    }
+}
