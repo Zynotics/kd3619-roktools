@@ -479,9 +479,36 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
     } catch(e) { res.status(500).json({error: 'Error'}); }
 });
 
+// 📝 NEU: SuperAdmin Endpoint zur Zuweisung eines R4-Benutzers zu einem Königreich
+app.post('/api/admin/users/assign-r4', authenticateToken, requireAdmin, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+
+    try {
+        const { userId, kingdomId } = req.body;
+        
+        if (!userId || !kingdomId) {
+            return res.status(400).json({ error: 'Benutzer ID und Königreich ID sind erforderlich.' });
+        }
+        
+        // 1. Validierung: Sicherstellen, dass der Benutzer existiert und kein Admin ist
+        const targetUser = await get('SELECT role FROM users WHERE id = $1', [userId]);
+        if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        if (targetUser.role === 'admin') return res.status(403).json({ error: 'Kann Admin-Rollen nicht zuweisen.' });
+        
+        // 2. Setze die Rolle auf R4, die Kingdom ID und setze is_approved auf true
+        await query('UPDATE users SET role = $1, kingdom_id = $2, is_approved = true WHERE id = $3', ['r4', kingdomId, userId]);
+        
+        return res.json({ success: true, message: `Benutzer ${userId} wurde Rolle R4 und Königreich ${kingdomId} zugewiesen.` });
+        
+    } catch (error) {
+        console.error('❌ Error during assign-r4:', error);
+        return res.status(500).json({ error: 'R4 Zuweisung fehlgeschlagen' });
+    }
+});
+
+
 // ==================== KINGDOM ADMIN ENDPOINTS ====================
 
-// 📝 requireReadAccess erlaubt R4 hier Zugriff (Fix für R4 Weiterleitung)
 app.get('/api/admin/kingdoms', authenticateToken, requireReadAccess, async (req, res) => {
   try {
       let where = '';
