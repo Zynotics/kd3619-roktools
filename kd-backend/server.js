@@ -475,6 +475,47 @@ app.post('/api/admin/kingdoms', authenticateToken, requireAdmin, async (req, res
     } catch(e) { res.status(500).json({error: 'Error'}); }
 });
 
+// 🆕 NEU: Route zum Updaten von Kingdoms (PUT)
+app.put('/api/admin/kingdoms/:id', authenticateToken, requireAdmin, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    try {
+        const { displayName, slug } = req.body;
+        if (!displayName || !slug) return res.status(400).json({ error: 'Display Name and Slug required' });
+
+        const normalizedSlug = String(slug).trim().toLowerCase().replace(/[^a-z0-9\-]/g, '-');
+
+        await query(
+            'UPDATE kingdoms SET display_name = $1, slug = $2, updated_at = NOW() WHERE id = $3',
+            [displayName, normalizedSlug, req.params.id]
+        );
+
+        // Fetch updated
+        const updated = await get(`
+            SELECT k.id, k.display_name, k.slug, k.rok_identifier, k.status, k.plan, k.created_at, k.updated_at, k.owner_user_id, u.username AS owner_username, u.email AS owner_email 
+            FROM kingdoms k LEFT JOIN users u ON u.id = k.owner_user_id
+            WHERE k.id = $1`, [req.params.id]);
+            
+        res.json({
+            kingdom: {
+                id: updated.id,
+                displayName: updated.display_name,
+                slug: updated.slug,
+                rokIdentifier: updated.rok_identifier,
+                status: updated.status,
+                plan: updated.plan,
+                createdAt: updated.created_at,
+                ownerUserId: updated.owner_user_id,
+                ownerUsername: updated.owner_username,
+                ownerEmail: updated.owner_email
+            }
+        });
+
+    } catch(e) {
+        console.error('Update kingdom error:', e);
+        res.status(500).json({error: 'Failed to update kingdom'}); 
+    }
+});
+
 app.post('/api/admin/kingdoms/:id/assign-r5', authenticateToken, requireAdmin, async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
     try {
