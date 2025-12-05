@@ -80,8 +80,17 @@ const AdminUserManagement: React.FC = () => {
   const [isAssigningR4, setIsAssigningR4] = useState(false);
   const [assignR4Error, setAssignR4Error] = useState<string | null>(null);
 
+  // 📝 Hinzugefügt: Temporäre Erfolgsnachricht (ersetzt alerts)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
 
   const { user: currentUser, refreshUser } = useAuth();
+
+  // -------- Helper: Erfolgsnachricht anzeigen und zurücksetzen
+  const showSuccessMessage = useCallback((msg: string) => {
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(null), 3000);
+  }, []);
 
   // -------- Initial Load --------
   useEffect(() => {
@@ -130,6 +139,7 @@ const AdminUserManagement: React.FC = () => {
   }, []); // Keine Abhängigkeiten
 
   const toggleApproval = async (userId: string, approved: boolean) => {
+    setUserError(null); // 📝 Fehler zurücksetzen
     try {
       const token = getTokenOrThrow();
 
@@ -144,8 +154,9 @@ const AdminUserManagement: React.FC = () => {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.log('❌ Approval toggle failed:', errorText);
-        throw new Error('Failed to update approval');
+        const errorJson = JSON.parse(errorText || '{}');
+        setUserError(errorJson.error || 'Failed to update approval'); // 📝 Fehler anzeigen
+        throw new Error(errorJson.error || 'Failed to update approval');
       }
 
       setUsers((prev) =>
@@ -154,9 +165,10 @@ const AdminUserManagement: React.FC = () => {
       if (currentUser?.id === userId) {
         refreshUser();
       }
+      showSuccessMessage(`User successfully ${approved ? 'approved' : 'blocked'}.`); // 📝 Erfolgsmeldung
     } catch (err) {
       console.error('Error toggling approval:', err);
-      alert('Error updating approval status.');
+      // Fehler wird bereits oben in setUserError gesetzt
     }
   };
 
@@ -164,6 +176,7 @@ const AdminUserManagement: React.FC = () => {
     targetUser: User,
     changes: Partial<Pick<User, 'canAccessHonor' | 'canAccessAnalytics' | 'canAccessOverview'>>
   ) => {
+    setUserError(null); // 📝 Fehler zurücksetzen
     try {
       const token = getTokenOrThrow();
 
@@ -187,8 +200,9 @@ const AdminUserManagement: React.FC = () => {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.log('❌ Access update error:', errorText);
-        throw new Error('Failed to update access rights');
+        const errorJson = JSON.parse(errorText || '{}');
+        setUserError(errorJson.error || 'Failed to update access rights'); // 📝 Fehler anzeigen
+        throw new Error(errorJson.error || 'Failed to update access rights');
       }
 
       setUsers((prev) =>
@@ -206,13 +220,15 @@ const AdminUserManagement: React.FC = () => {
       if (currentUser?.id === targetUser.id) {
         refreshUser();
       }
+      showSuccessMessage('User access updated successfully.'); // 📝 Erfolgsmeldung
     } catch (err) {
       console.error('Error updating access:', err);
-      alert('Error updating access rights.');
+      // Fehler wird bereits oben in setUserError gesetzt
     }
   };
 
   const updateRole = async (targetUser: User, newRole: UserRole) => {
+    setUserError(null); // 📝 Fehler zurücksetzen
     try {
       const token = getTokenOrThrow();
 
@@ -228,7 +244,7 @@ const AdminUserManagement: React.FC = () => {
       if (!response.ok) {
         const errorText = await response.text();
         const errorJson = JSON.parse(errorText || '{}');
-        console.log('❌ Role update error:', errorText);
+        setUserError(errorJson.error || 'Failed to update role'); // 📝 Fehler anzeigen
         throw new Error(errorJson.error || 'Failed to update role');
       }
 
@@ -237,13 +253,15 @@ const AdminUserManagement: React.FC = () => {
       if (currentUser?.id === targetUser.id) {
         refreshUser();
       }
+      showSuccessMessage(`User role changed to ${newRole.toUpperCase()}.`); // 📝 Erfolgsmeldung
     } catch (err) {
       console.error('Error updating role:', err);
-      alert(err instanceof Error ? err.message : 'Error updating role.');
+      // Fehler wird bereits oben in setUserError gesetzt
     }
   };
 
   const deleteUser = async (userId: string) => {
+    setUserError(null); // 📝 Fehler zurücksetzen
     if (
       !window.confirm(
         'Are you sure you want to delete this user? This cannot be undone.'
@@ -265,14 +283,15 @@ const AdminUserManagement: React.FC = () => {
       if (!response.ok) {
         const errorText = await response.text();
         const errorJson = JSON.parse(errorText || '{}');
-        console.log('❌ Delete user error:', errorText);
+        setUserError(errorJson.error || 'Failed to delete user'); // 📝 Fehler anzeigen
         throw new Error(errorJson.error || 'Failed to delete user');
       }
 
       setUsers((prev) => prev.filter((u) => u.id !== userId));
+      showSuccessMessage('User successfully deleted.'); // 📝 Erfolgsmeldung
     } catch (err) {
       console.error('Error deleting user:', err);
-      alert(err instanceof Error ? err.message : 'Error deleting user.');
+      // Fehler wird bereits oben in setUserError gesetzt
     }
   };
 
@@ -296,11 +315,12 @@ const AdminUserManagement: React.FC = () => {
 
         // 🆕 NEU: Setze Slug und DisplayName für den Invite Link des aktuellen Königreichs
         const isR5 = currentUser?.role === 'r5';
+        const isR4 = currentUser?.role === 'r4';
         const isSuperAdmin = currentUser?.role === 'admin';
         
         let targetKingdom: Kingdom | undefined;
         
-        if (isR5 && currentUser?.kingdomId) {
+        if ((isR5 || isR4) && currentUser?.kingdomId) {
              targetKingdom = data.find(k => k.id === currentUser.kingdomId);
         } else if (isSuperAdmin && data.length > 0) {
             // Superadmin: Wähle das Default-Kingdom oder das erste
@@ -404,9 +424,10 @@ const AdminUserManagement: React.FC = () => {
       setNewDisplayName('');
       setNewSlug('');
       setNewRokId('');
+      showSuccessMessage(`Kingdom '${created.displayName}' successfully created.`); // 📝 Erfolgsmeldung
     } catch (err) {
       console.error('Error creating kingdom:', err);
-      setCreateKingdomError('Unexpected error while creating kingdom');
+      // Fehler wird bereits in setCreateKingdomError gesetzt, falls vorhanden
     } finally {
       setIsCreatingKingdom(false);
     }
@@ -429,7 +450,7 @@ const AdminUserManagement: React.FC = () => {
 
   const handleUpdateKingdomDetails = async (kingdomId: string) => {
     if (!editDisplayName.trim() || !editSlug.trim()) {
-        alert("Display Name and Slug are required.");
+        setEditKingdomError("Display Name and Slug are required.");
         return;
     }
 
@@ -464,19 +485,16 @@ const AdminUserManagement: React.FC = () => {
           throw new Error(msg);
       }
 
-      const updatedKingdom = json.kingdom || json; // Je nach Backend-Response-Format
+      const updatedKingdom = json.kingdom || json; 
 
       // State Update
       setKingdoms(prev => prev.map(k => k.id === kingdomId ? { ...k, ...updatedKingdom } : k));
       
       cancelEditing();
-      alert(`Kingdom updated successfully.`);
+      showSuccessMessage(`Kingdom updated successfully.`); // 📝 Erfolgsmeldung
     } catch (err: any) {
         console.error('Error updating kingdom:', err);
-        // Bei Netzwerkfehler o.ä. generischen Fehler anzeigen, falls nicht schon ein spezifischer Fehler gesetzt wurde
-        if (!editKingdomError) {
-             alert(err.message || 'Error updating kingdom.');
-        }
+        // Fehler wird bereits oben in setEditKingdomError gesetzt, falls vorhanden
     }
   };
 
@@ -500,12 +518,11 @@ const AdminUserManagement: React.FC = () => {
 
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.error || 'Failed to assign R5.');
+        const msg = json.error || 'Failed to assign R5.';
+        setAssignR5Error(msg); // 📝 Fehler anzeigen
+        throw new Error(msg);
       }
 
-      // Backend sollte das Kingdom mit den neuen Owner-Daten zurückgeben
-      const updatedKingdom = kingdoms.find(k => k.id === r5KingdomId) || json.kingdom; 
-      
       // 1. Kingdom-Liste aktualisieren (owner info wird vom fetchKingdoms geholt)
       fetchKingdoms();
       
@@ -514,9 +531,10 @@ const AdminUserManagement: React.FC = () => {
       
       setR5UserId('');
       setR5KingdomId('');
-      alert(`R5 successfully assigned to ${updatedKingdom?.displayName || 'Kingdom'}. User's role and Kingdom owner updated.`);
+      showSuccessMessage(`R5 successfully assigned to ${kingdoms.find(k => k.id === r5KingdomId)?.displayName || 'Kingdom'}.`); // 📝 Erfolgsmeldung
     } catch (err: any) {
-      setAssignR5Error(err.message || 'An unexpected error occurred during R5 assignment.');
+      console.error('Error during R5 assignment:', err);
+      // Fehler wird bereits oben in setAssignR5Error gesetzt
     } finally {
       setIsAssigningR5(false);
     }
@@ -531,7 +549,7 @@ const AdminUserManagement: React.FC = () => {
     setIsAssigningR4(true);
     try {
       const token = getTokenOrThrow();
-      // Nutzt den neuen Backend-Endpoint
+      // Nutzt den neuen Backend-endpoint
       const res = await fetch(`${BACKEND_URL}/api/admin/users/assign-r4`, {
         method: 'POST',
         headers: {
@@ -543,7 +561,9 @@ const AdminUserManagement: React.FC = () => {
 
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.error || 'Failed to assign R4.');
+        const msg = json.error || 'Failed to assign R4.';
+        setAssignR4Error(msg); // 📝 Fehler anzeigen
+        throw new Error(msg);
       }
       
       // State-Updates:
@@ -552,7 +572,7 @@ const AdminUserManagement: React.FC = () => {
       setR4UserId('');
       setR4KingdomId('');
       const assignedKingdom = kingdoms.find(k => k.id === r4KingdomId)?.displayName || r4KingdomId;
-      alert(`R4 successfully assigned to ${assignedKingdom}.`);
+      showSuccessMessage(`R4 successfully assigned to ${assignedKingdom}.`); // 📝 Erfolgsmeldung
     } catch (err: any) {
       setAssignR4Error(err.message || 'An unexpected error occurred during R4 assignment.');
     } finally {
@@ -585,20 +605,23 @@ const AdminUserManagement: React.FC = () => {
 
         const json = await res.json();
         if (!res.ok) {
-            throw new Error(json.error || `Failed to set status to ${newStatus}.`);
+            const msg = json.error || `Failed to set status to ${newStatus}.`;
+            // Bei Fehler: ursprünglichen Status wiederherstellen und Fehler anzeigen
+            setKingdoms(currentKingdoms => currentKingdoms.map(k => k.id === kingdomId ? { ...k, status: currentStatus } : k));
+            setKingdomError(msg); // 📝 Fehler anzeigen
+            throw new Error(msg);
         }
         
-        // Bei Erfolg: State ist schon aktualisiert
+        showSuccessMessage(`Kingdom status successfully set to ${newStatus}.`); // 📝 Erfolgsmeldung
     } catch (err: any) {
-        // Bei Fehler: ursprünglichen Status wiederherstellen und Fehler anzeigen
-        setKingdoms(currentKingdoms => currentKingdoms.map(k => k.id === kingdomId ? { ...k, status: currentStatus } : k));
-        setKingdomError(err.message || 'An unexpected error occurred.');
+        console.error('Error updating kingdom status:', err);
+        // Fehler wird bereits oben in setKingdomError gesetzt
     }
   };
 
   const handleDeleteKingdom = async (kingdomId: string, kingdomName: string) => {
     if (kingdomId === 'kdm-default') {
-      alert('The Default Kingdom cannot be deleted.');
+      alert('The Default Kingdom cannot be deleted.'); // 📝 Bleibt als harte Regel
       return;
     }
     
@@ -621,18 +644,20 @@ const AdminUserManagement: React.FC = () => {
 
         const json = await res.json();
         if (!res.ok) {
-            throw new Error(json.error || `Failed to delete kingdom ${kingdomName}.`);
+            const msg = json.error || `Failed to delete kingdom ${kingdomName}.`;
+            // Bei Fehler: Kingdoms neu laden und Fehler anzeigen
+            fetchKingdoms(); 
+            setKingdomError(msg); // 📝 Fehler anzeigen
+            throw new Error(msg);
         }
         
         // Benutzerliste neu laden, da Benutzer-Zuordnung zurückgesetzt wurde
         fetchUsers(); 
 
-        // Bei Erfolg: Alert
-        alert(`Kingdom ${kingdomName} successfully deleted.`);
+        showSuccessMessage(`Kingdom ${kingdomName} successfully deleted.`); // 📝 Erfolgsmeldung
     } catch (err: any) {
-        // Bei Fehler: Kingdoms neu laden und Fehler anzeigen
-        fetchKingdoms(); 
-        setKingdomError(err.message || 'An unexpected error occurred during deletion.');
+        console.error('Error deleting kingdom:', err);
+        // Fehler wird bereits oben in setKingdomError gesetzt
     }
   };
   
@@ -641,10 +666,10 @@ const AdminUserManagement: React.FC = () => {
     if (inviteLink) {
       // Nutzt das native Clipboard API
       navigator.clipboard.writeText(inviteLink).then(() => {
-        alert('Einladungslink wurde in die Zwischenablage kopiert!');
+        showSuccessMessage('Einladungslink wurde in die Zwischenablage kopiert!'); // 📝 Erfolgsmeldung
       }).catch(err => {
         console.error('Kopieren fehlgeschlagen:', err);
-        alert('Kopieren fehlgeschlagen. Bitte manuell kopieren.');
+        alert('Kopieren fehlgeschlagen. Bitte manuell kopieren.'); // 📝 Hier bleibt alert als Fallback
       });
     }
   };
@@ -690,6 +715,13 @@ const AdminUserManagement: React.FC = () => {
               Link kopieren
             </button>
           </Card>
+        )}
+
+        {/* 📝 NEU: Globale Erfolgsmeldung */}
+        {successMessage && (
+          <div className="mb-4 text-sm text-green-400 bg-green-900/30 border border-green-700 px-3 py-2 rounded">
+            {successMessage}
+          </div>
         )}
 
         {userError && (
