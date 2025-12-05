@@ -225,7 +225,7 @@ app.post('/api/auth/check-gov-id', async (req, res) => {
 
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { email, username, password, governorId } = req.body;
+    const { email, username, password, governorId, slug } = req.body; // 🆕 slug optional
 
     if (!email || !username || !password || !governorId) {
       return res.status(400).json({ error: 'Alle Felder werden benötigt' });
@@ -244,17 +244,36 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Email oder Benutzername ist bereits vergeben' });
     }
 
+    // 🆕 Kingdom Look up (wenn Slug vorhanden)
+    let assignedKingdomId = null;
+    if (slug) {
+        const k = await findKingdomBySlug(slug);
+        if (k) {
+            assignedKingdomId = k.id;
+            console.log(`📝 User registering via Invite-Link for kingdom: ${k.display_name}`);
+        }
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = 'user-' + Date.now();
 
+    // 🆕 kingdom_id in Insert einfügen
     await query(
-      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [userId, email, username, passwordHash, false, 'user', normalizedGovId, false, false, false]
+      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview, kingdom_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [userId, email, username, passwordHash, false, 'user', normalizedGovId, false, false, false, assignedKingdomId]
     );
 
     return res.json({
       message: 'Registrierung erfolgreich.',
-      user: { id: userId, email, username, isApproved: false, role: 'user', governorId: normalizedGovId }
+      user: { 
+          id: userId, 
+          email, 
+          username, 
+          isApproved: false, 
+          role: 'user', 
+          governorId: normalizedGovId,
+          kingdomId: assignedKingdomId 
+      }
     });
   } catch (error) {
     console.error('❌ Error during registration:', error);
