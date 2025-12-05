@@ -21,7 +21,7 @@ interface User {
   canAccessHonor?: boolean;
   canAccessAnalytics?: boolean;
   canAccessOverview?: boolean;
-  // 📝 NEU: Granulare Rechte
+  // 📝 Granulare Rechte
   canManageOverviewFiles?: boolean; 
   canManageHonorFiles?: boolean; 
 }
@@ -56,12 +56,14 @@ const AdminUserManagement: React.FC = () => {
   const [kingdomSlug, setKingdomSlug] = useState<string | null>(null);
   const [kingdomDisplayName, setKingdomDisplayName] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  // 📝 Hinzugefügt: Public Link State
+  const [publicLink, setPublicLink] = useState<string | null>(null);
   
   // -------- Create Kingdom State --------
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newSlug, setNewSlug] = useState('');
   const [newRokId, setNewRokId] = useState('');
-  const [isCreatingKingdom, setIsCreatingKingdom] = useState(false);
+  const [isCreatingKingdom, setIsLoadingCreatingKingdom] = useState(false);
   const [createKingdomError, setCreateKingdomError] = useState<string | null>(null);
   
   // -------- Edit Kingdom State (Rename) --------
@@ -147,7 +149,7 @@ const AdminUserManagement: React.FC = () => {
     } finally {
       setIsLoadingUsers(false);
     }
-  }, [currentUser]); // currentUser ist eine Abhängigkeit, um nach Login/Rollenwechsel zu aktualisieren
+  }, [currentUser]); 
 
 
   const toggleApproval = async (userId: string, approved: boolean) => {
@@ -239,6 +241,7 @@ const AdminUserManagement: React.FC = () => {
     value: boolean
   ) => {
     setUserError(null);
+    const isSuperAdmin = currentUser?.role === 'admin';
     if (!isSuperAdmin) {
         setUserError('Only Superadmin can modify file management access.');
         return;
@@ -381,13 +384,18 @@ const AdminUserManagement: React.FC = () => {
             const displayName = targetKingdom.displayName && targetKingdom.displayName.trim() ? targetKingdom.displayName : targetKingdom.slug.toUpperCase();
             setKingdomDisplayName(displayName);
             
-            // Generiere den Invite Link mit dem neuen &register=true Parameter
+            // Generiere beide Links
             const newInviteLink = `${FRONTEND_URL}/?slug=${targetKingdom.slug}&register=true`;
             setInviteLink(newInviteLink);
+            
+            // 📝 Hinzugefügt: Public Link
+            const newPublicLink = `${FRONTEND_URL}/?slug=${targetKingdom.slug}`;
+            setPublicLink(newPublicLink);
         } else {
             setKingdomSlug(null);
             setKingdomDisplayName(null);
             setInviteLink(null);
+            setPublicLink(null);
         }
 
       } else if (response.status === 403) {
@@ -428,7 +436,7 @@ const AdminUserManagement: React.FC = () => {
       return;
     }
 
-    setIsCreatingKingdom(true);
+    setIsLoadingCreatingKingdom(true);
     setCreateKingdomError(null);
 
     try {
@@ -477,7 +485,7 @@ const AdminUserManagement: React.FC = () => {
     } catch (err) {
       console.error('Error creating kingdom:', err);
     } finally {
-      setIsCreatingKingdom(false);
+      setIsLoadingCreatingKingdom(false);
     }
   };
 
@@ -701,12 +709,23 @@ const AdminUserManagement: React.FC = () => {
     }
   };
   
-  // 🆕 NEU: Funktion zum Kopieren des Links
+  // 🆕 NEU: Funktion zum Kopieren des Registrierungslinks
   const handleCopyInviteLink = () => {
     if (inviteLink) {
-      // Nutzt das native Clipboard API
       navigator.clipboard.writeText(inviteLink).then(() => {
         showSuccessMessage('Einladungslink wurde in die Zwischenablage kopiert!');
+      }).catch(err => {
+        console.error('Kopieren fehlgeschlagen:', err);
+        alert('Kopieren fehlgeschlagen. Bitte manuell kopieren.');
+      });
+    }
+  };
+  
+  // 📝 Hinzugefügt: Funktion zum Kopieren des Public Links
+  const handleCopyPublicLink = () => {
+    if (publicLink) {
+      navigator.clipboard.writeText(publicLink).then(() => {
+        showSuccessMessage('Öffentlicher Link wurde in die Zwischenablage kopiert!');
       }).catch(err => {
         console.error('Kopieren fehlgeschlagen:', err);
         alert('Kopieren fehlgeschlagen. Bitte manuell kopieren.');
@@ -727,11 +746,18 @@ const AdminUserManagement: React.FC = () => {
   
   // 🆕 Neu: R5 darf auch den Link sehen
   const showInviteLinkCard = canManageUsers && !!inviteLink; 
+  const showPublicLinkCard = canManageUsers && !!publicLink; // 📝 Public Link Card zeigen
   
   // Filtere Benutzer, die bereits Admin oder R5 sind, um sie nicht erneut zuzuweisen
   const assignableUsersR5 = users.filter(u => u.role !== 'admin' && u.role !== 'r5' && u.id !== currentUser?.id);
   // Filtere Benutzer, die bereits Admin oder R4/R5 sind, um sie nicht erneut zuzuweisen (R4 zu R4 Zuweisung ist redundant)
   const assignableUsersR4 = users.filter(u => u.role !== 'admin' && u.role !== 'r5' && u.role !== 'r4' && u.id !== currentUser?.id);
+  
+  // --- Hilfslogik für die Tabellenzellen ---
+  const getCanManageFileRightsGranularly = (user: User) => isSuperAdmin && user.role !== 'admin';
+  const getCanManageRights = (user: User) => isSuperAdmin || (currentUser?.role === 'r5' && user.kingdomId === currentUser?.kingdomId && user.role !== 'r5' && user.role !== 'admin');
+  const hasGlobalDashboardAccess = (user: User) => user.role === 'admin' || user.role === 'r5' || user.role === 'r4';
+
 
   return (
     <div className="space-y-6">
@@ -739,11 +765,18 @@ const AdminUserManagement: React.FC = () => {
       <Card className="p-6">
         <h2 className="text-2xl font-bold text-white mb-6">User Management</h2>
 
+        {/* 📝 NEU: Globale Erfolgsmeldung */}
+        {successMessage && (
+          <div className="mb-4 text-sm text-green-400 bg-green-900/30 border border-green-700 px-3 py-2 rounded">
+            {successMessage}
+          </div>
+        )}
+        
         {/* 🆕 NEU: Invite Link Sektion */}
         {showInviteLinkCard && (
           <Card className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-purple-900/30 border-purple-700 mb-6">
             <div>
-              <p className="text-sm font-semibold text-purple-300 mb-1">Einladungslink für {kingdomDisplayName || 'das Königreich'}:</p>
+              <p className="text-sm font-semibold text-purple-300 mb-1">Einladungslink (Registrierung) für {kingdomDisplayName || 'das Königreich'}:</p>
               <p className="text-xs break-all text-white bg-gray-800 p-2 rounded max-w-full sm:max-w-lg">
                   {inviteLink}
               </p>
@@ -756,12 +789,23 @@ const AdminUserManagement: React.FC = () => {
             </button>
           </Card>
         )}
-
-        {/* 📝 NEU: Globale Erfolgsmeldung */}
-        {successMessage && (
-          <div className="mb-4 text-sm text-green-400 bg-green-900/30 border border-green-700 px-3 py-2 rounded">
-            {successMessage}
-          </div>
+        
+        {/* 📝 Hinzugefügt: Public Link Sektion */}
+        {showPublicLinkCard && (
+            <Card className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-800/50 border-gray-700 mb-6">
+                <div>
+                    <p className="text-sm font-semibold text-gray-300 mb-1">Öffentlicher Link (Dashboard) für {kingdomDisplayName || 'das Königreich'}:</p>
+                    <p className="text-xs break-all text-white bg-gray-700 p-2 rounded max-w-full sm:max-w-lg">
+                        {publicLink}
+                    </p>
+                </div>
+                <button
+                    onClick={handleCopyPublicLink}
+                    className="mt-3 sm:mt-0 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                >
+                    Link kopieren
+                </button>
+            </Card>
         )}
 
         {userError && (
@@ -837,14 +881,10 @@ const AdminUserManagement: React.FC = () => {
 
                   // R5/R4 darf keine Admin/Superadmin-Benutzer verwalten
                   const isManagementRestricted = isSelf || isAdminUser || (currentUser?.role === 'r5' && user.role === 'r5');
-                  // Superadmin kann alle nicht-Admins verwalten
-                  const canManage = isSuperAdmin || (currentUser?.role === 'r5' && user.kingdomId === currentUser?.kingdomId && user.role !== 'admin');
-                  // Einschränkung der Rechteverwaltung für R5: R5 darf nur R4 und normale User verwalten
-                  const canManageRights = isSuperAdmin || (currentUser?.role === 'r5' && user.kingdomId === currentUser?.kingdomId && user.role !== 'r5' && user.role !== 'admin');
-                  // Nur Superadmin darf die neuen granularen Rechte verwalten, da diese die Standard-Rollen-Rechte überschreiben
-                  const canManageFileRightsGranularly = isSuperAdmin && user.role !== 'admin';
-                  // Wenn der Benutzer R4 oder R5 ist, werden die Read-Zugriffe von der Rolle gewährt
-                  const hasGlobalDashboardAccess = user.role === 'admin' || user.role === 'r5' || user.role === 'r4';
+                  
+                  const canManageRights = getCanManageRights(user);
+                  const canManageFileRightsGranularly = getCanManageFileRightsGranularly(user);
+                  const isGlobalDashboardAccess = hasGlobalDashboardAccess(user);
 
 
                   return (
@@ -909,69 +949,69 @@ const AdminUserManagement: React.FC = () => {
                       {/* Access: Honor Read */}
                       <TableCell align="center">
                         <button
-                          disabled={!canManageRights || hasGlobalDashboardAccess}
+                          disabled={!canManageRights || isGlobalDashboardAccess}
                           onClick={() =>
                             updateAccess(user, {
                               canAccessHonor: !user.canAccessHonor,
                             })
                           }
                           className={`px-2 py-1 rounded text-xs font-semibold ${
-                            user.canAccessHonor || hasGlobalDashboardAccess
+                            user.canAccessHonor || isGlobalDashboardAccess
                               ? 'bg-green-600 text-white'
                               : 'bg-gray-700 text-gray-300'
                           } ${
-                            !canManageRights || hasGlobalDashboardAccess
+                            !canManageRights || isGlobalDashboardAccess
                               ? 'opacity-50 cursor-not-allowed'
                               : ''
                           }`}
                         >
-                          {user.canAccessHonor || hasGlobalDashboardAccess ? 'Yes' : 'No'}
+                          {user.canAccessHonor || isGlobalDashboardAccess ? 'Yes' : 'No'}
                         </button>
                       </TableCell>
 
                       {/* Access: Analytics Read */}
                       <TableCell align="center">
                         <button
-                          disabled={!canManageRights || hasGlobalDashboardAccess}
+                          disabled={!canManageRights || isGlobalDashboardAccess}
                           onClick={() =>
                             updateAccess(user, {
                               canAccessAnalytics: !user.canAccessAnalytics,
                             })
                           }
                           className={`px-2 py-1 rounded text-xs font-semibold ${
-                            user.canAccessAnalytics || hasGlobalDashboardAccess
+                            user.canAccessAnalytics || isGlobalDashboardAccess
                               ? 'bg-green-600 text-white'
                               : 'bg-gray-700 text-gray-300'
                           } ${
-                            !canManageRights || hasGlobalDashboardAccess
+                            !canManageRights || isGlobalDashboardAccess
                               ? 'opacity-50 cursor-not-allowed'
                               : ''
                           }`}
                         >
-                          {user.canAccessAnalytics || hasGlobalDashboardAccess ? 'Yes' : 'No'}
+                          {user.canAccessAnalytics || isGlobalDashboardAccess ? 'Yes' : 'No'}
                         </button>
                       </TableCell>
 
                       {/* Access: Overview Read */}
                       <TableCell align="center">
                         <button
-                          disabled={!canManageRights || hasGlobalDashboardAccess}
+                          disabled={!canManageRights || isGlobalDashboardAccess}
                           onClick={() =>
                             updateAccess(user, {
                               canAccessOverview: !user.canAccessOverview,
                             })
                           }
                           className={`px-2 py-1 rounded text-xs font-semibold ${
-                            user.canAccessOverview || hasGlobalDashboardAccess
+                            user.canAccessOverview || isGlobalDashboardAccess
                               ? 'bg-green-600 text-white'
                               : 'bg-gray-700 text-gray-300'
                           } ${
-                            !canManageRights || hasGlobalDashboardAccess
+                            !canManageRights || isGlobalDashboardAccess
                               ? 'opacity-50 cursor-not-allowed'
                               : ''
                           }`}
                         >
-                          {user.canAccessOverview || hasGlobalDashboardAccess ? 'Yes' : 'No'}
+                          {user.canAccessOverview || isGlobalDashboardAccess ? 'Yes' : 'No'}
                         </button>
                       </TableCell>
                       
@@ -1022,7 +1062,7 @@ const AdminUserManagement: React.FC = () => {
 
                       {/* Actions */}
                       <TableCell align="center">
-                        {canManage && !isManagementRestricted ? (
+                        {canManageUsers && !isManagementRestricted ? (
                           <div className="flex gap-2 justify-center">
                             {!user.isApproved ? (
                               <button
