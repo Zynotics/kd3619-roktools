@@ -1,27 +1,24 @@
-
 import React from 'react';
 import { formatNumber } from '../utils';
 
 interface TotalPowerDisplayProps {
-  power: number | null;
-  fileName: string | null;
+  totalPower: number;
 }
 
-const TotalPowerDisplay: React.FC<TotalPowerDisplayProps> = ({ power, fileName }) => {
-  if (power === null || fileName === null) {
-    return null; // Don't render if no end date is selected
-  }
-
+export const TotalPowerDisplay: React.FC<TotalPowerDisplayProps> = ({ totalPower }) => {
   return (
-    <div className="bg-gray-800 p-6 rounded-xl shadow-lg text-center">
-      <h3 className="text-lg font-medium text-gray-400">
-        Total Power at End Date ({fileName})
-      </h3>
-      <p className="text-4xl font-bold text-white mt-2">
-        {formatNumber(power)}
-      </p>
+    <div className="grid grid-cols-1 mb-6">
+      <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg text-center flex flex-col justify-center items-center">
+        <h3 className="text-gray-400 font-medium text-sm uppercase tracking-wider mb-2">
+          Total Kingdom Power
+        </h3>
+        <div className="text-4xl font-bold text-white">
+          {formatNumber(totalPower)}
+        </div>
+      </div>
     </div>
   );
 };
 
+// Fallback, falls andere Komponenten noch den Default-Import nutzen (optional, aber sicher)
 export default TotalPowerDisplay;
