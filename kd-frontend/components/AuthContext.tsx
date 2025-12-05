@@ -23,6 +23,7 @@ interface AuthContextType {
   register: (email: string, username: string, pass: string, govId: string, slug?: string | null) => Promise<{ message: string }>; // 🆕 slug hinzugefügt
   logout: () => void;
   refreshUser: () => Promise<void>;
+  isLoading: boolean; // 📝 NEU: Ladezustand
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,7 +36,8 @@ const BACKEND_URL =
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [isReady, setIsReady] = useState(false);
+  // 📝 Starte mit isLoading=true, bis Token geprüft wurde.
+  const [isLoading, setIsLoading] = useState(true); 
 
   useEffect(() => {
     const storedToken = localStorage.getItem('authToken');
@@ -43,7 +45,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setToken(storedToken);
       validateToken(storedToken);
     } else {
-      setIsReady(true);
+      // 📝 Wenn kein Token, sofort ready (isLoading=false)
+      setIsLoading(false); 
     }
   }, []);
 
@@ -61,7 +64,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch {
       logout();
     } finally {
-      setIsReady(true);
+      // 📝 Stop Loading, wenn Validierung abgeschlossen ist
+      setIsLoading(false); 
     }
   };
 
@@ -112,18 +116,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('authToken');
     setToken(null);
     setUser(null);
+    // 📝 Ein Reload ist nicht nötig, da App.tsx den Zustand sofort erkennt.
   };
 
   const refreshUser = async () => {
     if (token) {
+      // 📝 Token ist vorhanden, starte Validierung, um neuesten Status zu holen.
+      setIsLoading(true); 
       await validateToken(token);
     }
   };
 
-  if (!isReady) return null; // or loading spinner
-
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, refreshUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

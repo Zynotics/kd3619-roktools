@@ -20,6 +20,7 @@ const ApprovalPending: React.FC = () => (
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, accessType }) => {
   const { user, isLoading } = useAuth();
 
+  // 📝 Zeige nichts an, solange der Auth-Status geladen wird
   if (isLoading) return null; 
 
   if (!user) {
@@ -39,12 +40,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, accessType })
   // 2. Check for Dashboard Access based on Role/Feature Flags
   const role = user.role;
   
-  // 📝 HIER IST DIE WICHTIGSTE ÄNDERUNG: R4 und R5 erhalten pauschal Dashboard-Zugriff
+  // 📝 R4, R5 und Admin erhalten pauschal Dashboard-Zugriff (Upload/Löschen/Vollansicht)
   const hasGlobalDashboardAccess = role === 'admin' || role === 'r5' || role === 'r4'; 
 
   // --- Spezifische Prüfung für Admin Panel ---
   if (accessType === 'admin') {
-    // Nur Admin und R5 sind erlaubt (R4 explizit ausgeschlossen)
+    // 📝 WICHTIG: Nur Admin und R5 sind erlaubt. R4 wird blockiert.
     if (role !== 'admin' && role !== 'r5') { 
       return (
           <div className="text-center p-8 text-red-400 bg-gray-800 rounded-xl">
