@@ -26,7 +26,7 @@ const NavItem: React.FC<{
   const isActive = view === currentActiveView;
   const baseClasses = 'flex items-center w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors';
   const activeClasses = 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/25';
-  const inactiveClasses = 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700';
+  const inactiveClasses = 'text-gray-300 hover:bg-gray-800 hover:text-white lg:border lg:border-gray-700'; // Angepasst für Sidebar
 
   if (isDisabled) {
     return (
@@ -54,17 +54,14 @@ const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('overview');
   const [headerTitle, setHeaderTitle] = useState<string>('Rise of Stats');
 
-  // 🌐 Lese Slug aus Query-Parametern (z.B. ?slug=kd3619)
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
   const isRegisterInvite = queryParams.get('register') === 'true';
 
-  // Rollen
   const isSuperAdmin = user?.role === 'admin';
   const isR5 = user?.role === 'r5';
   const isAdmin = isSuperAdmin || isR5; 
 
-  // View-Modi bestimmen
   const isPublicView = !!publicSlug && !user && !isRegisterInvite;
   const isRegistrationInviteView = !!publicSlug && !user && isRegisterInvite;
   const isAdminOverrideView = isSuperAdmin && !!publicSlug; 
@@ -113,7 +110,7 @@ const AppContent: React.FC = () => {
   }, [user, isLoading, publicSlug, isSuperAdmin]);
 
 
-  // 3. DYNAMISCHER HEADER TITEL (Main Header)
+  // 3. DYNAMISCHER HEADER TITEL
   useEffect(() => {
     const fetchTitle = async () => {
       if (publicSlug) {
@@ -200,27 +197,31 @@ const AppContent: React.FC = () => {
     );
   }
   
-  // Nur eingeloggte Benutzer und Admin Override haben Sidebar/Dashboard-Zugriff
   const showDashboardTabs = user || isAdminOverrideView;
   
   // Haupt-Layout-Struktur
   return (
-    // 📝 NEU: Setze Haupt-Grid-Layout (mit custom CSS-Klassen)
+    // 📝 KORREKTUR: Entferne fixed/sticky von der Sidebar-Klasse, verwende Grid-Layout
     <div className={`min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100 ${showDashboardTabs ? 'main-grid lg:main-grid-desktop' : ''}`}>
       
-      {/* 📝 NEU: LEFT SIDEBAR (Nur für eingeloggte User / Admin View) */}
+      {/* 📝 KORREKTUR: Sidebar Container. lg:h-screen sorgt für die volle Höhe, lg:sticky fixiert sie im Viewport. */}
       {showDashboardTabs && (
-        <aside className="lg:sticky lg:top-0 h-16 lg:h-screen w-full lg:w-64 bg-gray-900/50 border-b lg:border-r border-gray-800 p-4 shadow-xl z-10 lg:flex-shrink-0">
+        <aside className="lg:sticky lg:top-0 h-full lg:h-screen w-full lg:w-64 bg-gray-900/50 border-b lg:border-r border-gray-800 p-4 shadow-xl z-10 lg:flex lg:flex-col lg:flex-shrink-0">
           <div className="flex justify-between items-center h-full lg:flex-col lg:items-start lg:space-y-6">
             
-            {/* Logo/Title (Visible on all screens) */}
+            {/* Logo/Title (Visible on all screens - primary visibility in sidebar on desktop) */}
             <div className="flex items-center gap-3 lg:w-full lg:mb-4">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg">
                 <span className="font-bold text-lg text-white">KD</span>
               </div>
-              <h1 className="text-xl font-bold tracking-tight text-white hidden lg:block">
-                  {headerTitle}
-              </h1>
+              <div className="hidden lg:block">
+                  <h1 className="text-xl font-bold tracking-tight text-white">
+                      {headerTitle}
+                  </h1>
+                   <p className="text-xs text-gray-400">
+                      {isAdminOverrideView ? 'Admin Viewing Mode' : 'Analytics Platform'}
+                   </p>
+              </div>
             </div>
 
             {/* Navigation Links (Horizontal on small, Vertical on large) */}
@@ -256,11 +257,12 @@ const AppContent: React.FC = () => {
                     setActiveView={setActiveView}
                     label="Admin · Users"
                     icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.525.32 1.157.495 1.724.319v0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+                    isDisabled={user?.role === 'r4' && !isSuperAdmin} // R4 kann Read-Access auf Admin-Dashboard über ProtectedRoute nicht bekommen, aber die Navigation soll trotzdem sichtbar sein
                   />
                 )}
             </nav>
             
-            {/* User Info / Logout (Hidden on small screens in Sidebar, shown in Main Header on Desktop) */}
+            {/* User Info / Logout (Desktop Only) */}
             <div className="hidden lg:flex flex-col items-start w-full border-t border-gray-700 pt-4 mt-auto">
                 {user ? (
                     <>
@@ -296,12 +298,12 @@ const AppContent: React.FC = () => {
       {/* MAIN CONTENT AREA */}
       <main className="lg:col-span-1 px-4 sm:px-6 lg:px-8 py-6">
         
-        {/* HEADER (Simplified for wide screens) */}
-        <header className="mb-6 border-b border-gray-800 pb-4">
+        {/* HEADER (Simplified/Mobil Only) */}
+        <header className="mb-6 border-b border-gray-800 pb-4 lg:hidden">
           <div className="flex items-center justify-between gap-4">
             
-            {/* Logo + Title (Hidden on large screens when sidebar is present) */}
-            <div className="flex items-center gap-3 lg:hidden">
+            {/* Logo + Title (Mobile Only) */}
+            <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg">
                 <span className="font-bold text-xl text-white">KD</span>
               </div>
@@ -315,13 +317,13 @@ const AppContent: React.FC = () => {
               </div>
             </div>
 
-            {/* RECHTS OBEN: User Info ODER Login Button */}
+            {/* RECHTS OBEN: User Info ODER Login Button (Mobile Only) */}
             <div className="flex items-center gap-4 ml-auto">
               {isLoading && <span className="text-xs text-gray-400">Checking login…</span>}
               
               {user ? (
-                /* Fall A: Eingeloggt -> Zeige Username + Logout (Visible on large screens) */
-                <div className="hidden lg:flex items-center gap-4">
+                /* Fall A: Eingeloggt -> Zeige Username + Logout */
+                <div className="flex items-center gap-4">
                     <div className="text-right">
                         <div className="text-sm font-semibold text-white">
                             {user.username}
@@ -335,6 +337,12 @@ const AppContent: React.FC = () => {
                             {user.isApproved ? 'Approved' : 'Pending'}
                         </div>
                     </div>
+                    <button
+                        onClick={logout}
+                        className="text-xs px-3 py-1.5 rounded-md border border-gray-600 text-gray-200 hover:bg-gray-800 transition-colors"
+                    >
+                        Log out
+                    </button>
                 </div>
               ) : (
                 /* Fall B: Nicht eingeloggt (Public View) -> Zeige Login Button */

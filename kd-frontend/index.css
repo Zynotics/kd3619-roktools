@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 📝 NEU: Benutzerdefinierte Utility-Klassen für das Layout */
+/* NEU: Benutzerdefinierte Utility-Klassen für das Layout */
 @layer utilities {
     .main-grid {
         display: grid;
@@ -13,7 +13,8 @@
     /* Desktop / Large Screen Layout */
     @screen lg {
         .main-grid-desktop {
-            grid-template-columns: 16rem 1fr; /* 256px breite Sidebar */
+            /* 16rem = 256px breite Sidebar, der Rest (1fr) für den Inhalt */
+            grid-template-columns: 16rem 1fr; 
         }
     }
 }
