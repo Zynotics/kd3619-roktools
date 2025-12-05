@@ -1,7 +1,8 @@
-// LoginPrompt.tsx (VOLLSTÄNDIGER CODE MIT INVITE LOGIK)
+// LoginPrompt.tsx (VOLLSTÄNDIGER CODE)
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { Card } from './Card';
+import { useLocation } from 'react-router-dom'; // 🆕 useLocation nutzen
 
 type GovIdStatus = 'idle' | 'checking' | 'valid' | 'invalid';
 
@@ -27,17 +28,18 @@ const LoginPrompt: React.FC = () => {
   const [inviteSlug, setInviteSlug] = useState<string | null>(null);
 
   const { login, register } = useAuth();
+  const location = useLocation(); // 🆕 Router Location
 
   // 🆕 URL beim Laden prüfen
   useEffect(() => {
-      const searchParams = new URLSearchParams(window.location.search);
+      const searchParams = new URLSearchParams(location.search);
       const slug = searchParams.get('slug');
       if (slug) {
           setInviteSlug(slug);
           // Wenn Slug da ist, vermutlich eher Registrierung gewünscht:
           setIsLogin(false);
       }
-  }, []);
+  }, [location.search]);
 
 
   const validateGovId = async () => {
@@ -132,7 +134,7 @@ const LoginPrompt: React.FC = () => {
   return (
     <Card className="max-w-lg mx-auto p-8">
       <h2 className="text-2xl font-bold text-white mb-6">
-        {isLogin ? 'Sign in to your KD' : 'Register New Account'}
+        {isLogin ? 'Sign In to KD3619' : 'Register New Account'}
       </h2>
       
       {/* 🆕 Invite Hinweis */}
