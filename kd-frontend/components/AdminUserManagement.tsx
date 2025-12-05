@@ -8,7 +8,7 @@ import { Kingdom as KingdomType } from '../types';
 
 type UserRole = 'user' | 'r4' | 'r5' | 'admin';
 
-// 📝 ERWEITERT: User-Interface um kingdomId
+// 📝 ERWEITERT: User-Interface um kingdomId und neue File Management Flags
 interface User {
   id: string;
   email: string;
@@ -17,10 +17,13 @@ interface User {
   role: UserRole;
   createdAt: string;
   governorId?: string | null;
-  kingdomId?: string | null; // NEU
+  kingdomId?: string | null;
   canAccessHonor?: boolean;
   canAccessAnalytics?: boolean;
   canAccessOverview?: boolean;
+  // 📝 NEU: Granulare Rechte
+  canManageOverviewFiles?: boolean; 
+  canManageHonorFiles?: boolean; 
 }
 
 type Kingdom = KingdomType;
@@ -122,7 +125,15 @@ const AdminUserManagement: React.FC = () => {
 
       if (response.ok) {
         const userData: User[] = await response.json();
-        setUsers(userData);
+        
+        // 📝 Hinzufügen von Default-Werten für die neuen Flags (falls Backend sie noch nicht liefert)
+        const normalizedUsers = userData.map(u => ({
+            ...u,
+            canManageOverviewFiles: u.canManageOverviewFiles ?? false,
+            canManageHonorFiles: u.canManageHonorFiles ?? false,
+        }));
+        
+        setUsers(normalizedUsers);
       } else if (response.status === 403) {
         setUserError('No admin privileges');
       } else {
@@ -136,10 +147,11 @@ const AdminUserManagement: React.FC = () => {
     } finally {
       setIsLoadingUsers(false);
     }
-  }, []); // Keine Abhängigkeiten
+  }, [currentUser]); // currentUser ist eine Abhängigkeit, um nach Login/Rollenwechsel zu aktualisieren
+
 
   const toggleApproval = async (userId: string, approved: boolean) => {
-    setUserError(null); // 📝 Fehler zurücksetzen
+    setUserError(null); 
     try {
       const token = getTokenOrThrow();
 
@@ -155,7 +167,7 @@ const AdminUserManagement: React.FC = () => {
       if (!response.ok) {
         const errorText = await response.text();
         const errorJson = JSON.parse(errorText || '{}');
-        setUserError(errorJson.error || 'Failed to update approval'); // 📝 Fehler anzeigen
+        setUserError(errorJson.error || 'Failed to update approval');
         throw new Error(errorJson.error || 'Failed to update approval');
       }
 
@@ -165,10 +177,9 @@ const AdminUserManagement: React.FC = () => {
       if (currentUser?.id === userId) {
         refreshUser();
       }
-      showSuccessMessage(`User successfully ${approved ? 'approved' : 'blocked'}.`); // 📝 Erfolgsmeldung
+      showSuccessMessage(`User successfully ${approved ? 'approved' : 'blocked'}.`);
     } catch (err) {
       console.error('Error toggling approval:', err);
-      // Fehler wird bereits oben in setUserError gesetzt
     }
   };
 
@@ -176,7 +187,7 @@ const AdminUserManagement: React.FC = () => {
     targetUser: User,
     changes: Partial<Pick<User, 'canAccessHonor' | 'canAccessAnalytics' | 'canAccessOverview'>>
   ) => {
-    setUserError(null); // 📝 Fehler zurücksetzen
+    setUserError(null); 
     try {
       const token = getTokenOrThrow();
 
@@ -201,34 +212,74 @@ const AdminUserManagement: React.FC = () => {
       if (!response.ok) {
         const errorText = await response.text();
         const errorJson = JSON.parse(errorText || '{}');
-        setUserError(errorJson.error || 'Failed to update access rights'); // 📝 Fehler anzeigen
+        setUserError(errorJson.error || 'Failed to update access rights');
         throw new Error(errorJson.error || 'Failed to update access rights');
       }
 
       setUsers((prev) =>
         prev.map((u) =>
           u.id === targetUser.id
-            ? {
-                ...u,
-                canAccessHonor: body.canAccessHonor,
-                canAccessAnalytics: body.canAccessAnalytics,
-                canAccessOverview: body.canAccessOverview,
-              }
+            ? { ...u, ...body }
             : u
         )
       );
       if (currentUser?.id === targetUser.id) {
         refreshUser();
       }
-      showSuccessMessage('User access updated successfully.'); // 📝 Erfolgsmeldung
+      showSuccessMessage('User access updated successfully.');
     } catch (err) {
       console.error('Error updating access:', err);
-      // Fehler wird bereits oben in setUserError gesetzt
+    }
+  };
+  
+  // 📝 NEU: Handler für die neuen granularen File Permissions
+  const updateFileAccess = async (
+    targetUser: User,
+    key: 'canManageOverviewFiles' | 'canManageHonorFiles',
+    value: boolean
+  ) => {
+    setUserError(null);
+    if (!isSuperAdmin) {
+        setUserError('Only Superadmin can modify file management access.');
+        return;
+    }
+
+    try {
+        const token = getTokenOrThrow();
+        
+        const body = {
+            userId: targetUser.id,
+            canManageOverviewFiles: key === 'canManageOverviewFiles' ? value : targetUser.canManageOverviewFiles,
+            canManageHonorFiles: key === 'canManageHonorFiles' ? value : targetUser.canManageHonorFiles,
+        };
+        
+        // 📝 NEU: Verwende /api/admin/users/access-files Endpoint
+        const response = await fetch(`${BACKEND_URL}/api/admin/users/access-files`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            const errorJson = JSON.parse(errorText || '{}');
+            setUserError(errorJson.error || 'Failed to update file management rights');
+            throw new Error(errorJson.error || 'Failed to update file management rights');
+        }
+
+        setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, [key]: value } : u));
+        showSuccessMessage('User file management access updated successfully.');
+    } catch(err) {
+        console.error('Error updating file access:', err);
     }
   };
 
+
   const updateRole = async (targetUser: User, newRole: UserRole) => {
-    setUserError(null); // 📝 Fehler zurücksetzen
+    setUserError(null); 
     try {
       const token = getTokenOrThrow();
 
@@ -244,7 +295,7 @@ const AdminUserManagement: React.FC = () => {
       if (!response.ok) {
         const errorText = await response.text();
         const errorJson = JSON.parse(errorText || '{}');
-        setUserError(errorJson.error || 'Failed to update role'); // 📝 Fehler anzeigen
+        setUserError(errorJson.error || 'Failed to update role');
         throw new Error(errorJson.error || 'Failed to update role');
       }
 
@@ -253,15 +304,14 @@ const AdminUserManagement: React.FC = () => {
       if (currentUser?.id === targetUser.id) {
         refreshUser();
       }
-      showSuccessMessage(`User role changed to ${newRole.toUpperCase()}.`); // 📝 Erfolgsmeldung
+      showSuccessMessage(`User role changed to ${newRole.toUpperCase()}.`);
     } catch (err) {
       console.error('Error updating role:', err);
-      // Fehler wird bereits oben in setUserError gesetzt
     }
   };
 
   const deleteUser = async (userId: string) => {
-    setUserError(null); // 📝 Fehler zurücksetzen
+    setUserError(null);
     if (
       !window.confirm(
         'Are you sure you want to delete this user? This cannot be undone.'
@@ -283,15 +333,14 @@ const AdminUserManagement: React.FC = () => {
       if (!response.ok) {
         const errorText = await response.text();
         const errorJson = JSON.parse(errorText || '{}');
-        setUserError(errorJson.error || 'Failed to delete user'); // 📝 Fehler anzeigen
+        setUserError(errorJson.error || 'Failed to delete user');
         throw new Error(errorJson.error || 'Failed to delete user');
       }
 
       setUsers((prev) => prev.filter((u) => u.id !== userId));
-      showSuccessMessage('User successfully deleted.'); // 📝 Erfolgsmeldung
+      showSuccessMessage('User successfully deleted.');
     } catch (err) {
       console.error('Error deleting user:', err);
-      // Fehler wird bereits oben in setUserError gesetzt
     }
   };
 
@@ -354,7 +403,7 @@ const AdminUserManagement: React.FC = () => {
     } finally {
       setIsLoadingKingdoms(false);
     }
-  }, [currentUser]); // currentUser ist eine Abhängigkeit, um nach Login/Rollenwechsel zu aktualisieren
+  }, [currentUser]); 
 
   const normalizeSlug = (value: string) =>
     value
@@ -424,10 +473,9 @@ const AdminUserManagement: React.FC = () => {
       setNewDisplayName('');
       setNewSlug('');
       setNewRokId('');
-      showSuccessMessage(`Kingdom '${created.displayName}' successfully created.`); // 📝 Erfolgsmeldung
+      showSuccessMessage(`Kingdom '${created.displayName}' successfully created.`);
     } catch (err) {
       console.error('Error creating kingdom:', err);
-      // Fehler wird bereits in setCreateKingdomError gesetzt, falls vorhanden
     } finally {
       setIsCreatingKingdom(false);
     }
@@ -438,14 +486,14 @@ const AdminUserManagement: React.FC = () => {
     setEditingKingdomId(k.id);
     setEditDisplayName(k.displayName);
     setEditSlug(k.slug);
-    setEditKingdomError(null); // 📝 Fehler zurücksetzen
+    setEditKingdomError(null);
   };
 
   const cancelEditing = () => {
     setEditingKingdomId(null);
     setEditDisplayName('');
     setEditSlug('');
-    setEditKingdomError(null); // 📝 Fehler zurücksetzen beim Abbrechen
+    setEditKingdomError(null);
   };
 
   const handleUpdateKingdomDetails = async (kingdomId: string) => {
@@ -455,7 +503,7 @@ const AdminUserManagement: React.FC = () => {
     }
 
     const normalizedSlug = normalizeSlug(editSlug);
-    setEditKingdomError(null); // 📝 Fehler zurücksetzen vor API-Aufruf
+    setEditKingdomError(null);
 
     try {
       const token = getTokenOrThrow();
@@ -481,7 +529,7 @@ const AdminUserManagement: React.FC = () => {
 
       if (!res.ok) {
           const msg = json?.error || 'Failed to update kingdom.';
-          setEditKingdomError(msg); // 📝 Setze spezifische Fehlermeldung
+          setEditKingdomError(msg); 
           throw new Error(msg);
       }
 
@@ -491,10 +539,9 @@ const AdminUserManagement: React.FC = () => {
       setKingdoms(prev => prev.map(k => k.id === kingdomId ? { ...k, ...updatedKingdom } : k));
       
       cancelEditing();
-      showSuccessMessage(`Kingdom updated successfully.`); // 📝 Erfolgsmeldung
+      showSuccessMessage(`Kingdom updated successfully.`);
     } catch (err: any) {
         console.error('Error updating kingdom:', err);
-        // Fehler wird bereits oben in setEditKingdomError gesetzt, falls vorhanden
     }
   };
 
@@ -519,22 +566,18 @@ const AdminUserManagement: React.FC = () => {
       const json = await res.json();
       if (!res.ok) {
         const msg = json.error || 'Failed to assign R5.';
-        setAssignR5Error(msg); // 📝 Fehler anzeigen
+        setAssignR5Error(msg); 
         throw new Error(msg);
       }
-
-      // 1. Kingdom-Liste aktualisieren (owner info wird vom fetchKingdoms geholt)
-      fetchKingdoms();
       
-      // 2. User-Liste neu laden, um die Rolle und kingdomId des betroffenen Users zu aktualisieren
+      fetchKingdoms();
       fetchUsers();
       
       setR5UserId('');
       setR5KingdomId('');
-      showSuccessMessage(`R5 successfully assigned to ${kingdoms.find(k => k.id === r5KingdomId)?.displayName || 'Kingdom'}.`); // 📝 Erfolgsmeldung
+      showSuccessMessage(`R5 successfully assigned to ${kingdoms.find(k => k.id === r5KingdomId)?.displayName || 'Kingdom'}.`);
     } catch (err: any) {
       console.error('Error during R5 assignment:', err);
-      // Fehler wird bereits oben in setAssignR5Error gesetzt
     } finally {
       setIsAssigningR5(false);
     }
@@ -562,17 +605,16 @@ const AdminUserManagement: React.FC = () => {
       const json = await res.json();
       if (!res.ok) {
         const msg = json.error || 'Failed to assign R4.';
-        setAssignR4Error(msg); // 📝 Fehler anzeigen
+        setAssignR4Error(msg); 
         throw new Error(msg);
       }
       
-      // State-Updates:
       fetchUsers(); 
       
       setR4UserId('');
       setR4KingdomId('');
       const assignedKingdom = kingdoms.find(k => k.id === r4KingdomId)?.displayName || r4KingdomId;
-      showSuccessMessage(`R4 successfully assigned to ${assignedKingdom}.`); // 📝 Erfolgsmeldung
+      showSuccessMessage(`R4 successfully assigned to ${assignedKingdom}.`);
     } catch (err: any) {
       setAssignR4Error(err.message || 'An unexpected error occurred during R4 assignment.');
     } finally {
@@ -608,20 +650,19 @@ const AdminUserManagement: React.FC = () => {
             const msg = json.error || `Failed to set status to ${newStatus}.`;
             // Bei Fehler: ursprünglichen Status wiederherstellen und Fehler anzeigen
             setKingdoms(currentKingdoms => currentKingdoms.map(k => k.id === kingdomId ? { ...k, status: currentStatus } : k));
-            setKingdomError(msg); // 📝 Fehler anzeigen
+            setKingdomError(msg); 
             throw new Error(msg);
         }
         
-        showSuccessMessage(`Kingdom status successfully set to ${newStatus}.`); // 📝 Erfolgsmeldung
+        showSuccessMessage(`Kingdom status successfully set to ${newStatus}.`);
     } catch (err: any) {
         console.error('Error updating kingdom status:', err);
-        // Fehler wird bereits oben in setKingdomError gesetzt
     }
   };
 
   const handleDeleteKingdom = async (kingdomId: string, kingdomName: string) => {
     if (kingdomId === 'kdm-default') {
-      alert('The Default Kingdom cannot be deleted.'); // 📝 Bleibt als harte Regel
+      alert('The Default Kingdom cannot be deleted.'); 
       return;
     }
     
@@ -647,17 +688,16 @@ const AdminUserManagement: React.FC = () => {
             const msg = json.error || `Failed to delete kingdom ${kingdomName}.`;
             // Bei Fehler: Kingdoms neu laden und Fehler anzeigen
             fetchKingdoms(); 
-            setKingdomError(msg); // 📝 Fehler anzeigen
+            setKingdomError(msg); 
             throw new Error(msg);
         }
         
         // Benutzerliste neu laden, da Benutzer-Zuordnung zurückgesetzt wurde
         fetchUsers(); 
 
-        showSuccessMessage(`Kingdom ${kingdomName} successfully deleted.`); // 📝 Erfolgsmeldung
+        showSuccessMessage(`Kingdom ${kingdomName} successfully deleted.`);
     } catch (err: any) {
         console.error('Error deleting kingdom:', err);
-        // Fehler wird bereits oben in setKingdomError gesetzt
     }
   };
   
@@ -666,10 +706,10 @@ const AdminUserManagement: React.FC = () => {
     if (inviteLink) {
       // Nutzt das native Clipboard API
       navigator.clipboard.writeText(inviteLink).then(() => {
-        showSuccessMessage('Einladungslink wurde in die Zwischenablage kopiert!'); // 📝 Erfolgsmeldung
+        showSuccessMessage('Einladungslink wurde in die Zwischenablage kopiert!');
       }).catch(err => {
         console.error('Kopieren fehlgeschlagen:', err);
-        alert('Kopieren fehlgeschlagen. Bitte manuell kopieren.'); // 📝 Hier bleibt alert als Fallback
+        alert('Kopieren fehlgeschlagen. Bitte manuell kopieren.');
       });
     }
   };
@@ -679,7 +719,7 @@ const AdminUserManagement: React.FC = () => {
 
   const canManageUsers = currentUser?.role === 'admin' || currentUser?.role === 'r5';
   const isSuperAdmin = currentUser?.role === 'admin';
-  const canManageKingdoms = isSuperAdmin; // Nur Superadmin darf Königreiche erstellen/löschen/R5 zuweisen
+  const canManageKingdoms = isSuperAdmin; 
 
   // 🚩 NEU: Bestimme, welche Rollen der aktuelle Benutzer vergeben darf
   const allowedRoles = isSuperAdmin ? ['user', 'r4', 'r5'] : ['user', 'r4'];
@@ -762,14 +802,25 @@ const AdminUserManagement: React.FC = () => {
                     Kingdom
                   </TableCell>
                   <TableCell align="center" header>
-                    Honor
+                    Honor Read
                   </TableCell>
                   <TableCell align="center" header>
-                    Analytics
+                    Analytics Read
                   </TableCell>
                   <TableCell align="center" header>
-                    Overview
+                    Overview Read
                   </TableCell>
+                  {/* 📝 NEUE SPALTEN für SuperAdmin */}
+                  {isSuperAdmin && (
+                      <>
+                          <TableCell align="center" header>
+                              Honor Manage
+                          </TableCell>
+                          <TableCell align="center" header>
+                              Overview Manage
+                          </TableCell>
+                      </>
+                  )}
                   <TableCell align="center" header>
                     Approval
                   </TableCell>
@@ -786,6 +837,14 @@ const AdminUserManagement: React.FC = () => {
 
                   // R5/R4 darf keine Admin/Superadmin-Benutzer verwalten
                   const isManagementRestricted = isSelf || isAdminUser || (currentUser?.role === 'r5' && user.role === 'r5');
+                  // Superadmin kann alle nicht-Admins verwalten
+                  const canManage = isSuperAdmin || (currentUser?.role === 'r5' && user.kingdomId === currentUser?.kingdomId && user.role !== 'admin');
+                  // Einschränkung der Rechteverwaltung für R5: R5 darf nur R4 und normale User verwalten
+                  const canManageRights = isSuperAdmin || (currentUser?.role === 'r5' && user.kingdomId === currentUser?.kingdomId && user.role !== 'r5' && user.role !== 'admin');
+                  // Nur Superadmin darf die neuen granularen Rechte verwalten, da diese die Standard-Rollen-Rechte überschreiben
+                  const canManageFileRightsGranularly = isSuperAdmin && user.role !== 'admin';
+                  // Wenn der Benutzer R4 oder R5 ist, werden die Read-Zugriffe von der Rolle gewährt
+                  const hasGlobalDashboardAccess = user.role === 'admin' || user.role === 'r5' || user.role === 'r4';
 
 
                   return (
@@ -825,6 +884,7 @@ const AdminUserManagement: React.FC = () => {
                               updateRole(user, e.target.value as UserRole)
                             }
                             className="bg-gray-800 border border-gray-600 text-gray-200 text-xs px-2 py-1 rounded-lg"
+                            disabled={!canManageRights} 
                           >
                             <option value="user">User</option>
                             <option value="r4">R4</option>
@@ -846,74 +906,106 @@ const AdminUserManagement: React.FC = () => {
                       </TableCell>
 
 
-                      {/* Access: Honor */}
+                      {/* Access: Honor Read */}
                       <TableCell align="center">
                         <button
-                          disabled={!canManageUsers || isManagementRestricted}
+                          disabled={!canManageRights || hasGlobalDashboardAccess}
                           onClick={() =>
                             updateAccess(user, {
                               canAccessHonor: !user.canAccessHonor,
                             })
                           }
                           className={`px-2 py-1 rounded text-xs font-semibold ${
-                            user.canAccessHonor
+                            user.canAccessHonor || hasGlobalDashboardAccess
                               ? 'bg-green-600 text-white'
                               : 'bg-gray-700 text-gray-300'
                           } ${
-                            !canManageUsers || isManagementRestricted
+                            !canManageRights || hasGlobalDashboardAccess
                               ? 'opacity-50 cursor-not-allowed'
                               : ''
                           }`}
                         >
-                          {user.canAccessHonor ? 'Yes' : 'No'}
+                          {user.canAccessHonor || hasGlobalDashboardAccess ? 'Yes' : 'No'}
                         </button>
                       </TableCell>
 
-                      {/* Access: Analytics */}
+                      {/* Access: Analytics Read */}
                       <TableCell align="center">
                         <button
-                          disabled={!canManageUsers || isManagementRestricted}
+                          disabled={!canManageRights || hasGlobalDashboardAccess}
                           onClick={() =>
                             updateAccess(user, {
                               canAccessAnalytics: !user.canAccessAnalytics,
                             })
                           }
                           className={`px-2 py-1 rounded text-xs font-semibold ${
-                            user.canAccessAnalytics
+                            user.canAccessAnalytics || hasGlobalDashboardAccess
                               ? 'bg-green-600 text-white'
                               : 'bg-gray-700 text-gray-300'
                           } ${
-                            !canManageUsers || isManagementRestricted
+                            !canManageRights || hasGlobalDashboardAccess
                               ? 'opacity-50 cursor-not-allowed'
                               : ''
                           }`}
                         >
-                          {user.canAccessAnalytics ? 'Yes' : 'No'}
+                          {user.canAccessAnalytics || hasGlobalDashboardAccess ? 'Yes' : 'No'}
                         </button>
                       </TableCell>
 
-                      {/* Access: Overview */}
+                      {/* Access: Overview Read */}
                       <TableCell align="center">
                         <button
-                          disabled={!canManageUsers || isManagementRestricted}
+                          disabled={!canManageRights || hasGlobalDashboardAccess}
                           onClick={() =>
                             updateAccess(user, {
                               canAccessOverview: !user.canAccessOverview,
                             })
                           }
                           className={`px-2 py-1 rounded text-xs font-semibold ${
-                            user.canAccessOverview
+                            user.canAccessOverview || hasGlobalDashboardAccess
                               ? 'bg-green-600 text-white'
                               : 'bg-gray-700 text-gray-300'
                           } ${
-                            !canManageUsers || isManagementRestricted
+                            !canManageRights || hasGlobalDashboardAccess
                               ? 'opacity-50 cursor-not-allowed'
                               : ''
                           }`}
                         >
-                          {user.canAccessOverview ? 'Yes' : 'No'}
+                          {user.canAccessOverview || hasGlobalDashboardAccess ? 'Yes' : 'No'}
                         </button>
                       </TableCell>
+                      
+                      {/* 📝 NEU: File Management Access (Nur Superadmin) */}
+                      {isSuperAdmin && (
+                          <>
+                              <TableCell align="center">
+                                  <button
+                                      disabled={!canManageFileRightsGranularly}
+                                      onClick={() => updateFileAccess(user, 'canManageHonorFiles', !user.canManageHonorFiles)}
+                                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                                          user.canManageHonorFiles
+                                              ? 'bg-yellow-600 text-white'
+                                              : 'bg-gray-700 text-gray-300'
+                                      } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  >
+                                      {user.canManageHonorFiles ? 'Yes' : 'No'}
+                                  </button>
+                              </TableCell>
+                              <TableCell align="center">
+                                  <button
+                                      disabled={!canManageFileRightsGranularly}
+                                      onClick={() => updateFileAccess(user, 'canManageOverviewFiles', !user.canManageOverviewFiles)}
+                                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                                          user.canManageOverviewFiles
+                                              ? 'bg-yellow-600 text-white'
+                                              : 'bg-gray-700 text-gray-300'
+                                      } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  >
+                                      {user.canManageOverviewFiles ? 'Yes' : 'No'}
+                                  </button>
+                              </TableCell>
+                          </>
+                      )}
 
                       {/* Approval */}
                       <TableCell align="center">
@@ -930,7 +1022,7 @@ const AdminUserManagement: React.FC = () => {
 
                       {/* Actions */}
                       <TableCell align="center">
-                        {canManageUsers && !isManagementRestricted ? (
+                        {canManage && !isManagementRestricted ? (
                           <div className="flex gap-2 justify-center">
                             {!user.isApproved ? (
                               <button
@@ -1270,7 +1362,7 @@ const AdminUserManagement: React.FC = () => {
                                         <button
                                             onClick={() => handleUpdateKingdomDetails(k.id)}
                                             className="px-3 py-1 text-xs font-semibold rounded bg-green-600 hover:bg-green-700 text-white transition-colors"
-                                            disabled={!!editKingdomError && editKingdomError !== 'Display Name and Slug are required.'}
+                                            disabled={!!editKingdomError && editKingdomError !== "Display Name and Slug are required."}
                                         >
                                             Save
                                         </button>
