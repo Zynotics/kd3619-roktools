@@ -65,6 +65,8 @@ const AdminUserManagement: React.FC = () => {
   const [editingKingdomId, setEditingKingdomId] = useState<string | null>(null);
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editSlug, setEditSlug] = useState('');
+  // 📝 NEU: State für Edit Kingdom Fehler
+  const [editKingdomError, setEditKingdomError] = useState<string | null>(null);
 
   // 👑 NEU: R5 Assign State (Bestehend)
   const [r5UserId, setR5UserId] = useState<string>('');
@@ -415,12 +417,14 @@ const AdminUserManagement: React.FC = () => {
     setEditingKingdomId(k.id);
     setEditDisplayName(k.displayName);
     setEditSlug(k.slug);
+    setEditKingdomError(null); // 📝 Fehler zurücksetzen
   };
 
   const cancelEditing = () => {
     setEditingKingdomId(null);
     setEditDisplayName('');
     setEditSlug('');
+    setEditKingdomError(null); // 📝 Fehler zurücksetzen beim Abbrechen
   };
 
   const handleUpdateKingdomDetails = async (kingdomId: string) => {
@@ -430,6 +434,7 @@ const AdminUserManagement: React.FC = () => {
     }
 
     const normalizedSlug = normalizeSlug(editSlug);
+    setEditKingdomError(null); // 📝 Fehler zurücksetzen vor API-Aufruf
 
     try {
       const token = getTokenOrThrow();
@@ -445,9 +450,18 @@ const AdminUserManagement: React.FC = () => {
           }),
       });
 
-      const json = await res.json();
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        // ignore
+      }
+
       if (!res.ok) {
-          throw new Error(json.error || 'Failed to update kingdom.');
+          const msg = json?.error || 'Failed to update kingdom.';
+          setEditKingdomError(msg); // 📝 Setze spezifische Fehlermeldung
+          throw new Error(msg);
       }
 
       const updatedKingdom = json.kingdom || json; // Je nach Backend-Response-Format
@@ -459,7 +473,10 @@ const AdminUserManagement: React.FC = () => {
       alert(`Kingdom updated successfully.`);
     } catch (err: any) {
         console.error('Error updating kingdom:', err);
-        alert(err.message || 'Error updating kingdom.');
+        // Bei Netzwerkfehler o.ä. generischen Fehler anzeigen, falls nicht schon ein spezifischer Fehler gesetzt wurde
+        if (!editKingdomError) {
+             alert(err.message || 'Error updating kingdom.');
+        }
     }
   };
 
@@ -934,7 +951,7 @@ const AdminUserManagement: React.FC = () => {
             {/* 👑 ASSIGN R5 (sets owner) */}
             <Card className="p-6 bg-yellow-900/30 border-yellow-700">
                 <h3 className="text-lg font-semibold text-yellow-200 mb-4">
-                    👑 Assign R5 Role & Kingdom Owner
+                    👑 Assign R5 Role & Kingdom Owner (Superadmin)
                 </h3>
                 <form onSubmit={handleAssignR5} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -1007,7 +1024,7 @@ const AdminUserManagement: React.FC = () => {
             {/* 📝 NEU: ASSIGN R4 (Superadmin) */}
             <Card className="p-6 bg-blue-900/30 border-blue-700">
                 <h3 className="text-lg font-semibold text-blue-200 mb-4">
-                    🛠️ Assign R4 Role to Kingdom
+                    🛠️ Assign R4 Role to Kingdom (Superadmin)
                 </h3>
                 <form onSubmit={handleAssignR4} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -1205,24 +1222,33 @@ const AdminUserManagement: React.FC = () => {
                         </TableCell>
 
                         {/* Actions */}
-                        <TableCell align="center" className="space-x-2 whitespace-nowrap">
+                        <TableCell align="center" className="space-x-2 whitespace-nowrap relative">
                           {canManageKingdoms && k.id !== 'kdm-default' && (
                             <>
                               {isEditing ? (
-                                  // SAVE / CANCEL Buttons
                                   <>
-                                      <button
-                                          onClick={() => handleUpdateKingdomDetails(k.id)}
-                                          className="px-3 py-1 text-xs font-semibold rounded bg-green-600 hover:bg-green-700 text-white transition-colors"
-                                      >
-                                          Save
-                                      </button>
-                                      <button
-                                          onClick={cancelEditing}
-                                          className="px-3 py-1 text-xs font-semibold rounded bg-gray-600 hover:bg-gray-500 text-white transition-colors"
-                                      >
-                                          Cancel
-                                      </button>
+                                    {/* 📝 NEU: Anzeige des Bearbeitungsfehlers */}
+                                    {editKingdomError && (
+                                        <p className="text-xs text-red-400 mb-1 p-1 rounded bg-red-900/30">
+                                            {editKingdomError}
+                                        </p>
+                                    )}
+                                    {/* SAVE / CANCEL Buttons */}
+                                    <div className='flex gap-2 justify-center'>
+                                        <button
+                                            onClick={() => handleUpdateKingdomDetails(k.id)}
+                                            className="px-3 py-1 text-xs font-semibold rounded bg-green-600 hover:bg-green-700 text-white transition-colors"
+                                            disabled={!!editKingdomError && editKingdomError !== 'Display Name and Slug are required.'}
+                                        >
+                                            Save
+                                        </button>
+                                        <button
+                                            onClick={cancelEditing}
+                                            className="px-3 py-1 text-xs font-semibold rounded bg-gray-600 hover:bg-gray-500 text-white transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
                                   </>
                               ) : (
                                   // EDIT / STATUS / DELETE Buttons
