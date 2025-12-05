@@ -23,6 +23,8 @@ const AppContent: React.FC = () => {
   // 🌐 Lese Slug aus Query-Parametern (z.B. ?slug=kd3619)
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
+  // 🆕 NEU: Parameter für Registrierungseinladung hinzufügen
+  const isRegisterInvite = queryParams.get('register') === 'true';
 
   // Rollen
   const isSuperAdmin = user?.role === 'admin';
@@ -30,20 +32,30 @@ const AppContent: React.FC = () => {
   const isAdmin = isSuperAdmin || isR5; 
 
   // View-Modi bestimmen
-  const isPublicView = !!publicSlug && !user;
+  // 🆕 NEU: isPublicView schließt jetzt den Registrierungseinladungs-Modus aus
+  const isPublicView = !!publicSlug && !user && !isRegisterInvite;
+  
+  // 🆕 NEU: Zustand für den Registrierungseinladungs-Modus
+  const isRegistrationInviteView = !!publicSlug && !user && isRegisterInvite;
+
   const isAdminOverrideView = isSuperAdmin && !!publicSlug; 
 
   // 1. VIEW ROUTING
   useEffect(() => {
-    // Wenn ein Public Slug da ist, aber KEIN User eingeloggt ist:
-    if (publicSlug && !user) {
+    // Wenn ein Public Slug da ist, aber KEIN User eingeloggt ist und KEIN Register Invite:
+    if (publicSlug && !user && !isRegisterInvite) {
         if (activeView === 'admin') setActiveView('overview');
     } 
     // Wenn Superadmin auf der Root-Seite ist (kein Slug):
     else if (isSuperAdmin && !publicSlug && activeView !== 'admin') {
         setActiveView('admin');
     }
-  }, [publicSlug, isSuperAdmin, activeView, user]);
+    // 🆕 Wenn im Registrierungseinladungs-Modus, auf 'overview' setzen, 
+    // aber das Rendern wird durch die LANDING PAGE Logik unten übersteuert
+    else if (isRegistrationInviteView) {
+        setActiveView('overview');
+    }
+  }, [publicSlug, isSuperAdmin, activeView, user, isRegisterInvite, isRegistrationInviteView]);
 
 
   // 2. R5 REDIRECT
@@ -139,13 +151,32 @@ const AppContent: React.FC = () => {
 
 
   // LANDING PAGE / LOGIN
-  if (!user && !publicSlug && !isLoading) {
+  // 🆕 NEUE BEDINGUNG: Zeige LoginPrompt, wenn kein User ODER im Registrierungseinladungs-Modus
+  if ((!user && !publicSlug && !isLoading) || isRegistrationInviteView) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <LoginPrompt />
           <div className="mt-8 text-center text-gray-500">
-            <p>Or access a Kingdom directly using a public link.</p>
+            <p>
+              {isRegistrationInviteView 
+                ? 'Login with an existing account or register for the Kingdom above.' 
+                : 'Or access a Kingdom directly using a public link.'}
+            </p> 
+            {/* 🆕 Button um zur öffentlichen Dashboard-Ansicht zu wechseln */}
+            {isRegistrationInviteView && (
+                <button
+                    onClick={() => {
+                        // Entfernt den register=true Parameter, um zur normalen Dashboard-Ansicht zu wechseln
+                        const newUrl = new URL(window.location.href);
+                        newUrl.searchParams.delete('register');
+                        window.location.href = newUrl.toString();
+                    }}
+                    className="text-sm text-gray-400 hover:text-gray-200 mt-2 inline-block"
+                >
+                    Switch to Public Dashboard View
+                </button>
+            )}
           </div>
         </div>
       </div>
