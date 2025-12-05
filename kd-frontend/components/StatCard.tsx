@@ -1,4 +1,4 @@
-// StatCard.tsx - FIXED Version (Named Export + Color Support)
+// StatCard.tsx - KORRIGIERT auf Default Export
 import React from 'react';
 import { formatNumber } from '../utils';
 
@@ -11,10 +11,10 @@ interface StatCardProps {
   icon?: React.ReactNode;
   variant?: 'default' | 'gradient' | 'hover';
   className?: string;
-  color?: string; // 🆕 Hinzugefügt für farbige Werte (z.B. Kill Points rot)
+  color?: string; 
 }
 
-export const StatCard: React.FC<StatCardProps> = ({ 
+const StatCard: React.FC<StatCardProps> = ({ 
   title, 
   value, 
   change, 
@@ -34,11 +34,9 @@ export const StatCard: React.FC<StatCardProps> = ({
 
   const cardClasses = `${variantClasses[variant]} text-center ${className}`;
 
-  // Fallback für changeColor wenn nicht provided
   const calculatedChangeColor =
     changeColor || (change && change >= 0 ? 'text-green-400' : 'text-red-400');
-
-  // Bestimme die Farbe des Hauptwerts (nutze prop 'color' falls vorhanden, sonst weiß)
+    
   const valueTextColor = color || "text-gray-100";
 
   return (
@@ -47,12 +45,9 @@ export const StatCard: React.FC<StatCardProps> = ({
       <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate mb-2">
         {title}
       </h4>
-      
-      {/* Wert mit dynamischer Farbe */}
       <p className={`text-2xl font-bold mb-2 ${valueTextColor}`}>
         {value}
       </p>
-
       {(change !== undefined && changePercent !== undefined) && (
         <div className={`text-sm font-semibold ${calculatedChangeColor}`}>
           <span>
