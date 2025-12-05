@@ -197,6 +197,22 @@ function authenticateToken(req, res, next) {
   });
 }
 
+// 📝 NEU: Middleware für Lesezugriff auf Kingdoms für R4/R5/Admin (für Redirect-Zwecke)
+function requireReadAccess(req, res, next) {
+    if (!req.user) return res.status(401).json({ error: 'Nicht authentifiziert' });
+    const role = req.user.role;
+    // Erlaube Admin, R5 und R4 den Lesezugriff auf Kingdoms
+    if (role !== 'admin' && role !== 'r5' && role !== 'r4') {
+        return res.status(403).json({ error: 'Admin, R5 oder R4 Rechte erforderlich' });
+    }
+    // R5/R4 muss einem Königreich zugewiesen sein, um hier sinnvoll zugreifen zu können
+    if ((role === 'r5' || role === 'r4') && !req.user.kingdomId) {
+        return res.status(403).json({ error: `${role.toUpperCase()}-Benutzer ist keinem Königreich zugewiesen.` });
+    }
+    next();
+}
+
+// Bestehende Middleware, die nur Admin/R5 für Schreib-/Verwaltungszugriff erlaubt
 async function requireAdmin(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'Nicht authentifiziert' });
   const role = req.user.role;
@@ -465,7 +481,8 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
 
 // ==================== KINGDOM ADMIN ENDPOINTS ====================
 
-app.get('/api/admin/kingdoms', authenticateToken, requireAdmin, async (req, res) => {
+// 📝 requireReadAccess erlaubt R4 hier Zugriff (Fix für R4 Weiterleitung)
+app.get('/api/admin/kingdoms', authenticateToken, requireReadAccess, async (req, res) => {
   try {
       let where = '';
       const p = [];
