@@ -23,7 +23,6 @@ const AppContent: React.FC = () => {
   // 🌐 Lese Slug aus Query-Parametern (z.B. ?slug=kd3619)
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
-  // 🆕 NEU: Parameter für Registrierungseinladung hinzufügen
   const isRegisterInvite = queryParams.get('register') === 'true';
 
   // Rollen
@@ -32,12 +31,8 @@ const AppContent: React.FC = () => {
   const isAdmin = isSuperAdmin || isR5; 
 
   // View-Modi bestimmen
-  // 🆕 NEU: isPublicView schließt jetzt den Registrierungseinladungs-Modus aus
   const isPublicView = !!publicSlug && !user && !isRegisterInvite;
-  
-  // 🆕 NEU: Zustand für den Registrierungseinladungs-Modus
   const isRegistrationInviteView = !!publicSlug && !user && isRegisterInvite;
-
   const isAdminOverrideView = isSuperAdmin && !!publicSlug; 
 
   // 1. VIEW ROUTING
@@ -50,7 +45,7 @@ const AppContent: React.FC = () => {
     else if (isSuperAdmin && !publicSlug && activeView !== 'admin') {
         setActiveView('admin');
     }
-    // 🆕 Wenn im Registrierungseinladungs-Modus, auf 'overview' setzen, 
+    // Wenn im Registrierungseinladungs-Modus, auf 'overview' setzen, 
     // aber das Rendern wird durch die LANDING PAGE Logik unten übersteuert
     else if (isRegistrationInviteView) {
         setActiveView('overview');
@@ -58,12 +53,14 @@ const AppContent: React.FC = () => {
   }, [publicSlug, isSuperAdmin, activeView, user, isRegisterInvite, isRegistrationInviteView]);
 
 
-  // 2. R5 REDIRECT
+  // 2. R5/R4 REDIRECT (Redirect von Root-URL zu Kingdom-URL, wenn Kingdom zugewiesen)
   useEffect(() => {
     const redirectToSlug = async () => {
+        // Prüfe, ob User eingeloggt ist, einem Kingdom zugeordnet ist, NICHT auf einer Slug-Seite ist und KEIN Superadmin ist
         if (user && user.kingdomId && !publicSlug && !isSuperAdmin) {
             try {
                 const token = localStorage.getItem('authToken');
+                // Wir verwenden die /api/admin/kingdoms Route, die nur die Kingdoms des aktuellen Users zurückgibt (für R5/R4 ist das sein Kingdom)
                 const res = await fetch(`${BACKEND_URL}/api/admin/kingdoms`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
@@ -74,6 +71,7 @@ const AppContent: React.FC = () => {
                         if (mySlug) {
                             const newUrl = new URL(window.location.href);
                             newUrl.searchParams.set('slug', mySlug);
+                            // Explizite Weiterleitung
                             window.location.href = newUrl.toString();
                         }
                     }
@@ -82,6 +80,7 @@ const AppContent: React.FC = () => {
         }
     };
     
+    // Führe nur aus, wenn das Laden des AuthContext abgeschlossen ist
     if (!isLoading) {
         redirectToSlug();
     }
@@ -113,7 +112,7 @@ const AppContent: React.FC = () => {
         return;
       }
 
-      // Fall B: Eingeloggter R5 (Root-Ansicht, die durch den Redirect nur kurz sichtbar ist)
+      // Fall B: Eingeloggter R5/R4 (Root-Ansicht, die durch den Redirect nur kurz sichtbar ist)
       if (user && user.kingdomId) {
         try {
           const token = localStorage.getItem('authToken');
@@ -151,8 +150,7 @@ const AppContent: React.FC = () => {
 
 
   // LANDING PAGE / LOGIN
-  // 🆕 NEUE BEDINGUNG: Zeige LoginPrompt, wenn kein User ODER im Registrierungseinladungs-Modus
-  if ((!user && !publicSlug && !isLoading) || isRegistrationInviteView) {
+  if (!user && !publicSlug && !isLoading || isRegistrationInviteView) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -217,7 +215,7 @@ const AppContent: React.FC = () => {
                   <div className="text-right hidden sm:block">
                     <div className="text-sm font-semibold text-white">
                       {user.username}
-                      {(user.role === 'admin' || user.role === 'r5') && (
+                      {(user.role === 'admin' || user.role === 'r5' || user.role === 'r4') && (
                         <span className="ml-2 text-xs text-purple-400">
                           ({user.role.toUpperCase()})
                         </span>
@@ -291,7 +289,8 @@ const AppContent: React.FC = () => {
                 </>
               )}
 
-              {showAdminTab && (
+              {/* Admin Tab wird für R4 blockiert in ProtectedRoute.tsx */}
+              {user && (user.role === 'admin' || user.role === 'r5') && (
                 <button
                   onClick={() => setActiveView('admin')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -360,7 +359,7 @@ const AppContent: React.FC = () => {
 
           {/* Admin Panel */}
           {activeView === 'admin' && user && (isAdmin) && (
-            <ProtectedRoute>
+            <ProtectedRoute accessType='admin'>
               <AdminUserManagement />
             </ProtectedRoute>
           )}
