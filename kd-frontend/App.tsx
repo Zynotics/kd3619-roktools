@@ -1,162 +1,175 @@
+// App.tsx (RÜCKBAU)
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import LoginPrompt from './components/LoginPrompt';
-import ApprovalPending from './components/ApprovalPending';
+import AdminUserManagement from './components/AdminUserManagement';
 import OverviewDashboard from './components/OverviewDashboard';
 import HonorDashboard from './components/HonorDashboard';
 import PowerAnalyticsDashboard from './components/PowerAnalyticsDashboard';
-import AdminUserManagement from './components/AdminUserManagement';
 import FileUpload from './components/FileUpload';
+import LoginPrompt from './components/LoginPrompt';
 
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
     ? 'https://api.rise-of-stats.com'
     : 'http://localhost:4000';
 
-// ----------------------------------------------------------------------
-// HELPER: Navigation Link, der den ?slug Parameter behält
-// ----------------------------------------------------------------------
-const NavLinkWithSlug: React.FC<{ to: string; children: React.ReactNode; className?: string }> = ({ to, children }) => {
-  const location = useLocation();
-  const search = location.search; // z.B. "?slug=3619-vikings"
+type ActiveView = 'overview' | 'honor' | 'analytics' | 'admin' | 'uploads';
 
-  return (
-    <NavLink 
-      to={to + search} 
-      className={({ isActive }) => 
-        `flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-          isActive 
-            ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/25 border border-transparent' 
-            : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
-        }`
-      }
-    >
-      {children}
-    </NavLink>
-  );
-};
-
-// ----------------------------------------------------------------------
-// WRAPPER: Public or Protected Route
-// Erlaubt Zugriff, wenn ein Slug da ist (Public Mode) ODER wenn User eingeloggt (Protected Mode)
-// ----------------------------------------------------------------------
-const PublicOrProtected: React.FC<{ children: React.ReactNode; requiredAccess?: string }> = ({ children, requiredAccess }) => {
-    const { user } = useAuth();
-    const location = useLocation();
-    const slug = new URLSearchParams(location.search).get('slug');
-
-    // 1. Public Mode: Wenn Slug da ist, immer anzeigen (Read-Only)
-    if (slug) {
-        return <>{children}</>;
-    }
-
-    // 2. User Mode: Wenn eingeloggt, prüfen ob Rechte da sind
-    if (user) {
-        return <ProtectedRoute requiredAccess={requiredAccess}>{children}</ProtectedRoute>;
-    }
-
-    // 3. Fallback: Login (mit Erhalt der Params, falls welche da wären)
-    return <Navigate to={`/login${location.search}`} replace />;
-};
-
-
-// ----------------------------------------------------------------------
-// LAYOUT COMPONENT (Header, Navigation, Title Logic, Redirects)
-// ----------------------------------------------------------------------
-const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// WICHTIG: Die Hauptlogik, die die Ansicht steuert, wird hier zentralisiert.
+const AppContent: React.FC = () => {
   const { user, logout, isLoading } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const [activeView, setActiveView] = useState<ActiveView>('overview');
   const [headerTitle, setHeaderTitle] = useState<string>('Rise of Stats');
 
-  const searchParams = new URLSearchParams(location.search);
-  const publicSlug = searchParams.get('slug');
+  // 🌐 Lese Slug aus Query-Parametern (z.B. ?slug=kd3619)
+  const queryParams = new URLSearchParams(window.location.search);
+  const publicSlug = queryParams.get('slug');
 
+  // Rollen
   const isSuperAdmin = user?.role === 'admin';
   const isR5 = user?.role === 'r5';
   const isR4 = user?.role === 'r4';
-  const isAdminOrR5 = isSuperAdmin || isR5;
+  const isAdminOrR5 = isSuperAdmin || isR5; 
 
-  // --- EFFECT 1: R5 REDIRECT ---
-  // Wenn ein R5 eingeloggt ist, aber kein Slug in der URL steht, leite zu seinem Kingdom um.
+  // View-Modi bestimmen
+  const isPublicView = !!publicSlug && !user;
+  const isAdminOverrideView = isSuperAdmin && !!publicSlug; 
+  
+  // 1. R5 REDIRECT (Logik für zustandsbasiertes Routing)
   useEffect(() => {
-    const handleR5Redirect = async () => {
-      if (user && user.kingdomId && !publicSlug && !isSuperAdmin) {
-        try {
-            const token = localStorage.getItem('authToken');
-            const res = await fetch(`${BACKEND_URL}/api/admin/kingdoms`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const kingdoms = await res.json();
-                if (kingdoms && kingdoms.length > 0) {
-                    const mySlug = kingdoms[0].slug;
-                    if (mySlug) {
-                        // Aktuellen Pfad behalten, aber Slug anhängen
-                        navigate(`${location.pathname}?slug=${mySlug}`, { replace: true });
+    const redirectToSlug = async () => {
+        // Wenn User eingeloggt, Kingdom-ID hat und KEIN Slug in URL ist, und NICHT Superadmin
+        if (user && user.kingdomId && !publicSlug && !isSuperAdmin) {
+            try {
+                const token = localStorage.getItem('authToken');
+                const res = await fetch(`${BACKEND_URL}/api/admin/kingdoms`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const kingdoms = await res.json();
+                    if (kingdoms && kingdoms.length > 0) {
+                        const mySlug = kingdoms[0].slug;
+                        if (mySlug) {
+                            // Einfache Weiterleitung durch Neuladen der Seite mit Slug
+                            const newUrl = new URL(window.location.href);
+                            newUrl.searchParams.set('slug', mySlug);
+                            window.location.href = newUrl.toString(); 
+                        }
                     }
                 }
-            }
-        } catch (e) { console.error('R5 Redirect failed', e); }
-      }
+            } catch (e) { console.error('Redirect failed', e); }
+        }
     };
-
+    
     if (!isLoading) {
-        handleR5Redirect();
+        redirectToSlug();
     }
-  }, [user, isLoading, publicSlug, isSuperAdmin, navigate, location.pathname]);
+  }, [user, isLoading, publicSlug, isSuperAdmin]);
 
 
-  // --- EFFECT 2: DYNAMISCHER HEADER TITEL ---
+  // 2. DYNAMISCHER HEADER TITEL
   useEffect(() => {
     const fetchTitle = async () => {
-      // Fall A: Slug vorhanden (Public oder eingeloggt mit Slug)
       if (publicSlug) {
         try {
           const res = await fetch(`${BACKEND_URL}/api/public/kingdom/${publicSlug}`);
           if (res.ok) {
             const data = await res.json();
             const displayName = data.displayName && data.displayName.trim() ? data.displayName : publicSlug.toUpperCase();
-            
-            if (displayName.toUpperCase() === publicSlug.toUpperCase()) {
-                 setHeaderTitle(displayName);
-            } else {
-                 setHeaderTitle(`${displayName} - ${publicSlug}`);
-            }
+            setHeaderTitle(`${displayName} - ${publicSlug}`);
           } else {
             setHeaderTitle(`Kingdom - ${publicSlug}`);
           }
         } catch (e) { setHeaderTitle(`Kingdom - ${publicSlug}`); }
-      } 
-      // Fall B: Superadmin ohne Slug
-      else if (isSuperAdmin) {
-        setHeaderTitle('Superadmin Dashboard');
-      } 
-      // Fallback
-      else {
-        setHeaderTitle('Rise of Stats');
+        return;
       }
+      if (isSuperAdmin) {
+        setHeaderTitle('Superadmin Dashboard');
+        return;
+      }
+      setHeaderTitle('Rise of Stats');
     };
     fetchTitle();
-  }, [publicSlug, isSuperAdmin]);
+  }, [publicSlug, user, isSuperAdmin]);
 
 
-  // Bestimmen, welche Tabs angezeigt werden
-  // Dashboard Tabs zeigen wir immer an, außer wir sind Superadmin OHNE Slug (dann sind wir im reinen Admin-Mode)
-  const showDashboardTabs = publicSlug || (user && !isSuperAdmin) || (isSuperAdmin && publicSlug);
+  // LANDING PAGE / LOGIN
+  if (!user && !publicSlug && !isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
+        <div className="max-w-lg mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <LoginPrompt />
+          <div className="mt-8 text-center text-gray-500">
+            <p>Or access a Kingdom directly using a public link.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // APPROVAL PENDING
+  if (user && !user.isApproved) {
+     return (
+        <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+           <ApprovalPending />
+        </div>
+     );
+  }
+
+
+  // Bedingte Zugriffsprüfung für Dashboard-Tabs
+  const hasAccess = (view: ActiveView) => {
+    if (isPublicView) return true; // Public view hat immer Zugriff, aber nur auf Overview/Honor/Analytics
+    if (!user) return false;
+
+    if (view === 'admin' || view === 'uploads') {
+        return isAdminOrR5 || isR4;
+    }
+    
+    // Für die Dashboard-Views die spezifischen Rechte prüfen
+    if (view === 'overview') return user.canAccessOverview || isAdminOrR5;
+    if (view === 'honor') return user.canAccessHonor || isAdminOrR5;
+    if (view === 'analytics') return user.canAccessAnalytics || isAdminOrR5;
+
+    return false;
+  }
   
-  // Admin Tabs zeigen wir, wenn entsprechende Rechte da sind
-  const showAdminUsers = isSuperAdmin || isR5;
-  const showUploads = isSuperAdmin || isR5 || isR4;
+  const showDashboardTabs = publicSlug || (user && !isSuperAdmin) || isAdminOverrideView; 
+  const showAdminUsers = isSuperAdmin || isR5; 
+  const showUploads = isSuperAdmin || isR5 || isR4; 
+  
+
+  const renderContent = () => {
+    if (!hasAccess(activeView) && user && activeView !== 'admin' && activeView !== 'uploads') {
+        return <div className="p-8 text-center text-red-400">Access Denied.</div>;
+    }
+
+    switch (activeView) {
+      case 'overview':
+        return <OverviewDashboard backendUrl={BACKEND_URL} publicSlug={publicSlug} isAdminOverride={isAdminOverrideView} />;
+      case 'honor':
+        return <HonorDashboard backendUrl={BACKEND_URL} publicSlug={publicSlug} isAdminOverride={isAdminOverrideView} />;
+      case 'analytics':
+        return <PowerAnalyticsDashboard backendUrl={BACKEND_URL} publicSlug={publicSlug} isAdminOverride={isAdminOverrideView} />;
+      case 'admin':
+        if (isAdminOrR5) return <AdminUserManagement />;
+        return <div className="p-8 text-center text-red-400">Access Denied.</div>;
+      case 'uploads':
+        if (showUploads) return <FileUpload />;
+        return <div className="p-8 text-center text-red-400">Access Denied.</div>;
+      default:
+        return <OverviewDashboard backendUrl={BACKEND_URL} publicSlug={publicSlug} isAdminOverride={isAdminOverrideView} />;
+    }
+  };
 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         
-        {/* HEADER AREA */}
+        {/* HEADER */}
         <header className="mb-6 border-b border-gray-800 pb-4">
           <div className="flex items-center justify-between gap-4">
             {/* Logo + Title */}
@@ -174,7 +187,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               </div>
             </div>
 
-            {/* User Info / Login Button */}
+            {/* User Info / Logout Button */}
             <div className="flex items-center gap-4">
               {isLoading && <span className="text-xs text-gray-400">Checking...</span>}
               
@@ -195,15 +208,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 </>
               ) : (
                 !isLoading && (
-                   <Link 
-                      to={`/login${location.search}`} 
+                   <a 
+                      href={`/login${window.location.search}`} // Link zum Login mit Slug
                       className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20"
                    >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
                       </svg>
                       Login
-                   </Link>
+                   </a>
                 )
               )}
             </div>
@@ -214,138 +227,100 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <div className="flex gap-2">
               {showDashboardTabs && (
                 <>
-                  <NavLinkWithSlug to="/">Kingdom Overview</NavLinkWithSlug>
-                  <NavLinkWithSlug to="/honor">Honor Ranking</NavLinkWithSlug>
-                  <NavLinkWithSlug to="/analytics">Player Analytics</NavLinkWithSlug>
+                  <button
+                    onClick={() => setActiveView('overview')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                      activeView === 'overview'
+                        ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/25'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
+                    }`}
+                  >
+                    Kingdom Overview
+                  </button>
+
+                  <button
+                    onClick={() => setActiveView('honor')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                      activeView === 'honor'
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/25'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
+                    }`}
+                  >
+                    Honor Ranking
+                  </button>
+
+                  <button
+                    onClick={() => setActiveView('analytics')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                      activeView === 'analytics'
+                        ? 'bg-gradient-to-r from-emerald-500 to-lime-500 text-white shadow-lg shadow-emerald-500/25'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
+                    }`}
+                  >
+                    Player Analytics
+                  </button>
                 </>
+              )}
+              
+              {showUploads && (
+                  <button
+                    onClick={() => setActiveView('uploads')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                      activeView === 'uploads'
+                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
+                    }`}
+                  >
+                    Admin · Uploads
+                  </button>
               )}
 
               {showAdminUsers && (
-                <NavLink 
-                    to="/admin/users"
-                    className={({ isActive }) => 
-                      `flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isActive 
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25' 
-                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'}`
-                    }
+                <button
+                  onClick={() => setActiveView('admin')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                    activeView === 'admin'
+                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
+                  }`}
                 >
-                    Admin · Users
-                </NavLink>
-              )}
-
-              {showUploads && (
-                <NavLink 
-                    to="/admin/uploads"
-                    className={({ isActive }) => 
-                      `flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isActive 
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25' 
-                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'}`
-                    }
-                >
-                    Admin · Uploads
-                </NavLink>
+                  Admin · Users
+                </button>
               )}
             </div>
           </nav>
         </header>
 
-        {/* CONTENT */}
+        {/* MAIN CONTENT AREA */}
         <main className="space-y-6">
-          {children}
+          {renderContent()}
         </main>
-
       </div>
     </div>
   );
 };
 
 
-// ----------------------------------------------------------------------
-// APP ROUTES CONFIGURATION
-// ----------------------------------------------------------------------
-const AppRoutes: React.FC = () => {
-  const { user } = useAuth();
-  const location = useLocation();
-
-  return (
-    <Routes>
-      {/* LOGIN PAGE */}
-      <Route path="/login" element={
-          user ? <Navigate to={`/${location.search}`} replace /> : (
-             <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-                <LoginPrompt />
-             </div>
-          )
-      } />
-
-      {/* PENDING APPROVAL PAGE */}
-      <Route path="/pending" element={
-          user && !user.isApproved ? (
-            <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-               <ApprovalPending />
-            </div>
-          ) : <Navigate to="/" replace />
-      } />
-
-      {/* --- PUBLIC / PROTECTED DASHBOARDS --- */}
-      {/* Diese Routen sind sichtbar für:
-          1. Jeden, der einen gültigen ?slug=... Parameter hat (Public View)
-          2. Eingeloggte User (R4/R5/User), die ihrem Kingdom zugewiesen sind
-      */}
-      
-      <Route path="/" element={
-         <Layout>
-             <PublicOrProtected requiredAccess="canAccessOverview">
-                <OverviewDashboard />
-             </PublicOrProtected>
-         </Layout>
-      } />
-      
-      <Route path="/honor" element={
-         <Layout>
-             <PublicOrProtected requiredAccess="canAccessHonor">
-                <HonorDashboard />
-             </PublicOrProtected>
-         </Layout>
-      } />
-
-      <Route path="/analytics" element={
-         <Layout>
-             <PublicOrProtected requiredAccess="canAccessAnalytics">
-                <PowerAnalyticsDashboard />
-             </PublicOrProtected>
-         </Layout>
-      } />
-
-
-      {/* --- ADMIN ROUTES (PROTECTED) --- */}
-      <Route path="/admin/users" element={
-         <ProtectedRoute>
-             <Layout>
-                <AdminUserManagement />
-             </Layout>
-         </ProtectedRoute>
-      } />
-      
-      <Route path="/admin/uploads" element={
-         <ProtectedRoute>
-             <Layout>
-                <FileUpload />
-             </Layout>
-         </ProtectedRoute>
-      } />
-
-      {/* FALLBACK */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  );
-};
-
 const App: React.FC = () => {
   return (
     <AuthProvider>
       <Router>
-        <AppRoutes />
+         <Routes>
+            {/* Base Route fängt alle Requests ab, die nicht /login oder /pending sind */}
+            <Route path="*" element={<AppContent />} />
+            
+            {/* Separate Routes für Login/Pending, da sie Full-Screen sein sollen */}
+            <Route path="/login" element={
+                <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+                  <LoginPrompt />
+                </div>
+            } />
+            <Route path="/pending" element={
+                 <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+                  <ApprovalPending />
+                 </div>
+            } />
+        </Routes>
       </Router>
     </AuthProvider>
   );

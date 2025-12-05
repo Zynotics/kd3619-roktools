@@ -1,3 +1,4 @@
+// Table.tsx
 import React from 'react';
 
 interface TableProps {
@@ -6,7 +7,6 @@ interface TableProps {
   maxHeight?: string;
 }
 
-// 🟢 Named Exports für alle Unterkomponenten
 export const Table: React.FC<TableProps> = ({ children, className = '', maxHeight = 'auto' }) => {
   return (
     <div
