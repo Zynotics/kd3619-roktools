@@ -1,9 +1,9 @@
-// ComparisonSection.tsx - KORRIGIERT auf Default Export
+// ComparisonSection.tsx - KORRIGIERT
 import React, { useState, useMemo } from 'react';
 import type { ComparisonStats, PlayerInfo, PlayerStatChange } from '../types';
 import StatCard from './StatCard';
 import ColumnFilter from './ColumnFilter';
-import Card from './Card'; // 👈 Default Import
+import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { formatNumber } from '../utils';
 
@@ -20,7 +20,7 @@ const PLAYER_INFO_COLUMNS = [
     { key: 't5Kills', title: 'T5 Kills', align: 'right' },
     { key: 'totalKillPoints', title: 'Kill Points', align: 'right' },
     { key: 'deadTroops', title: 'Dead Troops', align: 'right' },
-    { key: 'cityHall', title: 'City Hall', 'align': 'center' },
+    { key: 'cityHall', title: 'City Hall', align: 'center' },
     { key: 'troopsPower', title: 'Troops Power', align: 'right' },
     { key: 'techPower', title: 'Tech Power', align: 'right' },
     { key: 'buildingPower', title: 'Building Power', align: 'right' },
@@ -486,7 +486,6 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
               change={stats.killPointsDifference}
               changePercent={getChangePercent(stats.killPointsDifference, stats.totalKillPointsFile1)}
               variant="gradient"
-              color="text-red-400"
             />
             <StatCard
               title="Total Dead Troops"
@@ -494,7 +493,6 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
               change={stats.deadTroopsDifference}
               changePercent={getChangePercent(stats.deadTroopsDifference, stats.totalDeadTroopsFile1)}
               variant="gradient"
-              color="text-gray-400"
             />
           </div>
       </Card>

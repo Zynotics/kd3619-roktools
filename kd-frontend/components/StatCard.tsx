@@ -1,4 +1,4 @@
-// StatCard.tsx - KORRIGIERT auf Default Export
+// StatCard.tsx - ERWEITERTE Version
 import React from 'react';
 import { formatNumber } from '../utils';
 
@@ -11,7 +11,6 @@ interface StatCardProps {
   icon?: React.ReactNode;
   variant?: 'default' | 'gradient' | 'hover';
   className?: string;
-  color?: string; 
 }
 
 const StatCard: React.FC<StatCardProps> = ({ 
@@ -22,8 +21,7 @@ const StatCard: React.FC<StatCardProps> = ({
   changeColor,
   icon,
   variant = 'default',
-  className = '',
-  color
+  className = ''
 }) => {
   
   const variantClasses = {
@@ -34,10 +32,9 @@ const StatCard: React.FC<StatCardProps> = ({
 
   const cardClasses = `${variantClasses[variant]} text-center ${className}`;
 
+  // Fallback für changeColor wenn nicht provided
   const calculatedChangeColor =
     changeColor || (change && change >= 0 ? 'text-green-400' : 'text-red-400');
-    
-  const valueTextColor = color || "text-gray-100";
 
   return (
     <div className={cardClasses}>
@@ -45,7 +42,8 @@ const StatCard: React.FC<StatCardProps> = ({
       <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate mb-2">
         {title}
       </h4>
-      <p className={`text-2xl font-bold mb-2 ${valueTextColor}`}>
+      {/* HIER der wichtige Fix: immer helle Zahl */}
+      <p className="text-2xl font-bold text-gray-100 mb-2">
         {value}
       </p>
       {(change !== undefined && changePercent !== undefined) && (
@@ -57,6 +55,12 @@ const StatCard: React.FC<StatCardProps> = ({
             ({changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%)
           </span>
         </div>
+      )}
+      {/* Fallback für alte changeColor Prop */}
+      {(change !== undefined && changePercent !== undefined && changeColor) && (
+        <p className={`text-sm font-semibold ${changeColor}`}>
+          {change >= 0 ? '+' : ''}{formatNumber(change)} ({changePercent.toFixed(2)}%)
+        </p>
       )}
     </div>
   );
