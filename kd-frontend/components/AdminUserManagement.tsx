@@ -1,4 +1,4 @@
-// AdminUserManagement.tsx (VOLLSTÄNDIGER CODE)
+// AdminUserManagement.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
@@ -53,7 +53,7 @@ const AdminUserManagement: React.FC = () => {
   const [kingdomSlug, setKingdomSlug] = useState<string | null>(null);
   const [kingdomDisplayName, setKingdomDisplayName] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
-
+  
   // -------- Create Kingdom State --------
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newSlug, setNewSlug] = useState('');
@@ -66,11 +66,17 @@ const AdminUserManagement: React.FC = () => {
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editSlug, setEditSlug] = useState('');
 
-  // 👑 NEU: R5 Assign State
+  // 👑 NEU: R5 Assign State (Bestehend)
   const [r5UserId, setR5UserId] = useState<string>('');
   const [r5KingdomId, setR5KingdomId] = useState<string>('');
   const [isAssigningR5, setIsAssigningR5] = useState(false);
   const [assignR5Error, setAssignR5Error] = useState<string | null>(null);
+
+  // 📝 NEU: R4 Assign State
+  const [r4UserId, setR4UserId] = useState<string>('');
+  const [r4KingdomId, setR4KingdomId] = useState<string>('');
+  const [isAssigningR4, setIsAssigningR4] = useState(false);
+  const [assignR4Error, setAssignR4Error] = useState<string | null>(null);
 
 
   const { user: currentUser, refreshUser } = useAuth();
@@ -498,6 +504,44 @@ const AdminUserManagement: React.FC = () => {
       setIsAssigningR5(false);
     }
   };
+  
+  // 📝 NEU: R4 Zuweisung
+  const handleAssignR4 = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAssignR4Error(null);
+    if (!r4UserId || !r4KingdomId) return;
+
+    setIsAssigningR4(true);
+    try {
+      const token = getTokenOrThrow();
+      // Nutzt den neuen Backend-Endpoint
+      const res = await fetch(`${BACKEND_URL}/api/admin/users/assign-r4`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId: r4UserId, kingdomId: r4KingdomId }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to assign R4.');
+      }
+      
+      // State-Updates:
+      fetchUsers(); 
+      
+      setR4UserId('');
+      setR4KingdomId('');
+      const assignedKingdom = kingdoms.find(k => k.id === r4KingdomId)?.displayName || r4KingdomId;
+      alert(`R4 successfully assigned to ${assignedKingdom}.`);
+    } catch (err: any) {
+      setAssignR4Error(err.message || 'An unexpected error occurred during R4 assignment.');
+    } finally {
+      setIsAssigningR4(false);
+    }
+  };
 
 
   // 🔒 NEU: Kingdom Status ändern
@@ -601,6 +645,11 @@ const AdminUserManagement: React.FC = () => {
   
   // 🆕 Neu: R5 darf auch den Link sehen
   const showInviteLinkCard = canManageUsers && !!inviteLink; 
+  
+  // Filtere Benutzer, die bereits Admin oder R5 sind, um sie nicht erneut zuzuweisen
+  const assignableUsersR5 = users.filter(u => u.role !== 'admin' && u.role !== 'r5' && u.id !== currentUser?.id);
+  // Filtere Benutzer, die bereits Admin oder R4/R5 sind, um sie nicht erneut zuzuweisen (R4 zu R4 Zuweisung ist redundant)
+  const assignableUsersR4 = users.filter(u => u.role !== 'admin' && u.role !== 'r5' && u.role !== 'r4' && u.id !== currentUser?.id);
 
   return (
     <div className="space-y-6">
@@ -879,350 +928,425 @@ const AdminUserManagement: React.FC = () => {
       {/* KINGDOM MANAGEMENT SECTIONS (NUR SICHTBAR FÜR isSuperAdmin) */}
       {isSuperAdmin && (
         <>
-          {/* KINGDOM MANAGEMENT: R5 ASSIGNMENT FORM (ONLY SUPERADMIN) */}
-          <Card className="p-6 gradient">
-              <h3 className="text-lg font-semibold text-gray-200 mb-4">
-                  👑 Assign R5 Role & Kingdom Owner (Superadmin)
-              </h3>
-              <form onSubmit={handleAssignR5} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                  {/* User Select */}
-                  <div className="flex flex-col md:col-span-2">
-                    <label htmlFor="r5-user-select" className="text-xs text-gray-400 mb-1">
-                      Select User (will become R5 and Owner)
-                    </label>
-                    <select
-                      id="r5-user-select"
-                      value={r5UserId}
-                      onChange={(e) => setR5UserId(e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 h-9"
-                      required
-                      disabled={isAssigningR5 || isLoadingUsers}
-                    >
-                      <option value="">Select User...</option>
-                      {users
-                        // Superadmin kann jeden Nicht-Admin zu R5 machen, einschließlich R4.
-                        .filter(u => u.role !== 'admin') 
-                        .map((user) => (
+          {/* KINGDOM ASSIGNMENT FORMS */}
+          <div className="space-y-6">
+
+            {/* 👑 ASSIGN R5 (sets owner) */}
+            <Card className="p-6 bg-yellow-900/30 border-yellow-700">
+                <h3 className="text-lg font-semibold text-yellow-200 mb-4">
+                    👑 Assign R5 Role & Kingdom Owner (Superadmin)
+                </h3>
+                <form onSubmit={handleAssignR5} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    {/* User Select */}
+                    <div className="flex flex-col md:col-span-2">
+                      <label htmlFor="r5-user-select" className="text-xs text-gray-400 mb-1">
+                        Select User (will become R5 and Owner)
+                      </label>
+                      <select
+                        id="r5-user-select"
+                        value={r5UserId}
+                        onChange={(e) => setR5UserId(e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-yellow-500 h-9"
+                        required
+                        disabled={isAssigningR5 || isLoadingUsers || assignableUsersR5.length === 0}
+                      >
+                        <option value="">Select User...</option>
+                        {assignableUsersR5.map((user) => (
                           <option key={user.id} value={user.id}>
                             {user.username} ({user.role}) - {user.email}
                           </option>
                         ))}
-                    </select>
+                      </select>
+                       {assignableUsersR5.length === 0 && <p className='text-xs text-gray-500 mt-1'>No suitable users (must not be Admin/R5).</p>}
+                    </div>
+
+                    {/* Kingdom Select */}
+                    <div className="flex flex-col">
+                      <label htmlFor="r5-kingdom-select" className="text-xs text-gray-400 mb-1">
+                        Select Kingdom
+                      </label>
+                      <select
+                        id="r5-kingdom-select"
+                        value={r5KingdomId}
+                        onChange={(e) => setR5KingdomId(e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-yellow-500 h-9"
+                        required
+                        disabled={isAssigningR5 || isLoadingKingdoms}
+                      >
+                        <option value="">Select Kingdom...</option>
+                        {kingdoms.map((k) => (
+                          <option key={k.id} value={k.id}>
+                            {k.displayName} ({k.slug})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Submit */}
+                    <div className="flex flex-col justify-end">
+                      <button
+                        type="submit"
+                        disabled={isAssigningR5 || !r5UserId || !r5KingdomId}
+                        className={`px-4 py-2 rounded text-sm font-semibold h-9 ${
+                          !r5UserId || !r5KingdomId || isAssigningR5
+                            ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                            : 'bg-yellow-600 text-white hover:bg-yellow-700 transition-colors'
+                        }`}
+                      >
+                        {isAssigningR5 ? 'Assigning...' : 'Assign R5 & Set Owner'}
+                      </button>
+                    </div>
                   </div>
+                  {assignR5Error && (
+                    <p className="text-xs text-red-400 mt-2">{assignR5Error}</p>
+                  )}
+                </form>
+            </Card>
 
-                  {/* Kingdom Select */}
-                  <div className="flex flex-col">
-                    <label htmlFor="r5-kingdom-select" className="text-xs text-gray-400 mb-1">
-                      Select Kingdom
-                    </label>
-                    <select
-                      id="r5-kingdom-select"
-                      value={r5KingdomId}
-                      onChange={(e) => setR5KingdomId(e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 h-9"
-                      required
-                      disabled={isAssigningR5 || isLoadingKingdoms}
-                    >
-                      <option value="">Select Kingdom...</option>
-                      {kingdoms.map((k) => (
-                        <option key={k.id} value={k.id}>
-                          {k.displayName} ({k.slug})
-                        </option>
-                      ))}
-                    </select>
+            {/* 📝 NEU: ASSIGN R4 (Superadmin) */}
+            <Card className="p-6 bg-blue-900/30 border-blue-700">
+                <h3 className="text-lg font-semibold text-blue-200 mb-4">
+                    🛠️ Assign R4 Role to Kingdom (Superadmin)
+                </h3>
+                <form onSubmit={handleAssignR4} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    {/* User Select */}
+                    <div className="flex flex-col md:col-span-2">
+                      <label htmlFor="r4-user-select" className="text-xs text-gray-400 mb-1">
+                        Select User (will become R4)
+                      </label>
+                      <select
+                        id="r4-user-select"
+                        value={r4UserId}
+                        onChange={(e) => setR4UserId(e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 h-9"
+                        required
+                        disabled={isAssigningR4 || isLoadingUsers || assignableUsersR4.length === 0}
+                      >
+                        <option value="">Select User...</option>
+                        {assignableUsersR4.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.username} ({user.role}) - {user.email}
+                          </option>
+                        ))}
+                      </select>
+                      {assignableUsersR4.length === 0 && <p className='text-xs text-gray-500 mt-1'>No suitable users (must not be Admin/R5/R4).</p>}
+                    </div>
+
+                    {/* Kingdom Select */}
+                    <div className="flex flex-col">
+                      <label htmlFor="r4-kingdom-select" className="text-xs text-gray-400 mb-1">
+                        Select Kingdom
+                      </label>
+                      <select
+                        id="r4-kingdom-select"
+                        value={r4KingdomId}
+                        onChange={(e) => setR4KingdomId(e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 h-9"
+                        required
+                        disabled={isAssigningR4 || isLoadingKingdoms}
+                      >
+                        <option value="">Select Kingdom...</option>
+                        {kingdoms.map((k) => (
+                          <option key={k.id} value={k.id}>
+                            {k.displayName} ({k.slug})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Submit */}
+                    <div className="flex flex-col justify-end">
+                      <button
+                        type="submit"
+                        disabled={isAssigningR4 || !r4UserId || !r4KingdomId}
+                        className={`px-4 py-2 rounded text-sm font-semibold h-9 ${
+                          !r4UserId || !r4KingdomId || isAssigningR4
+                            ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700 transition-colors'
+                        }`}
+                      >
+                        {isAssigningR4 ? 'Assigning...' : 'Assign R4 Role'}
+                      </button>
+                    </div>
                   </div>
-
-                  {/* Submit */}
-                  <div className="flex flex-col justify-end">
-                    <button
-                      type="submit"
-                      disabled={isAssigningR5 || !r5UserId || !r5KingdomId}
-                      className={`px-4 py-2 rounded text-sm font-semibold h-9 ${
-                        !r5UserId || !r5KingdomId || isAssigningR5
-                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                          : 'bg-yellow-600 text-white hover:bg-yellow-700 transition-colors'
-                      }`}
-                    >
-                      {isAssigningR5 ? 'Assigning...' : 'Assign R5 & Set Owner'}
-                    </button>
-                  </div>
-                </div>
-                {assignR5Error && (
-                  <p className="text-xs text-red-400 mt-2">{assignR5Error}</p>
-                )}
-              </form>
-          </Card>
+                  {assignR4Error && (
+                    <p className="text-xs text-red-400 mt-2">{assignR4Error}</p>
+                  )}
+                </form>
+            </Card>
 
 
-          {/* KINGDOM MANAGEMENT: LIST AND ACTIONS */}
-          <Card className="p-6">
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-white mb-2">
-                  Kingdom Management
-                </h2>
-                <p className="text-sm text-gray-400">
-                  Manage Rise of Kingdoms kingdoms, slugs and RoK IDs. Each slug
-                  will later map to its own URL (z.B.
-                  <span className="text-blue-300"> {FRONTEND_URL}/?slug=3619-vikings</span>).
-                </p>
-              </div>
-            </div>
-
-            {kingdomError && (
-              <div className="mb-4 text-sm text-red-400 bg-red-900/30 border border-red-700 px-3 py-2 rounded">
-                {kingdomError}
-              </div>
-            )}
-
-            {isLoadingKingdoms ? (
-              <p className="text-gray-300 mb-4">Loading kingdoms...</p>
-            ) : kingdoms.length === 0 ? (
-              <p className="text-gray-400 mb-4">No kingdoms created yet.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <tr>
-                    <TableCell align="left" header>
-                      Name
-                    </TableCell>
-                    <TableCell align="left" header>
-                      Slug
-                    </TableCell>
-                    <TableCell align="left" header>
-                      Owner (R5)
-                    </TableCell>
-                    {/* 🌐 NEU: Public Link Spalte */}
-                    {isSuperAdmin && <TableCell align="left" header>Public Link</TableCell>}
-                    <TableCell align="center" header>
-                      Status
-                    </TableCell>
-                    <TableCell align="center" header>
-                      Actions
-                    </TableCell>
-                  </tr>
-                </TableHeader>
-                <tbody>
-                  {kingdoms.map((k) => {
-                    const publicLink = `${FRONTEND_URL}/?slug=${k.slug}`;
-                    const fullAccessLink = `${publicLink}`; // Superadmin nutzt den gleichen Link
-                    const isEditing = editingKingdomId === k.id;
-
-                    return (
-                    <TableRow key={k.id}>
-                      
-                      {/* NAME CELL (Editable) */}
-                      <TableCell align="left" className="font-medium text-white">
-                        {isEditing ? (
-                            <input
-                                type="text"
-                                value={editDisplayName}
-                                onChange={(e) => setEditDisplayName(e.target.value)}
-                                className="bg-gray-800 text-white border border-gray-600 rounded px-2 py-1 text-xs w-full"
-                            />
-                        ) : (
-                            k.displayName
-                        )}
-                      </TableCell>
-
-                      {/* SLUG CELL (Editable) */}
-                      <TableCell align="left">
-                        {isEditing ? (
-                            <input
-                                type="text"
-                                value={editSlug}
-                                onChange={(e) => setEditSlug(e.target.value)}
-                                className="bg-gray-800 text-blue-300 border border-gray-600 rounded px-2 py-1 text-xs font-mono w-full"
-                            />
-                        ) : (
-                            <span className="font-mono text-xs text-blue-300">
-                                {k.slug}
-                            </span>
-                        )}
-                      </TableCell>
-
-                      {/* Owner/R5 anzeigen */}
-                      <TableCell align="left">
-                        {k.ownerUsername ? (
-                          <span className="text-xs text-green-300" title={k.ownerEmail || undefined}>
-                            {k.ownerUsername}
-                          </span>
-                        ) : (
-                          <span className="text-gray-500 text-xs">—</span>
-                        )}
-                      </TableCell>
-
-                      {/* 🌐 NEU: Public Link Anzeige */}
-                      {isSuperAdmin && (
-                        <TableCell align="left">
-                            <a
-                                href={fullAccessLink} // Link führt zur App mit Slug-Parameter
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-blue-400 hover:text-blue-300 underline truncate block max-w-xs"
-                                title={fullAccessLink}
-                            >
-                                {`Open KD (${k.slug})`}
-                            </a>
-                        </TableCell>
-                      )}
-
-                      {/* Status anzeigen */}
-                      <TableCell align="center">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            k.status === 'active'
-                              ? 'bg-green-700 text-white'
-                              : 'bg-red-700 text-white'
-                          }`}
-                        >
-                          {k.status.toUpperCase()}
-                        </span>
-                      </TableCell>
-
-                      {/* Actions */}
-                      <TableCell align="center" className="space-x-2 whitespace-nowrap">
-                        {canManageKingdoms && k.id !== 'kdm-default' && (
-                          <>
-                            {isEditing ? (
-                                // SAVE / CANCEL Buttons
-                                <>
-                                    <button
-                                        onClick={() => handleUpdateKingdomDetails(k.id)}
-                                        className="px-3 py-1 text-xs font-semibold rounded bg-green-600 hover:bg-green-700 text-white transition-colors"
-                                    >
-                                        Save
-                                    </button>
-                                    <button
-                                        onClick={cancelEditing}
-                                        className="px-3 py-1 text-xs font-semibold rounded bg-gray-600 hover:bg-gray-500 text-white transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                </>
-                            ) : (
-                                // EDIT / STATUS / DELETE Buttons
-                                <>
-                                    <button
-                                        onClick={() => startEditing(k)}
-                                        className="px-3 py-1 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        onClick={() => handleUpdateKingdomStatus(k.id, k.status)}
-                                        className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
-                                            k.status === 'active'
-                                              ? 'bg-red-600 hover:bg-red-700 text-white'
-                                              : 'bg-green-600 hover:bg-green-700 text-white'
-                                        }`}
-                                        title={k.status === 'active' ? 'Set Kingdom to Inactive' : 'Set Kingdom to Active (re-enable access)'}
-                                    >
-                                        {k.status === 'active' ? 'Set Inactive' : 'Set Active'}
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeleteKingdom(k.id, k.displayName)}
-                                        className="px-3 py-1 text-xs font-semibold rounded bg-gray-600 hover:bg-red-500 text-white transition-colors"
-                                        title="Permanently delete kingdom, files, and reset users"
-                                    >
-                                        Delete
-                                    </button>
-                                </>
-                            )}
-                          </>
-                        )}
-                        {k.id === 'kdm-default' && (
-                          <span className='text-gray-500 text-xs'>System Default</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })}
-                </tbody>
-              </Table>
-            )}
-
-            {/* Create Kingdom Form (Admin Only) */}
-            <div className="mt-6 border-t border-gray-700 pt-4">
-              <h3 className="text-lg font-semibold text-white mb-3">
-                Create new Kingdom
-              </h3>
-              {!canManageKingdoms && (
-                <p className="text-sm text-yellow-400 mb-2">
-                  You do not have permission to create kingdoms.
-                </p>
-              )}
-
-              <form
-                onSubmit={handleCreateKingdom}
-                className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"
-              >
+            {/* KINGDOM MANAGEMENT: LIST AND ACTIONS */}
+            <Card className="p-6">
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">
-                    Display Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newDisplayName}
-                    onChange={(e) => setNewDisplayName(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Kingdom 3619 - Vikings"
-                    disabled={!canManageKingdoms || isCreatingKingdom}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">
-                    Slug (optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={newSlug}
-                    onChange={(e) => setNewSlug(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="3619-vikings"
-                    disabled={!canManageKingdoms || isCreatingKingdom}
-                  />
-                  <p className="text-[10px] text-gray-500 mt-1">
-                    Will be auto-generated from display name if left empty.
+                  <h2 className="text-2xl font-bold text-white mb-2">
+                    Kingdom Management
+                  </h2>
+                  <p className="text-sm text-gray-400">
+                    Manage Rise of Kingdoms kingdoms, slugs and RoK IDs. Each slug
+                    will later map to its own URL (z.B.
+                    <span className="text-blue-300"> {FRONTEND_URL}/?slug=3619-vikings</span>).
                   </p>
                 </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">
-                    RoK Kingdom ID (optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={newRokId}
-                    onChange={(e) => setNewRokId(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="3619"
-                    disabled={!canManageKingdoms || isCreatingKingdom}
-                  />
+              </div>
+
+              {kingdomError && (
+                <div className="mb-4 text-sm text-red-400 bg-red-900/30 border border-red-700 px-3 py-2 rounded">
+                  {kingdomError}
                 </div>
-                <div className="flex flex-col items-stretch md:items-end gap-2">
-                  <button
-                    type="submit"
-                    disabled={
-                      !canManageKingdoms ||
-                      isCreatingKingdom ||
-                      !newDisplayName.trim()
-                    }
-                    className={`px-4 py-2 rounded text-sm font-semibold ${
-                      !canManageKingdoms
-                        ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    {isCreatingKingdom ? 'Creating...' : 'Create Kingdom'}
-                  </button>
-                  {createKingdomError && (
-                    <p className="text-xs text-red-400">{createKingdomError}</p>
-                  )}
-                </div>
-              </form>
-            </div>
-          </Card>
+              )}
+
+              {isLoadingKingdoms ? (
+                <p className="text-gray-300 mb-4">Loading kingdoms...</p>
+              ) : kingdoms.length === 0 ? (
+                <p className="text-gray-400 mb-4">No kingdoms created yet.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <tr>
+                      <TableCell align="left" header>
+                        Name
+                      </TableCell>
+                      <TableCell align="left" header>
+                        Slug
+                      </TableCell>
+                      <TableCell align="left" header>
+                        Owner (R5)
+                      </TableCell>
+                      {/* 🌐 NEU: Public Link Spalte */}
+                      {isSuperAdmin && <TableCell align="left" header>Public Link</TableCell>}
+                      <TableCell align="center" header>
+                        Status
+                      </TableCell>
+                      <TableCell align="center" header>
+                        Actions
+                      </TableCell>
+                    </tr>
+                  </TableHeader>
+                  <tbody>
+                    {kingdoms.map((k) => {
+                      const publicLink = `${FRONTEND_URL}/?slug=${k.slug}`;
+                      const fullAccessLink = `${publicLink}`; // Superadmin nutzt den gleichen Link
+                      const isEditing = editingKingdomId === k.id;
+
+                      return (
+                      <TableRow key={k.id}>
+                        
+                        {/* NAME CELL (Editable) */}
+                        <TableCell align="left" className="font-medium text-white">
+                          {isEditing ? (
+                              <input
+                                  type="text"
+                                  value={editDisplayName}
+                                  onChange={(e) => setEditDisplayName(e.target.value)}
+                                  className="bg-gray-800 text-white border border-gray-600 rounded px-2 py-1 text-xs w-full"
+                              />
+                          ) : (
+                              k.displayName
+                          )}
+                        </TableCell>
+
+                        {/* SLUG CELL (Editable) */}
+                        <TableCell align="left">
+                          {isEditing ? (
+                              <input
+                                  type="text"
+                                  value={editSlug}
+                                  onChange={(e) => setEditSlug(e.target.value)}
+                                  className="bg-gray-800 text-blue-300 border border-gray-600 rounded px-2 py-1 text-xs font-mono w-full"
+                              />
+                          ) : (
+                              <span className="font-mono text-xs text-blue-300">
+                                  {k.slug}
+                              </span>
+                          )}
+                        </TableCell>
+
+                        {/* Owner/R5 anzeigen */}
+                        <TableCell align="left">
+                          {k.ownerUsername ? (
+                            <span className="text-xs text-green-300" title={k.ownerEmail || undefined}>
+                              {k.ownerUsername}
+                            </span>
+                          ) : (
+                            <span className="text-gray-500 text-xs">—</span>
+                          )}
+                        </TableCell>
+
+                        {/* 🌐 NEU: Public Link Anzeige */}
+                        {isSuperAdmin && (
+                          <TableCell align="left">
+                              <a
+                                  href={fullAccessLink} // Link führt zur App mit Slug-Parameter
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-400 hover:text-blue-300 underline truncate block max-w-xs"
+                                  title={fullAccessLink}
+                              >
+                                  {`Open KD (${k.slug})`}
+                              </a>
+                          </TableCell>
+                        )}
+
+                        {/* Status anzeigen */}
+                        <TableCell align="center">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                              k.status === 'active'
+                                ? 'bg-green-700 text-white'
+                                : 'bg-red-700 text-white'
+                            }`}
+                          >
+                            {k.status.toUpperCase()}
+                          </span>
+                        </TableCell>
+
+                        {/* Actions */}
+                        <TableCell align="center" className="space-x-2 whitespace-nowrap">
+                          {canManageKingdoms && k.id !== 'kdm-default' && (
+                            <>
+                              {isEditing ? (
+                                  // SAVE / CANCEL Buttons
+                                  <>
+                                      <button
+                                          onClick={() => handleUpdateKingdomDetails(k.id)}
+                                          className="px-3 py-1 text-xs font-semibold rounded bg-green-600 hover:bg-green-700 text-white transition-colors"
+                                      >
+                                          Save
+                                      </button>
+                                      <button
+                                          onClick={cancelEditing}
+                                          className="px-3 py-1 text-xs font-semibold rounded bg-gray-600 hover:bg-gray-500 text-white transition-colors"
+                                      >
+                                          Cancel
+                                      </button>
+                                  </>
+                              ) : (
+                                  // EDIT / STATUS / DELETE Buttons
+                                  <>
+                                      <button
+                                          onClick={() => startEditing(k)}
+                                          className="px-3 py-1 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                                      >
+                                          Edit
+                                      </button>
+                                      <button
+                                          onClick={() => handleUpdateKingdomStatus(k.id, k.status)}
+                                          className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
+                                              k.status === 'active'
+                                                ? 'bg-red-600 hover:bg-red-700 text-white'
+                                                : 'bg-green-600 hover:bg-green-700 text-white'
+                                          }`}
+                                          title={k.status === 'active' ? 'Set Kingdom to Inactive' : 'Set Kingdom to Active (re-enable access)'}
+                                      >
+                                          {k.status === 'active' ? 'Set Inactive' : 'Set Active'}
+                                      </button>
+                                      <button
+                                          onClick={() => handleDeleteKingdom(k.id, k.displayName)}
+                                          className="px-3 py-1 text-xs font-semibold rounded bg-gray-600 hover:bg-red-500 text-white transition-colors"
+                                          title="Permanently delete kingdom, files, and reset users"
+                                      >
+                                          Delete
+                                      </button>
+                                  </>
+                              )}
+                            </>
+                          )}
+                          {k.id === 'kdm-default' && (
+                            <span className='text-gray-500 text-xs'>System Default</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              )}
+
+              {/* Create Kingdom Form (Admin Only) */}
+              <div className="mt-6 border-t border-gray-700 pt-4">
+                <h3 className="text-lg font-semibold text-white mb-3">
+                  Create new Kingdom
+                </h3>
+                {!canManageKingdoms && (
+                  <p className="text-sm text-yellow-400 mb-2">
+                    You do not have permission to create kingdoms.
+                  </p>
+                )}
+
+                <form
+                  onSubmit={handleCreateKingdom}
+                  className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"
+                >
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">
+                      Display Name
+                    </label>
+                    <input
+                      type="text"
+                      value={newDisplayName}
+                      onChange={(e) => setNewDisplayName(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="Kingdom 3619 - Vikings"
+                      disabled={!canManageKingdoms || isCreatingKingdom}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">
+                      Slug (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={newSlug}
+                      onChange={(e) => setNewSlug(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="3619-vikings"
+                      disabled={!canManageKingdoms || isCreatingKingdom}
+                    />
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Will be auto-generated from display name if left empty.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">
+                      RoK Kingdom ID (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={newRokId}
+                      onChange={(e) => setNewRokId(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="3619"
+                      disabled={!canManageKingdoms || isCreatingKingdom}
+                    />
+                  </div>
+                  <div className="flex flex-col items-stretch md:items-end gap-2">
+                    <button
+                      type="submit"
+                      disabled={
+                        !canManageKingdoms ||
+                        isCreatingKingdom ||
+                        !newDisplayName.trim()
+                      }
+                      className={`px-4 py-2 rounded text-sm font-semibold ${
+                        !canManageKingdoms
+                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {isCreatingKingdom ? 'Creating...' : 'Create Kingdom'}
+                    </button>
+                    {createKingdomError && (
+                      <p className="text-xs text-red-400">{createKingdomError}</p>
+                    )}
+                  </div>
+                </form>
+              </div>
+            </Card>
+          </div>
         </>
       )}
     </div>
