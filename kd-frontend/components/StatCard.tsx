@@ -1,4 +1,4 @@
-// StatCard.tsx - ERWEITERTE Version
+// StatCard.tsx - FIXED Version (Named Export + Color Support)
 import React from 'react';
 import { formatNumber } from '../utils';
 
@@ -11,9 +11,10 @@ interface StatCardProps {
   icon?: React.ReactNode;
   variant?: 'default' | 'gradient' | 'hover';
   className?: string;
+  color?: string; // 🆕 Hinzugefügt für farbige Werte (z.B. Kill Points rot)
 }
 
-const StatCard: React.FC<StatCardProps> = ({ 
+export const StatCard: React.FC<StatCardProps> = ({ 
   title, 
   value, 
   change, 
@@ -21,7 +22,8 @@ const StatCard: React.FC<StatCardProps> = ({
   changeColor,
   icon,
   variant = 'default',
-  className = ''
+  className = '',
+  color
 }) => {
   
   const variantClasses = {
@@ -36,16 +38,21 @@ const StatCard: React.FC<StatCardProps> = ({
   const calculatedChangeColor =
     changeColor || (change && change >= 0 ? 'text-green-400' : 'text-red-400');
 
+  // Bestimme die Farbe des Hauptwerts (nutze prop 'color' falls vorhanden, sonst weiß)
+  const valueTextColor = color || "text-gray-100";
+
   return (
     <div className={cardClasses}>
       {icon && <div className="flex justify-center mb-3">{icon}</div>}
       <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate mb-2">
         {title}
       </h4>
-      {/* HIER der wichtige Fix: immer helle Zahl */}
-      <p className="text-2xl font-bold text-gray-100 mb-2">
+      
+      {/* Wert mit dynamischer Farbe */}
+      <p className={`text-2xl font-bold mb-2 ${valueTextColor}`}>
         {value}
       </p>
+
       {(change !== undefined && changePercent !== undefined) && (
         <div className={`text-sm font-semibold ${calculatedChangeColor}`}>
           <span>
@@ -55,12 +62,6 @@ const StatCard: React.FC<StatCardProps> = ({
             ({changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%)
           </span>
         </div>
-      )}
-      {/* Fallback für alte changeColor Prop */}
-      {(change !== undefined && changePercent !== undefined && changeColor) && (
-        <p className={`text-sm font-semibold ${changeColor}`}>
-          {change >= 0 ? '+' : ''}{formatNumber(change)} ({changePercent.toFixed(2)}%)
-        </p>
       )}
     </div>
   );
