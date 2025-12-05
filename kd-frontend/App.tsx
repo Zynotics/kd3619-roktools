@@ -87,7 +87,13 @@ const AppContent: React.FC = () => {
             const data = await res.json();
             // 👑 FIX: Sicherstellen, dass data.displayName ein valider, nicht leerer String ist.
             const displayName = data.displayName && data.displayName.trim() ? data.displayName : publicSlug.toUpperCase();
-            setHeaderTitle(`${displayName} - ${publicSlug}`);
+            
+            // Vermeide doppelte Anzeige, falls Name und Slug gleich sind (z.B. "3 - 3")
+            if (displayName.toUpperCase() === publicSlug.toUpperCase()) {
+                 setHeaderTitle(displayName);
+            } else {
+                 setHeaderTitle(`${displayName} - ${publicSlug}`);
+            }
           } else {
             setHeaderTitle(`Kingdom Analytics - ${publicSlug}`);
           }
@@ -107,7 +113,12 @@ const AppContent: React.FC = () => {
             if (data && data.length > 0) {
                 const slug = data[0].slug.trim();
                 const displayName = data[0].displayName && data[0].displayName.trim() ? data[0].displayName : slug.toUpperCase();
-                setHeaderTitle(`${displayName} - ${slug}`);
+                
+                if (displayName.toUpperCase() === slug.toUpperCase()) {
+                     setHeaderTitle(displayName);
+                } else {
+                     setHeaderTitle(`${displayName} - ${slug}`);
+                }
             }
           }
         } catch (e) { setHeaderTitle('Kingdom Analytics'); }
