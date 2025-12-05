@@ -490,12 +490,14 @@ app.post('/api/admin/users/assign-r4', authenticateToken, requireAdmin, async (r
             return res.status(400).json({ error: 'Benutzer ID und Königreich ID sind erforderlich.' });
         }
         
-        // 1. Validierung: Sicherstellen, dass der Benutzer existiert und kein Admin ist
+        // 1. Validierung: Sicherstellen, dass der Benutzer existiert und kein Admin/R5 ist (da R5 eine andere Zuweisungslogik hat)
         const targetUser = await get('SELECT role FROM users WHERE id = $1', [userId]);
         if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-        if (targetUser.role === 'admin') return res.status(403).json({ error: 'Kann Admin-Rollen nicht zuweisen.' });
+        if (targetUser.role === 'admin' || targetUser.role === 'r5') {
+             return res.status(403).json({ error: 'Kann Admin/R5 Rollen nicht über diesen Endpoint zuweisen.' });
+        }
         
-        // 2. Setze die Rolle auf R4, die Kingdom ID und setze is_approved auf true
+        // 2. Setze die Rolle auf R4, die Kingdom ID und setze is_approved auf true (um den Approval-Prozess zu überspringen)
         await query('UPDATE users SET role = $1, kingdom_id = $2, is_approved = true WHERE id = $3', ['r4', kingdomId, userId]);
         
         return res.json({ success: true, message: `Benutzer ${userId} wurde Rolle R4 und Königreich ${kingdomId} zugewiesen.` });
@@ -533,6 +535,13 @@ app.post('/api/admin/kingdoms', authenticateToken, requireAdmin, async (req, res
         const { displayName, slug, rokIdentifier } = req.body;
         const id = 'kdm-' + Date.now();
         const nSlug = String(slug).trim().toLowerCase().replace(/[^a-z0-9\-]/g, '-');
+        
+        // 📝 NEU: Slug Eindeutigkeitsprüfung
+        const existingBySlug = await findKingdomBySlug(nSlug);
+        if (existingBySlug) {
+             return res.status(400).json({ error: `Slug '${nSlug}' ist bereits für das Königreich '${existingBySlug.display_name}' vergeben.` });
+        }
+        
         await query(`INSERT INTO kingdoms (id, display_name, slug, rok_identifier) VALUES ($1,$2,$3,$4)`, [id, displayName, nSlug, rokIdentifier]);
         res.json({ id, displayName, slug: nSlug });
     } catch(e) { res.status(500).json({error: 'Error'}); }
@@ -546,6 +555,12 @@ app.put('/api/admin/kingdoms/:id', authenticateToken, requireAdmin, async (req, 
         if (!displayName || !slug) return res.status(400).json({ error: 'Display Name and Slug required' });
 
         const normalizedSlug = String(slug).trim().toLowerCase().replace(/[^a-z0-9\-]/g, '-');
+
+        // 📝 NEU: Slug Eindeutigkeitsprüfung (außer für das aktuelle Königreich)
+        const existingBySlug = await get('SELECT id, display_name FROM kingdoms WHERE LOWER(slug) = $1 AND id != $2 LIMIT 1', [normalizedSlug, req.params.id]);
+        if (existingBySlug) {
+             return res.status(400).json({ error: `Slug '${normalizedSlug}' ist bereits für das Königreich '${existingBySlug.display_name}' vergeben.` });
+        }
 
         await query(
             'UPDATE kingdoms SET display_name = $1, slug = $2, updated_at = NOW() WHERE id = $3',
