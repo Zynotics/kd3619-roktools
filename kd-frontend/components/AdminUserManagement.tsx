@@ -56,6 +56,11 @@ const AdminUserManagement: React.FC = () => {
   const [isCreatingKingdom, setIsCreatingKingdom] = useState(false);
   const [createKingdomError, setCreateKingdomError] = useState<string | null>(null);
   
+  // -------- Edit Kingdom State (Rename) --------
+  const [editingKingdomId, setEditingKingdomId] = useState<string | null>(null);
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editSlug, setEditSlug] = useState('');
+
   // 👑 NEU: R5 Assign State
   const [r5UserId, setR5UserId] = useState<string>('');
   const [r5KingdomId, setR5KingdomId] = useState<string>('');
@@ -363,6 +368,59 @@ const AdminUserManagement: React.FC = () => {
       setCreateKingdomError('Unexpected error while creating kingdom');
     } finally {
       setIsCreatingKingdom(false);
+    }
+  };
+
+  // 🖊️ EDIT KINGDOM (Start/Cancel/Update)
+  const startEditing = (k: Kingdom) => {
+    setEditingKingdomId(k.id);
+    setEditDisplayName(k.displayName);
+    setEditSlug(k.slug);
+  };
+
+  const cancelEditing = () => {
+    setEditingKingdomId(null);
+    setEditDisplayName('');
+    setEditSlug('');
+  };
+
+  const handleUpdateKingdomDetails = async (kingdomId: string) => {
+    if (!editDisplayName.trim() || !editSlug.trim()) {
+        alert("Display Name and Slug are required.");
+        return;
+    }
+
+    const normalizedSlug = normalizeSlug(editSlug);
+
+    try {
+        const token = getTokenOrThrow();
+        const res = await fetch(`${BACKEND_URL}/api/admin/kingdoms/${kingdomId}`, {
+            method: 'PUT', 
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+                displayName: editDisplayName,
+                slug: normalizedSlug,
+            }),
+        });
+
+        const json = await res.json();
+        if (!res.ok) {
+            throw new Error(json.error || 'Failed to update kingdom.');
+        }
+
+        const updatedKingdom = json.kingdom || json; // Je nach Backend-Response-Format
+
+        // State Update
+        setKingdoms(prev => prev.map(k => k.id === kingdomId ? { ...k, ...updatedKingdom } : k));
+        
+        cancelEditing();
+        alert(`Kingdom updated successfully.`);
+    } catch (err: any) {
+        console.error('Error updating kingdom:', err);
+        alert(err.message || 'Error updating kingdom.');
     }
   };
 
@@ -881,17 +939,41 @@ const AdminUserManagement: React.FC = () => {
                   {kingdoms.map((k) => {
                     const publicLink = `${FRONTEND_URL}/?slug=${k.slug}`;
                     const fullAccessLink = `${publicLink}`; // Superadmin nutzt den gleichen Link
-                    
+                    const isEditing = editingKingdomId === k.id;
+
                     return (
                     <TableRow key={k.id}>
+                      
+                      {/* NAME CELL (Editable) */}
                       <TableCell align="left" className="font-medium text-white">
-                        {k.displayName}
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={editDisplayName}
+                                onChange={(e) => setEditDisplayName(e.target.value)}
+                                className="bg-gray-800 text-white border border-gray-600 rounded px-2 py-1 text-xs w-full"
+                            />
+                        ) : (
+                            k.displayName
+                        )}
                       </TableCell>
+
+                      {/* SLUG CELL (Editable) */}
                       <TableCell align="left">
-                        <span className="font-mono text-xs text-blue-300">
-                          {k.slug}
-                        </span>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={editSlug}
+                                onChange={(e) => setEditSlug(e.target.value)}
+                                className="bg-gray-800 text-blue-300 border border-gray-600 rounded px-2 py-1 text-xs font-mono w-full"
+                            />
+                        ) : (
+                            <span className="font-mono text-xs text-blue-300">
+                                {k.slug}
+                            </span>
+                        )}
                       </TableCell>
+
                       {/* Owner/R5 anzeigen */}
                       <TableCell align="left">
                         {k.ownerUsername ? (
@@ -902,6 +984,7 @@ const AdminUserManagement: React.FC = () => {
                           <span className="text-gray-500 text-xs">—</span>
                         )}
                       </TableCell>
+
                       {/* 🌐 NEU: Public Link Anzeige */}
                       {isSuperAdmin && (
                         <TableCell align="left">
@@ -916,6 +999,7 @@ const AdminUserManagement: React.FC = () => {
                             </a>
                         </TableCell>
                       )}
+
                       {/* Status anzeigen */}
                       <TableCell align="center">
                         <span
@@ -928,28 +1012,56 @@ const AdminUserManagement: React.FC = () => {
                           {k.status.toUpperCase()}
                         </span>
                       </TableCell>
-                      {/* Status/Delete Actions */}
+
+                      {/* Actions */}
                       <TableCell align="center" className="space-x-2 whitespace-nowrap">
                         {canManageKingdoms && k.id !== 'kdm-default' && (
                           <>
-                            <button
-                              onClick={() => handleUpdateKingdomStatus(k.id, k.status)}
-                              className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
-                                k.status === 'active'
-                                  ? 'bg-red-600 hover:bg-red-700 text-white'
-                                  : 'bg-green-600 hover:bg-green-700 text-white'
-                              }`}
-                              title={k.status === 'active' ? 'Set Kingdom to Inactive' : 'Set Kingdom to Active (re-enable access)'}
-                            >
-                              {k.status === 'active' ? 'Set Inactive' : 'Set Active'}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteKingdom(k.id, k.displayName)}
-                              className="px-3 py-1 text-xs font-semibold rounded bg-gray-600 hover:bg-red-500 text-white transition-colors"
-                              title="Permanently delete kingdom, files, and reset users"
-                            >
-                              Delete
-                            </button>
+                            {isEditing ? (
+                                // SAVE / CANCEL Buttons
+                                <>
+                                    <button
+                                        onClick={() => handleUpdateKingdomDetails(k.id)}
+                                        className="px-3 py-1 text-xs font-semibold rounded bg-green-600 hover:bg-green-700 text-white transition-colors"
+                                    >
+                                        Save
+                                    </button>
+                                    <button
+                                        onClick={cancelEditing}
+                                        className="px-3 py-1 text-xs font-semibold rounded bg-gray-600 hover:bg-gray-500 text-white transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                </>
+                            ) : (
+                                // EDIT / STATUS / DELETE Buttons
+                                <>
+                                    <button
+                                      onClick={() => startEditing(k)}
+                                      className="px-3 py-1 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleUpdateKingdomStatus(k.id, k.status)}
+                                      className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
+                                        k.status === 'active'
+                                          ? 'bg-red-600 hover:bg-red-700 text-white'
+                                          : 'bg-green-600 hover:bg-green-700 text-white'
+                                      }`}
+                                      title={k.status === 'active' ? 'Set Kingdom to Inactive' : 'Set Kingdom to Active (re-enable access)'}
+                                    >
+                                      {k.status === 'active' ? 'Set Inactive' : 'Set Active'}
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteKingdom(k.id, k.displayName)}
+                                      className="px-3 py-1 text-xs font-semibold rounded bg-gray-600 hover:bg-red-500 text-white transition-colors"
+                                      title="Permanently delete kingdom, files, and reset users"
+                                    >
+                                      Delete
+                                    </button>
+                                </>
+                            )}
                           </>
                         )}
                         {k.id === 'kdm-default' && (
