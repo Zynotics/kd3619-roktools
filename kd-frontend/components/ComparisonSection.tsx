@@ -1,7 +1,7 @@
-// ComparisonSection.tsx - KORRIGIERT
+// ComparisonSection.tsx - FIXED (Named Export)
 import React, { useState, useMemo } from 'react';
 import type { ComparisonStats, PlayerInfo, PlayerStatChange } from '../types';
-import StatCard from './StatCard';
+import { StatCard } from './StatCard'; // 🟢 Angepasst auf Named Import, falls StatCard so exportiert ist
 import ColumnFilter from './ColumnFilter';
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
@@ -335,7 +335,8 @@ const PlayerStatChangesTable: React.FC<PlayerStatChangesTableProps> = ({ changes
 };
 
 
-const ComparisonSection: React.FC<ComparisonSectionProps> = ({
+// 🟢 WICHTIG: "export const" für Named Import
+export const ComparisonSection: React.FC<ComparisonSectionProps> = ({
   stats,
   error,
   file1Name,
@@ -486,6 +487,7 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
               change={stats.killPointsDifference}
               changePercent={getChangePercent(stats.killPointsDifference, stats.totalKillPointsFile1)}
               variant="gradient"
+              color="text-red-400"
             />
             <StatCard
               title="Total Dead Troops"
@@ -493,6 +495,7 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
               change={stats.deadTroopsDifference}
               changePercent={getChangePercent(stats.deadTroopsDifference, stats.totalDeadTroopsFile1)}
               variant="gradient"
+              color="text-gray-400"
             />
           </div>
       </Card>
@@ -544,4 +547,5 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
   );
 };
 
+// 🟢 Default Export ebenfalls beibehalten, für Files die es so importieren
 export default ComparisonSection;
