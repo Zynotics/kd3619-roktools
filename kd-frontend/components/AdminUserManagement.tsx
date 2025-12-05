@@ -934,7 +934,7 @@ const AdminUserManagement: React.FC = () => {
             {/* 👑 ASSIGN R5 (sets owner) */}
             <Card className="p-6 bg-yellow-900/30 border-yellow-700">
                 <h3 className="text-lg font-semibold text-yellow-200 mb-4">
-                    👑 Assign R5 Role & Kingdom Owner (Superadmin)
+                    👑 Assign R5 Role & Kingdom Owner
                 </h3>
                 <form onSubmit={handleAssignR5} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -1007,7 +1007,7 @@ const AdminUserManagement: React.FC = () => {
             {/* 📝 NEU: ASSIGN R4 (Superadmin) */}
             <Card className="p-6 bg-blue-900/30 border-blue-700">
                 <h3 className="text-lg font-semibold text-blue-200 mb-4">
-                    🛠️ Assign R4 Role to Kingdom (Superadmin)
+                    🛠️ Assign R4 Role to Kingdom
                 </h3>
                 <form onSubmit={handleAssignR4} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
