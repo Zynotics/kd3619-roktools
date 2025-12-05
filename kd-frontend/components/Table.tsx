@@ -30,7 +30,7 @@ export const TableHeader: React.FC<TableHeaderProps> = ({ children, sticky = tru
   return (
     <thead
       className={`text-xs text-gray-400 uppercase bg-gray-700 ${
-        sticky ? 'sticky top-0 z-10' : ''
+        sticky ? 'sticky top-0' : ''
       }`}
     >
       {children}
@@ -49,9 +49,9 @@ export const TableRow: React.FC<TableRowProps> = ({
   hover = true,
   className = '',
 }) => {
-  const hoverClass = hover ? 'hover:bg-gray-700/50 transition-colors duration-150' : '';
+  const hoverClass = hover ? 'hover:bg-gray-600 transition-colors duration-200' : '';
   return (
-    <tr className={`border-b border-gray-700 last:border-0 ${hoverClass} ${className}`}>
+    <tr className={`border-b border-gray-700 bg-gray-800 ${hoverClass} ${className}`}>
       {children}
     </tr>
   );
@@ -79,12 +79,11 @@ export const TableCell: React.FC<TableCellProps> = ({
       right: 'text-right',
     }[align] || 'text-left';
 
-  const textClass = header ? 'font-semibold text-gray-200 px-6 py-3' : 'px-6 py-4';
-  const cursorClass = onClick ? 'cursor-pointer' : '';
+  const textClass = header ? 'font-semibold text-white' : '';
 
   return (
     <td
-      className={`${alignClass} ${textClass} ${cursorClass} ${className}`}
+      className={`px-4 py-3 whitespace-nowrap ${alignClass} ${textClass} ${className}`}
       onClick={onClick}
     >
       {children}
