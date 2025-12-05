@@ -26,7 +26,7 @@ const LoginPrompt: React.FC = () => {
   // 🆕 Invite Slug State
   const [inviteSlug, setInviteSlug] = useState<string | null>(null);
 
-  const { login, register } = useAuth();
+  const { login, register, refreshUser } = useAuth(); // 📝 refreshUser importiert
 
   // 🆕 URL beim Laden prüfen
   useEffect(() => {
@@ -106,6 +106,18 @@ const LoginPrompt: React.FC = () => {
         
         // 2. Auto-Login nach erfolgreicher Registrierung
         await login(username, password);
+
+        // 3. 📝 NEU: User-Status nach Registrierung/Login erneut abrufen, um sofortige Freigabe durch Admin zu berücksichtigen.
+        await refreshUser();
+        
+        // 4. 📝 NEU: Bei Registrierung über Einladungslink zur Kingdom-Seite weiterleiten
+        if (inviteSlug) {
+             const targetUrl = `/?slug=${inviteSlug}`;
+             window.location.href = targetUrl;
+        } else {
+             // Wenn kein Slug, zur Hauptseite weiterleiten
+             window.location.href = '/';
+        }
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.');
