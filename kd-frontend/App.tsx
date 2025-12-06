@@ -54,7 +54,7 @@ const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('overview');
   const [headerTitle, setHeaderTitle] = useState<string>('Rise of Stats');
   
-  // 📝 Temporäre State für Gov ID
+  // 📝 Temporäre State für Gov ID (nur zur Vermeidung von Fehlern, da die Logik noch nicht implementiert ist)
   const [editingGovId, setEditingGovId] = useState<string | null>(null);
   const [currentGovIdValue, setCurrentGovIdValue] = useState<string>('');
   const [govIdValidationMessage, setGovIdValidationMessage] = useState<string | null>(null);
@@ -75,12 +75,10 @@ const AppContent: React.FC = () => {
 
   // -------- Gov ID Handlers (Placeholder da Logik im Backend nicht implementiert ist) --------
   const handleEditGovIdStart = (userId: string, currentGovId: string | null | undefined) => {
-      // Logic removed as requested
       alert(`Editing Gov ID for user ${userId}. Gov ID: ${currentGovId}`);
   }
   
   const validateAndSaveGovId = async (userId: string) => {
-      // Logic removed as requested
       alert(`Saving new Gov ID ${currentGovIdValue} for user ${userId}. (Disabled)`);
   }
   // ---------------------------------------------------------------------------------
@@ -221,24 +219,24 @@ const AppContent: React.FC = () => {
   
   // Haupt-Layout-Struktur
   return (
-    // 📝 KORREKTUR: Main Grid Container
+    // 📝 KORRIGIERTE KLASSEN: Die Hauptansicht ist das Grid, das die volle Höhe einnimmt.
     <div className={`min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100 ${showDashboardTabs ? 'main-grid lg:main-grid-desktop' : ''}`}>
       
-      {/* 📝 KORREKTUR: Sidebar Container. Hält lg:h-screen und lg:sticky um fixe linke Spalte im Grid zu sein. */}
+      {/* 📝 KORREKTUR: Sidebar. Auf Desktop fixed links, nimmt 16rem Breite. Content ist rechts davon. */}
       {showDashboardTabs && (
-        <aside className="lg:sticky lg:top-0 lg:h-screen w-full lg:w-64 bg-gray-900/50 border-b lg:border-r border-gray-800 p-4 shadow-xl z-10 flex flex-col lg:flex-shrink-0">
+        <aside className="lg:fixed lg:top-0 lg:left-0 lg:h-screen lg:w-64 bg-gray-900/50 border-b lg:border-r border-gray-800 p-4 shadow-xl z-10 flex flex-col lg:flex-shrink-0">
           <div className="flex justify-between items-center h-full lg:flex-col lg:items-start lg:space-y-6">
             
-            {/* Logo/Title (Desktop only - Mobile Logo/Title ist im Header unten) */}
+            {/* Logo/Title (Desktop only) */}
             <div className="hidden lg:flex items-center gap-3 lg:w-full lg:mb-4">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg flex-shrink-0">
                 <span className="font-bold text-lg text-white">KD</span>
               </div>
-              <div className="hidden lg:block">
-                  <h1 className="text-xl font-bold tracking-tight text-white">
+              <div className="flex-grow min-w-0">
+                  <h1 className="text-lg font-bold tracking-tight text-white truncate">
                       {headerTitle}
                   </h1>
-                   <p className="text-xs text-gray-400">
+                   <p className="text-xs text-gray-400 truncate">
                       {isAdminOverrideView ? 'Admin Viewing Mode' : 'Analytics Platform'}
                    </p>
               </div>
@@ -251,7 +249,7 @@ const AppContent: React.FC = () => {
                   currentActiveView={activeView}
                   setActiveView={setActiveView}
                   label="Kingdom Analytics"
-                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>}
+                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>}
                 />
 
                 <NavItem
@@ -259,7 +257,7 @@ const AppContent: React.FC = () => {
                   currentActiveView={activeView}
                   setActiveView={setActiveView}
                   label="Honor Ranking"
-                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
+                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
                 />
 
                 <NavItem
@@ -267,7 +265,7 @@ const AppContent: React.FC = () => {
                   currentActiveView={activeView}
                   setActiveView={setActiveView}
                   label="Player Analytics"
-                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                 />
                 
                 {isAdmin && (
@@ -276,8 +274,7 @@ const AppContent: React.FC = () => {
                     currentActiveView={activeView}
                     setActiveView={setActiveView}
                     label="Admin · Users"
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.525.32 1.157.495 1.724.319v0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-                    isDisabled={user?.role === 'r4' && !isSuperAdmin}
+                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.525.32 1.157.495 1.724.319v0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
                   />
                 )}
             </nav>
@@ -316,7 +313,8 @@ const AppContent: React.FC = () => {
       )}
 
       {/* MAIN CONTENT AREA */}
-      <main className="lg:col-span-1 px-4 sm:px-6 lg:px-8 py-6 flex-grow overflow-y-auto"> 
+      {/* 📝 KORREKTUR: Auf Desktop wird linker Platz (16rem) freigehalten. Auf Mobilgeräten wird die Sidebar versteckt, der Content nutzt die volle Breite. */}
+      <main className={`lg:col-span-1 px-4 sm:px-6 lg:px-8 py-6 ${showDashboardTabs ? 'lg:ml-64' : 'mx-auto max-w-7xl'}`}>
         
         {/* HEADER (Mobile Only) */}
         <header className="mb-6 border-b border-gray-800 pb-4 lg:hidden">
@@ -342,28 +340,13 @@ const AppContent: React.FC = () => {
               {isLoading && <span className="text-xs text-gray-400">Checking login…</span>}
               
               {user ? (
-                /* Logout Button (Mobile Only, Info in Sidebar on Desktop) */
-                <div className="flex items-center gap-4">
-                    <div className="text-right">
-                        <div className="text-sm font-semibold text-white">
-                            {user.username}
-                            {(user.role === 'admin' || user.role === 'r5' || user.role === 'r4') && (
-                                <span className="ml-2 text-xs text-purple-400">
-                                    ({user.role.toUpperCase()})
-                                </span>
-                            )}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                            {user.isApproved ? 'Approved' : 'Pending'}
-                        </div>
-                    </div>
-                    <button
-                        onClick={logout}
-                        className="text-xs px-3 py-1.5 rounded-md border border-gray-600 text-gray-200 hover:bg-gray-800 transition-colors"
-                    >
-                        Log out
-                    </button>
-                </div>
+                /* Logout Button (Mobile Only) */
+                <button
+                    onClick={logout}
+                    className="text-xs px-3 py-1.5 rounded-md border border-gray-600 text-gray-200 hover:bg-gray-800 transition-colors lg:hidden"
+                >
+                    Log out
+                </button>
               ) : (
                 /* Fall B: Nicht eingeloggt (Public View) -> Zeige Login Button */
                 !isLoading && (
@@ -371,7 +354,7 @@ const AppContent: React.FC = () => {
                       onClick={() => (window.location.href = '/')}
                       className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
                       Login
                     </button>
                 )

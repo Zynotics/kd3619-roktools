@@ -2,12 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 📝 NEU: Benutzerdefinierte Utility-Klassen für das Layout */
+/* NEU: Benutzerdefinierte Utility-Klassen für das Layout */
 @layer utilities {
     .main-grid {
         display: grid;
         grid-template-columns: 1fr;
-        min-height: 100vh; /* Stellt sicher, dass der Container mindestens die volle Höhe hat */
+        min-height: 100vh; 
     }
     
     /* Desktop / Large Screen Layout */
