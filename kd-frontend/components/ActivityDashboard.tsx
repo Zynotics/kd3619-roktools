@@ -34,12 +34,13 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
         if (data.length > 0 && !selectedFileId) {
              setSelectedFileId(data[data.length - 1].id);
         } else if (data.length > 0 && selectedFileId) {
-             // Prüfen ob die selektierte noch existiert
+             // Prüfen ob die selektierte noch existiert, sonst reset auf neueste
              if (!data.find(f => f.id === selectedFileId)) {
                  setSelectedFileId(data[data.length - 1].id);
              }
-        } else {
+        } else if (data.length === 0) {
             setActivityData([]);
+            setSelectedFileId('');
         }
       }
     } catch (e) { 
@@ -58,7 +59,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
 
     const headers = file.headers;
     
-    // Hilfsfunktion zum sicheren Auslesen
+    // Hilfsfunktion zum sicheren Auslesen via Spaltennamen
     const getVal = (row: any[], keys: string[]) => {
         const idx = findColumnIndex(headers, keys);
         return (idx !== undefined && row[idx]) ? row[idx] : null;
@@ -67,8 +68,8 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
     const parsed: ActivityPlayerInfo[] = [];
     
     file.data.forEach(row => {
-        // IDs und Namen sind Pflichtfelder
-        const id = getVal(row, ['GovernorID', 'id', 'user id']);
+        // IDs und Namen sind Pflichtfelder für eine gültige Zeile
+        const id = getVal(row, ['GovernorID', 'id', 'user id', 'gov id']);
         const name = getVal(row, ['Name', 'player', 'display name']);
         
         if (id && name) {
