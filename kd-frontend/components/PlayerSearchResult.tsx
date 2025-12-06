@@ -1,10 +1,9 @@
-// PlayerSearchResult.tsx - AKTUALISIERT
+// PlayerSearchResult.tsx
 import React from 'react';
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { PlayerStatChange } from '../types';
 import { formatNumber } from '../utils';
-import Chart from 'chart.js/auto';
 
 interface PlayerSearchResultProps {
     result: PlayerStatChange;

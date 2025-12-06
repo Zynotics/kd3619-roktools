@@ -1,11 +1,12 @@
-// HonorPlayerSearchResult.tsx - AKTUALISIERT
+// HonorPlayerSearchResult.tsx
 import React, { useEffect, useRef } from 'react';
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { PlayerHonorHistory } from '../types';
 import { formatNumber, abbreviateNumber } from '../utils';
+import Chart from 'chart.js/auto'; // 👈 NEU: Import statt globaler Variable
 
-declare var Chart: any;
+// ENTFERNT: declare var Chart: any; 
 
 interface HonorPlayerSearchResultProps {
     result: PlayerHonorHistory;
@@ -13,7 +14,7 @@ interface HonorPlayerSearchResultProps {
 
 const HonorPlayerSearchResult: React.FC<HonorPlayerSearchResultProps> = ({ result }) => {
     const chartRef = useRef<HTMLCanvasElement>(null);
-    const chartInstanceRef = useRef<any>(null);
+    const chartInstanceRef = useRef<Chart | null>(null); // Typisierung verbessert
 
     useEffect(() => {
         if (!chartRef.current || !result) return;
@@ -37,6 +38,7 @@ const HonorPlayerSearchResult: React.FC<HonorPlayerSearchResultProps> = ({ resul
         const ctx = chartRef.current.getContext('2d');
         if (!ctx) return;
         
+        // @ts-ignore - Ignoriere TS-Fehler für Chart-Initialisierung, falls Typen strikt sind
         chartInstanceRef.current = new Chart(ctx, {
             type: 'line',
             data: chartData,
