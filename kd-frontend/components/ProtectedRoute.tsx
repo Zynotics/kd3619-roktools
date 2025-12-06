@@ -5,7 +5,7 @@ import { useAuth, UserRole } from './AuthContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  accessType?: 'overview' | 'honor' | 'analytics' | 'admin';
+  accessType?: 'overview' | 'honor' | 'analytics' | 'admin' | 'activity';
 }
 
 // Eine einfache Komponente für den Fall, dass die Freigabe aussteht
@@ -65,6 +65,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, accessType })
             </div>
         );
       }
+      if (accessType === 'activity' && !(user as any).canAccessActivity) {
+        return (
+            <div className="text-center p-8 text-red-400 bg-gray-800 rounded-xl">
+                Access Denied. You do not have permission to view the Weekly Activity.
+            </div>
+        );
+      }
       if (accessType === 'honor' && !user.canAccessHonor) {
         return (
             <div className="text-center p-8 text-red-400 bg-gray-800 rounded-xl">
@@ -82,7 +89,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, accessType })
   }
 
   // Fallback, wenn der Benutzer ein normaler 'user' ist, aber keine Features freigeschaltet sind
-  if (role === 'user' && accessType !== 'admin' && !user.canAccessOverview && !user.canAccessHonor && !user.canAccessAnalytics) {
+  if (role === 'user' && accessType !== 'admin' && 
+      !user.canAccessOverview && 
+      !user.canAccessHonor && 
+      !user.canAccessAnalytics && 
+      !(user as any).canAccessActivity) {
     return (
         <div className="text-center p-8 text-yellow-400 bg-gray-800 rounded-xl">
             Access Pending. Your account is approved, but no features are currently enabled. Please contact your Kingdom R5.
