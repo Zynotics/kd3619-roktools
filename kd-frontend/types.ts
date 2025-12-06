@@ -137,3 +137,16 @@ export interface Kingdom {
   ownerUsername?: string | null; // NEU: Username des Owners
   ownerEmail?: string | null; // NEU: Email des Owners
 }
+
+// 🆕 ACTIVITY TYPE DEFINITIONS
+export type ActivityPlayerInfo = {
+    id: string;
+    name: string;
+    alliance: string;
+    power: number;
+    killPoints: number;
+    helpTimes: number;
+    rssTrading: number;
+    buildingScore: number;
+    techDonation: number;
+};
