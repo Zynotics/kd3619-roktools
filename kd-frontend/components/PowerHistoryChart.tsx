@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import type { UploadedFile } from '../types';
-import { parseGermanNumber, cleanFileName, abbreviateNumber, formatNumber, findColumnIndex } from '../utils';
+import { parseGermanNumber, cleanFileName, abbreviateNumber, findColumnIndex } from '../utils';
 import { Card } from './Card';
-
-declare var Chart: any;
+import Chart from 'chart.js/auto'; // 👈 WICHTIG: Import statt globaler Variable
 
 interface PowerHistoryChartProps {
   files: UploadedFile[];
@@ -15,10 +14,10 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
   const killPointsChartRef = useRef<HTMLCanvasElement | null>(null);
   const deadTroopsChartRef = useRef<HTMLCanvasElement | null>(null);
 
-  const totalPowerChartInstance = useRef<any>(null);
-  const troopsPowerChartInstance = useRef<any>(null);
-  const killPointsChartInstance = useRef<any>(null);
-  const deadTroopsChartInstance = useRef<any>(null);
+  const totalPowerChartInstance = useRef<Chart | null>(null);
+  const troopsPowerChartInstance = useRef<Chart | null>(null);
+  const killPointsChartInstance = useRef<Chart | null>(null);
+  const deadTroopsChartInstance = useRef<Chart | null>(null);
 
   const chartData = useMemo(() => {
     if (!files || !Array.isArray(files) || files.length < 2) {
@@ -61,8 +60,10 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
     return { labels, totalPowerData, troopsPowerData, totalKillPointsData, totalDeadTroopsData };
   }, [files]);
 
-  const createChart = (ctx: CanvasRenderingContext2D, instanceRef: React.MutableRefObject<any>, label: string, data: number[], labels: string[], color: string) => {
+  const createChart = (ctx: CanvasRenderingContext2D, instanceRef: React.MutableRefObject<Chart | null>, label: string, data: number[], labels: string[], color: string) => {
     if (instanceRef.current) instanceRef.current.destroy();
+    
+    // @ts-ignore - Chart.js Typings können manchmal strikt sein bei dynamischen Daten
     return new Chart(ctx, {
       type: 'line',
       data: {
@@ -90,10 +91,47 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
 
   useEffect(() => {
     if (!chartData) return;
-    if (totalPowerChartRef.current) totalPowerChartInstance.current = createChart(totalPowerChartRef.current.getContext('2d')!, totalPowerChartInstance, 'Total Power', chartData.totalPowerData, chartData.labels, 'rgba(59, 130, 246, 0.8)');
-    if (troopsPowerChartRef.current) troopsPowerChartInstance.current = createChart(troopsPowerChartRef.current.getContext('2d')!, troopsPowerChartInstance, 'Troops Power', chartData.troopsPowerData, chartData.labels, 'rgba(16, 185, 129, 0.8)');
-    if (killPointsChartRef.current) killPointsChartInstance.current = createChart(killPointsChartRef.current.getContext('2d')!, killPointsChartInstance, 'Kill Points', chartData.totalKillPointsData, chartData.labels, 'rgba(239, 68, 68, 0.8)');
-    if (deadTroopsChartRef.current) deadTroopsChartInstance.current = createChart(deadTroopsChartRef.current.getContext('2d')!, deadTroopsChartInstance, 'Dead Troops', chartData.totalDeadTroopsData, chartData.labels, 'rgba(245, 158, 11, 0.8)');
+
+    if (totalPowerChartRef.current) {
+        totalPowerChartInstance.current = createChart(
+            totalPowerChartRef.current.getContext('2d')!, 
+            totalPowerChartInstance, 
+            'Total Power', 
+            chartData.totalPowerData, 
+            chartData.labels, 
+            'rgba(59, 130, 246, 0.8)'
+        );
+    }
+    if (troopsPowerChartRef.current) {
+        troopsPowerChartInstance.current = createChart(
+            troopsPowerChartRef.current.getContext('2d')!, 
+            troopsPowerChartInstance, 
+            'Troops Power', 
+            chartData.troopsPowerData, 
+            chartData.labels, 
+            'rgba(16, 185, 129, 0.8)'
+        );
+    }
+    if (killPointsChartRef.current) {
+        killPointsChartInstance.current = createChart(
+            killPointsChartRef.current.getContext('2d')!, 
+            killPointsChartInstance, 
+            'Kill Points', 
+            chartData.totalKillPointsData, 
+            chartData.labels, 
+            'rgba(239, 68, 68, 0.8)'
+        );
+    }
+    if (deadTroopsChartRef.current) {
+        deadTroopsChartInstance.current = createChart(
+            deadTroopsChartRef.current.getContext('2d')!, 
+            deadTroopsChartInstance, 
+            'Dead Troops', 
+            chartData.totalDeadTroopsData, 
+            chartData.labels, 
+            'rgba(245, 158, 11, 0.8)'
+        );
+    }
 
     return () => {
       totalPowerChartInstance.current?.destroy();
@@ -107,7 +145,6 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
 
   return (
     <div className="space-y-8">
-      {/* 👑 STATISCHER TITEL: Kingdom Progression */}
       <h3 className="text-lg font-semibold text-gray-200 mb-4">Kingdom Progression</h3>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

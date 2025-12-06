@@ -2,8 +2,7 @@ import React, { useEffect, useRef, useMemo } from 'react';
 import type { UploadedFile } from '../types';
 import { parseGermanNumber, cleanFileName, abbreviateNumber, formatNumber, findColumnIndex } from '../utils';
 import { Card } from './Card';
-
-declare var Chart: any;
+import Chart from 'chart.js/auto'; // 👈 WICHTIG: Import
 
 interface HonorHistoryChartProps {
     files: UploadedFile[];
@@ -11,7 +10,7 @@ interface HonorHistoryChartProps {
 
 const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
     const chartRef = useRef<HTMLCanvasElement>(null);
-    const chartInstanceRef = useRef<any>(null);
+    const chartInstanceRef = useRef<Chart | null>(null);
 
     const chartData = useMemo(() => {
         if (!files || !Array.isArray(files) || files.length < 1) return null;
@@ -50,6 +49,7 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
         const ctx = chartRef.current.getContext('2d');
         if (!ctx) return;
 
+        // @ts-ignore
         chartInstanceRef.current = new Chart(ctx, {
             type: 'line',
             data: chartData,
@@ -73,7 +73,6 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
     if (!files || !Array.isArray(files) || files.length < 1) {
         return (
             <Card gradient className="p-6 text-center text-gray-400">
-                {/* 👑 Statischer Titel */}
                 <h3 className="text-lg font-semibold text-gray-200 mb-2">Honor History</h3>
                 <p>Upload at least one file to see the honor progression.</p>
             </Card>
@@ -82,7 +81,6 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ files }) => {
     
     return (
         <Card gradient className="p-6">
-             {/* 👑 Statischer Titel */}
             <h3 className="text-lg font-semibold text-gray-200 mb-4">Honor History</h3>
             <div className="relative h-72">
                 <canvas ref={chartRef}></canvas>
