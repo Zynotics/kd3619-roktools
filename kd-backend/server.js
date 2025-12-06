@@ -170,6 +170,28 @@ const honorUpload = multer({
     else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
   },
   limits: { fileSize: 10 * 1024 * 1024 },
+
+// 🆕 Activity Ordner erstellen
+const uploadsActivityDir = path.join(__dirname, 'uploads', 'activity');
+if (!fs.existsSync(uploadsActivityDir)) {
+  fs.mkdirSync(uploadsActivityDir, { recursive: true });
+}
+
+// 🆕 Activity Multer Storage
+const activityStorage = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, uploadsActivityDir); },
+  filename: (req, file, cb) => { cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname)); },
+});
+
+const activityUpload = multer({
+  storage: activityStorage,
+  fileFilter: (req, file, cb) => {
+    if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
+    else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
+  },
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
 });
 
 
@@ -190,7 +212,7 @@ function authenticateToken(req, res, next) {
     
     // Hole ALLE user fields aus der DB für den aktuellsten Zustand
     // 📝 ERWEITERT: Hole die neuen can_manage_* Felder
-    const dbUser = await get('SELECT role, kingdom_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files FROM users WHERE id = $1', [user.id]);
+    const dbUser = await get('SELECT role, kingdom_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files FROM users WHERE id = $1', [user.id]);
     if (!dbUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
     
     req.user = { 
@@ -203,6 +225,7 @@ function authenticateToken(req, res, next) {
       // 📝 NEU: Füge die neuen Felder hinzu
       canManageOverviewFiles: !!dbUser.can_manage_overview_files,
       canManageHonorFiles: !!dbUser.can_manage_honor_files
+      canManageActivityFiles: !!dbUser.can_manage_activity_files
     };
     next();
   });
@@ -708,15 +731,20 @@ app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
 
 // Hilfsfunktion zur Prüfung der File Management Rechte
 function hasFileManagementAccess(req, type) {
-    const { role, canManageOverviewFiles, canManageHonorFiles } = req.user;
+    const { role, canManageOverviewFiles, canManageHonorFiles, canManageActivityFiles } = req.user;
+    
+    // Admin darf alles
     if (role === 'admin') return true;
+
+    // R5 und R4 Rechte Logik
     if (role === 'r5' || role === 'r4') {
         if (type === 'overview') return canManageOverviewFiles;
         if (type === 'honor') return canManageHonorFiles;
+        // Activity ist standardmäßig für R4/R5 erlaubt, oder man nutzt das Flag explizit:
+        if (type === 'activity') return true; // Oder: return canManageActivityFiles; wenn du es strikt willst
     }
     return false;
 }
-
 
 app.get('/overview/files-data', authenticateToken, async (req, res) => {
     const { role, kingdomId } = req.user;
@@ -870,6 +898,77 @@ app.get('/health', (req, res) => res.json({ status: 'Backend läuft', time: new 
 
 app.get('/', (req, res) => {
   res.json({ message: 'KD3619 Backend API', version: '2.5.0-FULL-FEATURE' });
+});
+
+// ==================== ACTIVITY DATA (R4/R5 Only) ====================
+
+app.get('/activity/files-data', authenticateToken, async (req, res) => {
+    // Nur R4, R5, Admin
+    if (!['admin', 'r5', 'r4'].includes(req.user.role)) return res.status(403).json({ error: 'Kein Zugriff' });
+
+    const { role, kingdomId } = req.user;
+    const kId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
+    
+    if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
+    
+    const rows = await all(`SELECT * FROM activity_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploadDate`, [kId]);
+    res.json(rows.map(r => ({...r, headers: JSON.parse(r.headers||'[]'), data: JSON.parse(r.data||'[]')})));
+});
+
+app.post('/activity/upload', authenticateToken, activityUpload.single('file'), async (req, res) => {
+    const { role, kingdomId, id: userId } = req.user;
+    
+    if (!hasFileManagementAccess(req, 'activity')) {
+         return res.status(403).json({ error: 'Keine Berechtigung zum Hochladen von Activity-Dateien.' });
+    }
+    
+    let targetK = kingdomId;
+    if (role === 'admin' && req.query.slug) {
+        const k = await findKingdomBySlug(req.query.slug);
+        if (k) targetK = k.id;
+    }
+    const finalK = targetK || (role === 'admin' ? 'kdm-default' : null);
+    
+    if (!finalK || !req.file) return res.status(400).json({ error: 'Error: Kein Kingdom oder Datei' });
+
+    try {
+        const { headers, data } = await parseExcel(req.file.path);
+        const id = 'act-' + Date.now();
+        await query(
+          `INSERT INTO activity_files (id, name, filename, path, size, uploadDate, headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          [id, req.file.originalname, req.file.filename, req.file.path, req.file.size, new Date().toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, userId]
+        );
+        res.json({ success: true });
+    } catch(e) { 
+        console.error(e);
+        res.status(500).json({ error: 'Upload failed' }); 
+    }
+});
+
+app.delete('/activity/files/:id', authenticateToken, async (req, res) => {
+    const f = await get('SELECT kingdom_id, path FROM activity_files WHERE id=$1', [req.params.id]);
+    if (!f) return res.status(404).json({ error: 'Not found' });
+    
+    if (!hasFileManagementAccess(req, 'activity')) return res.status(403).json({ error: 'Forbidden' });
+    
+    // Sicherstellen, dass man nicht im fremden Kingdom löscht (außer Admin)
+    if (req.user.role !== 'admin' && f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
+
+    if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
+    await query('DELETE FROM activity_files WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+});
+
+app.post('/activity/files/reorder', authenticateToken, async (req, res) => {
+    const { order } = req.body;
+    if (!hasFileManagementAccess(req, 'activity')) return res.status(403).json({ error: 'Forbidden' });
+    
+    // (Optional: Hier könnte man noch Kingdom-Check einbauen wie bei Overview, aber für R4/R5 passt es meist so)
+    
+    for (let i = 0; i < order.length; i++) {
+        await query('UPDATE activity_files SET fileOrder = $1 WHERE id = $2', [i, order[i]]);
+    }
+    res.json({ success: true });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
