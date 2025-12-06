@@ -4,6 +4,7 @@ import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { cleanFileName, parseGermanNumber, findColumnIndex, formatNumber, abbreviateNumber } from '../utils';
 import { useAuth } from '../components/AuthContext';
 import type { UploadedFile } from '../types';
+import Chart from 'chart.js/auto';
 
 interface PlayerAnalyticsRecord {
   fileName: string; power: number; troopsPower: number; totalKillPoints: number; deadTroops: number; t1Kills: number; t2Kills: number; t3Kills: number; t4Kills: number; t5Kills: number; totalKills: number;
@@ -12,7 +13,7 @@ interface PlayerAnalyticsHistory {
   id: string; name: string; alliance: string; history: PlayerAnalyticsRecord[];
 }
 
-declare var Chart: any;
+// declare var Chart: any;
 
 interface PowerAnalyticsDashboardProps {
   isAdmin: boolean;
