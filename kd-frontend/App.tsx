@@ -24,9 +24,9 @@ const NavItem: React.FC<{
   isDisabled?: boolean;
 }> = ({ view, currentActiveView, setActiveView, label, icon, isDisabled = false }) => {
   const isActive = view === currentActiveView;
-  const baseClasses = 'flex items-center w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors';
+  const baseClasses = 'flex items-center w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap';
   const activeClasses = 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/25';
-  const inactiveClasses = 'text-gray-300 hover:bg-gray-800 hover:text-white lg:border lg:border-gray-700'; // Angepasst für Sidebar
+  const inactiveClasses = 'text-gray-300 hover:bg-gray-800 hover:text-white lg:border lg:border-gray-700';
 
   if (isDisabled) {
     return (
@@ -53,6 +53,13 @@ const AppContent: React.FC = () => {
   const { user, logout, isLoading } = useAuth();
   const [activeView, setActiveView] = useState<ActiveView>('overview');
   const [headerTitle, setHeaderTitle] = useState<string>('Rise of Stats');
+  
+  // 📝 Temporäre State für Gov ID
+  const [editingGovId, setEditingGovId] = useState<string | null>(null);
+  const [currentGovIdValue, setCurrentGovIdValue] = useState<string>('');
+  const [govIdValidationMessage, setGovIdValidationMessage] = useState<string | null>(null);
+  const [govIdValidationStatus, setGovIdValidationStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+
 
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
@@ -65,6 +72,19 @@ const AppContent: React.FC = () => {
   const isPublicView = !!publicSlug && !user && !isRegisterInvite;
   const isRegistrationInviteView = !!publicSlug && !user && isRegisterInvite;
   const isAdminOverrideView = isSuperAdmin && !!publicSlug; 
+
+  // -------- Gov ID Handlers (Placeholder da Logik im Backend nicht implementiert ist) --------
+  const handleEditGovIdStart = (userId: string, currentGovId: string | null | undefined) => {
+      // Logic removed as requested
+      alert(`Editing Gov ID for user ${userId}. Gov ID: ${currentGovId}`);
+  }
+  
+  const validateAndSaveGovId = async (userId: string) => {
+      // Logic removed as requested
+      alert(`Saving new Gov ID ${currentGovIdValue} for user ${userId}. (Disabled)`);
+  }
+  // ---------------------------------------------------------------------------------
+
 
   // 1. VIEW ROUTING
   useEffect(() => {
@@ -201,16 +221,16 @@ const AppContent: React.FC = () => {
   
   // Haupt-Layout-Struktur
   return (
-    // 📝 KORREKTUR: Entferne fixed/sticky von der Sidebar-Klasse, verwende Grid-Layout
+    // 📝 KORREKTUR: Main Grid Container
     <div className={`min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100 ${showDashboardTabs ? 'main-grid lg:main-grid-desktop' : ''}`}>
       
-      {/* 📝 KORREKTUR: Sidebar Container. lg:h-screen sorgt für die volle Höhe, lg:sticky fixiert sie im Viewport. */}
+      {/* 📝 KORREKTUR: Sidebar Container. Hält lg:h-screen und lg:sticky um fixe linke Spalte im Grid zu sein. */}
       {showDashboardTabs && (
-        <aside className="lg:sticky lg:top-0 h-full lg:h-screen w-full lg:w-64 bg-gray-900/50 border-b lg:border-r border-gray-800 p-4 shadow-xl z-10 lg:flex lg:flex-col lg:flex-shrink-0">
+        <aside className="lg:sticky lg:top-0 lg:h-screen w-full lg:w-64 bg-gray-900/50 border-b lg:border-r border-gray-800 p-4 shadow-xl z-10 flex flex-col lg:flex-shrink-0">
           <div className="flex justify-between items-center h-full lg:flex-col lg:items-start lg:space-y-6">
             
-            {/* Logo/Title (Visible on all screens - primary visibility in sidebar on desktop) */}
-            <div className="flex items-center gap-3 lg:w-full lg:mb-4">
+            {/* Logo/Title (Desktop only - Mobile Logo/Title ist im Header unten) */}
+            <div className="hidden lg:flex items-center gap-3 lg:w-full lg:mb-4">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg">
                 <span className="font-bold text-lg text-white">KD</span>
               </div>
@@ -257,7 +277,7 @@ const AppContent: React.FC = () => {
                     setActiveView={setActiveView}
                     label="Admin · Users"
                     icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.525.32 1.157.495 1.724.319v0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-                    isDisabled={user?.role === 'r4' && !isSuperAdmin} // R4 kann Read-Access auf Admin-Dashboard über ProtectedRoute nicht bekommen, aber die Navigation soll trotzdem sichtbar sein
+                    isDisabled={user?.role === 'r4' && !isSuperAdmin}
                   />
                 )}
             </nav>
@@ -296,9 +316,9 @@ const AppContent: React.FC = () => {
       )}
 
       {/* MAIN CONTENT AREA */}
-      <main className="lg:col-span-1 px-4 sm:px-6 lg:px-8 py-6">
+      <main className="lg:col-span-1 px-4 sm:px-6 lg:px-8 py-6 flex-grow overflow-y-auto"> 
         
-        {/* HEADER (Simplified/Mobil Only) */}
+        {/* HEADER (Mobile Only) */}
         <header className="mb-6 border-b border-gray-800 pb-4 lg:hidden">
           <div className="flex items-center justify-between gap-4">
             
@@ -322,7 +342,7 @@ const AppContent: React.FC = () => {
               {isLoading && <span className="text-xs text-gray-400">Checking login…</span>}
               
               {user ? (
-                /* Fall A: Eingeloggt -> Zeige Username + Logout */
+                /* Logout Button (Mobile Only, Info in Sidebar on Desktop) */
                 <div className="flex items-center gap-4">
                     <div className="text-right">
                         <div className="text-sm font-semibold text-white">
