@@ -54,7 +54,7 @@ const NavItem: React.FC<{
 const AppContent: React.FC = () => {
   const { user, logout, isLoading } = useAuth();
   const [activeView, setActiveView] = useState<ActiveView>('overview');
-  const [headerTitle, setHeaderTitle] = useState<string>('TEST 123');
+  const [headerTitle, setHeaderTitle] = useState<string>('Rise of Stats');
 
   // URL Parameter parsing
   const queryParams = new URLSearchParams(window.location.search);

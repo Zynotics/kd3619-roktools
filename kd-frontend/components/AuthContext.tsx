@@ -1,9 +1,9 @@
-// AuthContext.tsx (VOLLSTÄNDIGER CODE MIT INVITE-SLUG SUPPORT)
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 type UserRole = 'user' | 'r4' | 'r5' | 'admin';
 
-interface User {
+// 📝 Export hinzugefügt und Felder erweitert
+export interface User {
   id: string;
   email: string;
   username: string;
@@ -13,17 +13,21 @@ interface User {
   canAccessHonor?: boolean;
   canAccessAnalytics?: boolean;
   canAccessOverview?: boolean;
-  kingdomId?: string | null; // NEU
+  kingdomId?: string | null;
+  // 🆕 Neue Felder für Dateirechte (passend zum Backend Update)
+  canManageOverviewFiles?: boolean;
+  canManageHonorFiles?: boolean;
+  canManageActivityFiles?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (username: string, pass: string) => Promise<void>;
-  register: (email: string, username: string, pass: string, govId: string, slug?: string | null) => Promise<{ message: string }>; // 🆕 slug hinzugefügt
+  register: (email: string, username: string, pass: string, govId: string, slug?: string | null) => Promise<{ message: string }>;
   logout: () => void;
   refreshUser: () => Promise<void>;
-  isLoading: boolean; // 📝 NEU: Ladezustand
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,8 +40,7 @@ const BACKEND_URL =
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  // 📝 Starte mit isLoading=true, bis Token geprüft wurde.
-  const [isLoading, setIsLoading] = useState(true); 
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('authToken');
@@ -45,8 +48,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setToken(storedToken);
       validateToken(storedToken);
     } else {
-      // 📝 Wenn kein Token, sofort ready (isLoading=false)
-      setIsLoading(false); 
+      setIsLoading(false);
     }
   }, []);
 
@@ -58,14 +60,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (res.ok) {
         const u = await res.json();
         setUser(u);
+        console.log('🔄 Session validated. Role:', u.role); // 🔍 Debugging
       } else {
         logout();
       }
     } catch {
       logout();
     } finally {
-      // 📝 Stop Loading, wenn Validierung abgeschlossen ist
-      setIsLoading(false); 
+      setIsLoading(false);
     }
   };
 
@@ -84,9 +86,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('authToken', data.token);
     setToken(data.token);
     setUser(data.user);
+    console.log('✅ Login successful. Role:', data.user.role); // 🔍 Debugging
   };
 
-  // 🆕 register mit slug Parameter
   const register = async (
     email: string, 
     username: string, 
@@ -116,12 +118,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('authToken');
     setToken(null);
     setUser(null);
-    // 📝 Ein Reload ist nicht nötig, da App.tsx den Zustand sofort erkennt.
+    // Optional: Hard Redirect, um States sicher zu clearen
+    // window.location.href = '/'; 
   };
 
   const refreshUser = async () => {
     if (token) {
-      // 📝 Token ist vorhanden, starte Validierung, um neuesten Status zu holen.
       setIsLoading(true); 
       await validateToken(token);
     }
