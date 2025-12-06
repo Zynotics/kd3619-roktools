@@ -15,9 +15,9 @@ async function init() {
       is_approved BOOLEAN DEFAULT FALSE,
       role TEXT DEFAULT 'user',
       governor_id TEXT,
-      can_access_honor BOOLEESCH DEFAULT FALSE,
-      can_access_analytics BOOLEESCH DEFAULT FALSE,
-      can_access_overview BOOLEESCH DEFAULT FALSE,
+      can_access_honor BOOLEAN DEFAULT FALSE,
+      can_access_analytics BOOLEAN DEFAULT FALSE,
+      can_access_overview BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
@@ -29,11 +29,13 @@ async function init() {
       REFERENCES kingdoms(id);
   `);
 
-  // 📝 NEU: Granulare File Management Rechte zur users-Tabelle hinzufügen (Fix für Fehler)
+  // 📝 NEU: Granulare File Management Rechte zur users-Tabelle hinzufügen
+  // (Hier fügen wir can_manage_activity_files hinzu)
   await query(`
     ALTER TABLE users
       ADD COLUMN IF NOT EXISTS can_manage_overview_files BOOLEAN DEFAULT FALSE,
-      ADD COLUMN IF NOT EXISTS can_manage_honor_files BOOLEAN DEFAULT FALSE;
+      ADD COLUMN IF NOT EXISTS can_manage_honor_files BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS can_manage_activity_files BOOLEAN DEFAULT FALSE;
   `);
 
   // OVERVIEW FILES
@@ -70,6 +72,23 @@ async function init() {
     );
   `);
 
+  // 🆕 ACTIVITY FILES (Neue Tabelle)
+  await query(`
+    CREATE TABLE IF NOT EXISTS activity_files (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      filename TEXT,
+      path TEXT,
+      size BIGINT,
+      uploadDate TIMESTAMPTZ,
+      fileOrder INTEGER DEFAULT 0,
+      headers TEXT,
+      data TEXT,
+      kingdom_id TEXT,
+      uploaded_by_user_id TEXT
+    );
+  `);
+
   // KINGDOMS
   await query(`
     CREATE TABLE IF NOT EXISTS kingdoms (
@@ -92,17 +111,15 @@ async function init() {
   `);
 
   // 🔧 Falls die Files-Tabellen schon existierten: Spalten sicherheitshalber nachziehen
-  await query(`
-    ALTER TABLE overview_files
-      ADD COLUMN IF NOT EXISTS kingdom_id TEXT,
-      ADD COLUMN IF NOT EXISTS uploaded_by_user_id TEXT;
-  `);
-
-  await query(`
-    ALTER TABLE honor_files
-      ADD COLUMN IF NOT EXISTS kingdom_id TEXT,
-      ADD COLUMN IF NOT EXISTS uploaded_by_user_id TEXT;
-  `);
+  // (Dies gilt auch für die neue activity_files Tabelle, falls sie manuell erstellt wurde, schadet aber nicht)
+  const tables = ['overview_files', 'honor_files', 'activity_files'];
+  for (const table of tables) {
+      await query(`
+        ALTER TABLE ${table}
+          ADD COLUMN IF NOT EXISTS kingdom_id TEXT,
+          ADD COLUMN IF NOT EXISTS uploaded_by_user_id TEXT;
+      `);
+  }
 
   // 🏰 Default-Kingdom anlegen (für alle bestehenden Daten)
   await query(`
@@ -113,18 +130,14 @@ async function init() {
 
   // 📎 Alle bestehenden Files dem Default-Kingdom zuordnen (falls noch kein kingdom_id)
   await query(`
-    UPDATE overview_files
-    SET kingdom_id = 'kdm-default'
-    WHERE kingdom_id IS NULL;
+    UPDATE overview_files SET kingdom_id = 'kdm-default' WHERE kingdom_id IS NULL;
   `);
-
   await query(`
-    UPDATE honor_files
-    SET kingdom_id = 'kdm-default'
-    WHERE kingdom_id IS NULL;
+    UPDATE honor_files SET kingdom_id = 'kdm-default' WHERE kingdom_id IS NULL;
   `);
+  // (Activity files sind neu, daher kein Update nötig, aber der Vollständigkeit halber gut zu wissen)
 
-  console.log('✅ Postgres schema initialized (users, files, kingdoms + default kingdom)');
+  console.log('✅ Postgres schema initialized (users, files [overview, honor, activity], kingdoms)');
 }
 
 init().catch((err) => {
