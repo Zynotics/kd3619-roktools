@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import FileUpload from './FileUpload';
 import FileList from './FileList';
-import Table from './Table';
+// 🛠️ FIX: Named Imports statt Default Import
+import { Table, TableHeader, TableRow, TableCell } from './Table'; 
 import { useAuth } from './AuthContext';
 import { cleanFileName, parseGermanNumber, findColumnIndex } from '../utils';
 import type { UploadedFile, ActivityPlayerInfo } from '../types';
@@ -18,23 +19,24 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
   const [activityData, setActivityData] = useState<ActivityPlayerInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // 🛠️ FIX: Eigener State für Sortierung, da Table.tsx dies nicht kann
+  const [sortColumn, setSortColumn] = useState<keyof ActivityPlayerInfo | 'rank'>('techDonation');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
   // 1. Dateien laden
   const fetchFiles = useCallback(async () => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem('authToken');
-      // Endpunkt für Activity-Files
       const res = await fetch(`${backendUrl}/activity/files-data`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
         const data: UploadedFile[] = await res.json();
         setFiles(data);
-        // Wenn Dateien vorhanden sind und noch keine ausgewählt ist, nimm die neueste
         if (data.length > 0 && !selectedFileId) {
              setSelectedFileId(data[data.length - 1].id);
         } else if (data.length > 0 && selectedFileId) {
-             // Prüfen ob die selektierte noch existiert, sonst reset auf neueste
              if (!data.find(f => f.id === selectedFileId)) {
                  setSelectedFileId(data[data.length - 1].id);
              }
@@ -52,23 +54,19 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
-  // 2. Datei Parsen (wenn eine ausgewählt ist)
+  // 2. Datei Parsen
   const parseFile = useCallback((fileId: string) => {
     const file = files.find(f => f.id === fileId);
     if (!file || !file.data) return;
 
     const headers = file.headers;
-    
-    // Hilfsfunktion zum sicheren Auslesen via Spaltennamen
     const getVal = (row: any[], keys: string[]) => {
         const idx = findColumnIndex(headers, keys);
         return (idx !== undefined && row[idx]) ? row[idx] : null;
     };
 
     const parsed: ActivityPlayerInfo[] = [];
-    
     file.data.forEach(row => {
-        // IDs und Namen sind Pflichtfelder für eine gültige Zeile
         const id = getVal(row, ['GovernorID', 'id', 'user id', 'gov id']);
         const name = getVal(row, ['Name', 'player', 'display name']);
         
@@ -93,12 +91,38 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
       if (selectedFileId) parseFile(selectedFileId); 
   }, [selectedFileId, parseFile]);
 
-  // 3. Spaltenkonfiguration für die Tabelle
+  // 🛠️ FIX: Logik für Sortierung implementieren
+  const handleSort = (column: keyof ActivityPlayerInfo | 'rank') => {
+      if (sortColumn === column) {
+          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+      } else {
+          setSortColumn(column);
+          setSortDirection('desc');
+      }
+  };
+
+  const sortedData = useMemo(() => {
+      if (sortColumn === 'rank') return activityData; // Rank ist implizit durch Index
+
+      return [...activityData].sort((a, b) => {
+          // @ts-ignore
+          const valA = a[sortColumn]; 
+          // @ts-ignore
+          const valB = b[sortColumn];
+
+          if (typeof valA === 'number' && typeof valB === 'number') {
+              return sortDirection === 'asc' ? valA - valB : valB - valA;
+          }
+          return 0; // Fallback für Strings, falls nötig
+      });
+  }, [activityData, sortColumn, sortDirection]);
+
+  // 3. Spalten Definition
   const columns = [
-    { header: 'Rank', accessor: (_: any, index: number) => index + 1, className: "w-16 text-center text-gray-500" },
-    { header: 'Name', accessor: 'name', className: "font-medium text-white" },
-    { header: 'ID', accessor: 'id', className: "text-gray-400 text-xs hidden sm:table-cell" },
-    { header: 'Alliance', accessor: 'alliance', className: "text-blue-400" },
+    { header: 'Rank', accessor: 'rank', className: "w-16 text-center text-gray-500", sortable: false },
+    { header: 'Name', accessor: 'name', className: "font-medium text-white", sortable: false },
+    { header: 'ID', accessor: 'id', className: "text-gray-400 text-xs hidden sm:table-cell", sortable: false },
+    { header: 'Alliance', accessor: 'alliance', className: "text-blue-400", sortable: false },
     { header: 'Helps', accessor: 'helpTimes', sortable: true, format: (v: number) => v.toLocaleString() },
     { header: 'Tech Donation', accessor: 'techDonation', sortable: true, format: (v: number) => v.toLocaleString() },
     { header: 'Construction', accessor: 'buildingScore', sortable: true, format: (v: number) => v.toLocaleString() },
@@ -121,7 +145,6 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
              <FileUpload uploadUrl={`${backendUrl}/activity/upload`} onUploadComplete={fetchFiles} />
           </div>
 
-          {/* Dateiliste zum Löschen/Sortieren */}
           <div>
              <FileList 
                 title="Activity History"
@@ -133,7 +156,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                     fetchFiles();
                 }} 
                 onReorder={async (newFiles) => {
-                    setFiles(newFiles); // Optimistic UI update
+                    setFiles(newFiles); 
                     const token = localStorage.getItem('authToken');
                     await fetch(`${backendUrl}/activity/files/reorder`, { 
                         method: 'POST', 
@@ -172,12 +195,49 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
         {isLoading ? (
             <div className="text-center text-gray-500 py-20">Loading data...</div>
         ) : activityData.length > 0 ? (
-            <Table 
-                columns={columns} 
-                data={activityData} 
-                defaultSortColumn="techDonation" 
-                defaultSortDirection="desc"
-            />
+            // 🛠️ FIX: Manuelles Rendering der Tabelle mit den primitiven Komponenten aus Table.tsx
+            <Table>
+                <TableHeader>
+                    <TableRow hover={false}>
+                        {columns.map((col, idx) => (
+                            <TableCell 
+                                key={idx} 
+                                header 
+                                className={`cursor-pointer select-none ${col.className || ''}`}
+                                onClick={() => col.sortable ? handleSort(col.accessor as keyof ActivityPlayerInfo) : undefined}
+                            >
+                                <div className="flex items-center gap-1">
+                                    {col.header}
+                                    {col.sortable && sortColumn === col.accessor && (
+                                        <span className='text-blue-400 text-xs'>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                    )}
+                                </div>
+                            </TableCell>
+                        ))}
+                    </TableRow>
+                </TableHeader>
+                <tbody>
+                    {sortedData.map((row, rowIdx) => (
+                        <TableRow key={row.id || rowIdx}>
+                            {columns.map((col, colIdx) => {
+                                let content;
+                                if (col.accessor === 'rank') {
+                                    content = rowIdx + 1;
+                                } else {
+                                    // @ts-ignore
+                                    const val = row[col.accessor];
+                                    content = col.format ? col.format(val) : val;
+                                }
+                                return (
+                                    <TableCell key={colIdx} className={col.className}>
+                                        {content}
+                                    </TableCell>
+                                );
+                            })}
+                        </TableRow>
+                    ))}
+                </tbody>
+            </Table>
         ) : (
             <div className="text-center text-gray-500 py-20 bg-gray-900/50 rounded-lg border border-gray-700 border-dashed">
                 {files.length === 0 
