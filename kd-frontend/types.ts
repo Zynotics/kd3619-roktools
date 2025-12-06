@@ -1,4 +1,4 @@
-// types.ts (VOLLSTÄNDIGER CODE)
+// types.ts
 
 export type TableData = any[][];
 export type TableHeaders = string[];
@@ -100,7 +100,6 @@ export type PlayerHonorHistory = {
     honorPoint: number;
   }[];
 };
-// Zu den existing types hinzufügen:
 
 export interface PlayerAnalyticsHistory {
   id: string;
@@ -123,17 +122,29 @@ export interface PlayerAnalyticsRecord {
   totalKills: number;
 }
 
-// 👑 NEU: Kingdom-Interface erweitern
 export interface Kingdom {
   id: string;
   displayName: string;
   slug: string;
   rokIdentifier: string | null;
-  status: 'active' | 'inactive' | string; // Erlaubt active/inactive Status
+  status: 'active' | 'inactive' | string;
   plan: string;
   createdAt?: string;
   updatedAt?: string;
-  ownerUserId?: string | null; // NEU: ID des Owners (sollte der R5 sein)
-  ownerUsername?: string | null; // NEU: Username des Owners
-  ownerEmail?: string | null; // NEU: Email des Owners
+  ownerUserId?: string | null;
+  ownerUsername?: string | null;
+  ownerEmail?: string | null;
 }
+
+// 🆕 NEU: Activity Typen
+export type ActivityPlayerInfo = {
+    id: string;
+    name: string;
+    alliance: string;
+    power: number;
+    killPoints: number;
+    helpTimes: number;
+    rssTrading: number;
+    buildingScore: number;
+    techDonation: number;
+};

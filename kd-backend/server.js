@@ -46,8 +46,10 @@ app.use(express.json());
 // 📂 Upload-Ordner
 const uploadsOverviewDir = path.join(__dirname, 'uploads', 'overview');
 const uploadsHonorDir = path.join(__dirname, 'uploads', 'honor');
+// 🆕 Activity Ordner hinzufügen
+const uploadsActivityDir = path.join(__dirname, 'uploads', 'activity');
 
-[uploadsOverviewDir, uploadsHonorDir].forEach((dir) => {
+[uploadsOverviewDir, uploadsHonorDir, uploadsActivityDir].forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -155,6 +157,12 @@ const honorStorage = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, uploadsHonorDir); },
   filename: (req, file, cb) => { cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname)); },
 });
+// 🆕 Activity Storage
+const activityStorage = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, uploadsActivityDir); },
+  filename: (req, file, cb) => { cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname)); },
+});
+
 const overviewUpload = multer({
   storage: overviewStorage,
   fileFilter: (req, file, cb) => {
@@ -165,6 +173,15 @@ const overviewUpload = multer({
 });
 const honorUpload = multer({
   storage: honorStorage,
+  fileFilter: (req, file, cb) => {
+    if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
+    else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
+  },
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+// 🆕 Activity Upload
+const activityUpload = multer({
+  storage: activityStorage,
   fileFilter: (req, file, cb) => {
     if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
     else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
@@ -189,8 +206,8 @@ function authenticateToken(req, res, next) {
     if (err) return res.status(403).json({ error: 'Ungültiger Token' });
     
     // Hole ALLE user fields aus der DB für den aktuellsten Zustand
-    // 📝 ERWEITERT: Hole die neuen can_manage_* Felder
-    const dbUser = await get('SELECT role, kingdom_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files FROM users WHERE id = $1', [user.id]);
+    // 📝 ERWEITERT: Hole die neuen can_manage_* Felder inkl. Activity
+    const dbUser = await get('SELECT role, kingdom_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files FROM users WHERE id = $1', [user.id]);
     if (!dbUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
     
     req.user = { 
@@ -202,7 +219,8 @@ function authenticateToken(req, res, next) {
       canAccessOverview: !!dbUser.can_access_overview,
       // 📝 NEU: Füge die neuen Felder hinzu
       canManageOverviewFiles: !!dbUser.can_manage_overview_files,
-      canManageHonorFiles: !!dbUser.can_manage_honor_files
+      canManageHonorFiles: !!dbUser.can_manage_honor_files,
+      canManageActivityFiles: !!dbUser.can_manage_activity_files // 🆕 NEU
     };
     next();
   });
@@ -230,6 +248,23 @@ async function requireAdmin(req, res, next) {
   if (role !== 'admin' && role !== 'r5') return res.status(403).json({ error: 'Admin oder R5 Rechte erforderlich' });
   if (role === 'r5' && !req.user.kingdomId) return res.status(403).json({ error: 'R5-Benutzer ist keinem Königreich zugewiesen.' });
   next();
+}
+
+// 🆕 Hilfsfunktion zur Prüfung der File Management Rechte
+function hasFileManagementAccess(req, type) {
+    const { role, canManageOverviewFiles, canManageHonorFiles, canManageActivityFiles } = req.user;
+    
+    // Admin darf alles
+    if (role === 'admin') return true;
+
+    // R5 und R4 Rechte Logik
+    if (role === 'r5' || role === 'r4') {
+        if (type === 'overview') return canManageOverviewFiles;
+        if (type === 'honor') return canManageHonorFiles;
+        // Activity ist standardmäßig für R4/R5 erlaubt, oder man nutzt das Flag explizit:
+        if (type === 'activity') return true; // Oder: return canManageActivityFiles; wenn du es strikt willst
+    }
+    return false;
 }
 
 
@@ -287,8 +322,8 @@ app.post('/api/auth/register', async (req, res) => {
     // 🆕 kingdom_id in Insert einfügen
     // 📝 ERWEITERT: Fügt die neuen can_manage_* Felder hinzu (default: false)
     await query(
-      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview, kingdom_id, can_manage_overview_files, can_manage_honor_files) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [userId, email, username, passwordHash, false, 'user', normalizedGovId, false, false, false, assignedKingdomId, false, false]
+      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview, kingdom_id, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [userId, email, username, passwordHash, false, 'user', normalizedGovId, false, false, false, assignedKingdomId, false, false, false]
     );
 
     return res.json({
@@ -302,7 +337,8 @@ app.post('/api/auth/register', async (req, res) => {
           governorId: normalizedGovId,
           kingdomId: assignedKingdomId,
           canManageOverviewFiles: false,
-          canManageHonorFiles: false, 
+          canManageHonorFiles: false,
+          canManageActivityFiles: false 
       }
     });
   } catch (error) {
@@ -317,7 +353,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (!username || !password) return res.status(400).json({ error: 'Benutzername und Passwort benötigt' });
 
     // 📝 ERWEITERT: Selectiere die neuen can_manage_* Felder
-    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files FROM users WHERE username = $1', [username]);
+    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files FROM users WHERE username = $1', [username]);
     if (!user) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
 
     const validPassword = await bcrypt.compare(password, user.password_hash);
@@ -340,6 +376,7 @@ app.post('/api/auth/login', async (req, res) => {
             email: user.email,
             canManageOverviewFiles: !!user.can_manage_overview_files,
             canManageHonorFiles: !!user.can_manage_honor_files,
+            canManageActivityFiles: !!user.can_manage_activity_files
         } 
     });
   } catch (error) {
@@ -351,7 +388,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/validate', authenticateToken, async (req, res) => {
   try {
     // 📝 ERWEITERT: Selectiere die neuen can_manage_* Felder
-    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files FROM users WHERE id = $1', [req.user.id]);
+    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files FROM users WHERE id = $1', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
 
     res.json({
@@ -368,6 +405,7 @@ app.get('/api/auth/validate', authenticateToken, async (req, res) => {
       // 📝 NEU: Füge die neuen Felder hinzu
       canManageOverviewFiles: !!user.can_manage_overview_files,
       canManageHonorFiles: !!user.can_manage_honor_files,
+      canManageActivityFiles: !!user.can_manage_activity_files
     });
   } catch (err) {
     res.status(500).json({ error: 'Token-Validierung fehlgeschlagen' });
@@ -381,10 +419,10 @@ app.post('/api/admin/create-admin', async (req, res) => {
     const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
     // 📝 NEU: Fügt die neuen can_manage_* Felder hinzu (default: true für Admin)
     await query(
-      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_manage_overview_files, can_manage_honor_files) 
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files) 
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash`,
-      ['admin-001', 'admin@kd3619.com', 'Stadmin', adminPasswordHash, true, 'admin', null, true, true]
+      ['admin-001', 'admin@kd3619.com', 'Stadmin', adminPasswordHash, true, 'admin', null, true, true, true]
     );
     res.json({ message: 'Admin user created successfully' });
   } catch (error) {
@@ -405,7 +443,7 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
     
     // 📝 ERWEITERT: Selectiere die neuen can_manage_* Felder
     const users = await all(
-      `SELECT id, email, username, is_approved, role, created_at, kingdom_id, governor_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files FROM users ${whereClause} ORDER BY created_at DESC`, params
+      `SELECT id, email, username, is_approved, role, created_at, kingdom_id, governor_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files FROM users ${whereClause} ORDER BY created_at DESC`, params
     );
 
     res.json(users.map((user) => ({
@@ -423,6 +461,7 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
         // 📝 NEU: Füge die neuen Felder hinzu
         canManageOverviewFiles: !!user.can_manage_overview_files,
         canManageHonorFiles: !!user.can_manage_honor_files,
+        canManageActivityFiles: !!user.can_manage_activity_files
     })));
   } catch (error) {
     res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
@@ -470,7 +509,7 @@ app.post('/api/admin/users/access-files', authenticateToken, requireAdmin, async
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
 
     try {
-      const { userId, canManageOverviewFiles, canManageHonorFiles } = req.body;
+      const { userId, canManageOverviewFiles, canManageHonorFiles, canManageActivityFiles } = req.body;
       
       if (!userId) return res.status(400).json({ error: 'Benutzer ID wird benötigt' });
 
@@ -482,8 +521,8 @@ app.post('/api/admin/users/access-files', authenticateToken, requireAdmin, async
       }
       
       await query(
-        `UPDATE users SET can_manage_overview_files=$1, can_manage_honor_files=$2 WHERE id=$3`, 
-        [!!canManageOverviewFiles, !!canManageHonorFiles, userId]
+        `UPDATE users SET can_manage_overview_files=$1, can_manage_honor_files=$2, can_manage_activity_files=$3 WHERE id=$4`, 
+        [!!canManageOverviewFiles, !!canManageHonorFiles, !!canManageActivityFiles, userId]
       );
       res.json({ success: true });
     } catch(e) { 
@@ -559,7 +598,7 @@ app.post('/api/admin/users/assign-r4', authenticateToken, requireAdmin, async (r
         
         // 2. Setze die Rolle auf R4, die Kingdom ID und setze is_approved auf true (um den Approval-Prozess zu überspringen)
         // 📝 Setze die neuen can_manage_* Felder auf false (Superadmin muss sie bei Bedarf manuell setzen)
-        await query('UPDATE users SET role = $1, kingdom_id = $2, is_approved = true, can_manage_overview_files = false, can_manage_honor_files = false WHERE id = $3', ['r4', kingdomId, userId]);
+        await query('UPDATE users SET role = $1, kingdom_id = $2, is_approved = true, can_manage_overview_files = false, can_manage_honor_files = false, can_manage_activity_files = false WHERE id = $3', ['r4', kingdomId, userId]);
         
         return res.json({ success: true, message: `Benutzer ${userId} wurde Rolle R4 und Königreich ${kingdomId} zugewiesen.` });
         
@@ -704,19 +743,7 @@ app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
 });
 
 
-// ==================== AUTH DATA (Overview/Honor) ====================
-
-// Hilfsfunktion zur Prüfung der File Management Rechte
-function hasFileManagementAccess(req, type) {
-    const { role, canManageOverviewFiles, canManageHonorFiles } = req.user;
-    if (role === 'admin') return true;
-    if (role === 'r5' || role === 'r4') {
-        if (type === 'overview') return canManageOverviewFiles;
-        if (type === 'honor') return canManageHonorFiles;
-    }
-    return false;
-}
-
+// ==================== AUTH DATA (Overview/Honor/Activity) ====================
 
 app.get('/overview/files-data', authenticateToken, async (req, res) => {
     const { role, kingdomId } = req.user;
@@ -862,6 +889,77 @@ app.post('/honor/files/reorder', authenticateToken, async (req, res) => {
     }
     
     for (let i = 0; i < order.length; i++) await query('UPDATE honor_files SET fileOrder = $1 WHERE id = $2', [i, order[i]]);
+    res.json({ success: true });
+});
+
+// ==================== ACTIVITY DATA (R4/R5 Only) ====================
+
+app.get('/activity/files-data', authenticateToken, async (req, res) => {
+    // Nur R4, R5, Admin
+    if (!['admin', 'r5', 'r4'].includes(req.user.role)) return res.status(403).json({ error: 'Kein Zugriff' });
+
+    const { role, kingdomId } = req.user;
+    const kId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
+    
+    if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
+    
+    const rows = await all(`SELECT * FROM activity_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploadDate`, [kId]);
+    res.json(rows.map(r => ({...r, headers: JSON.parse(r.headers||'[]'), data: JSON.parse(r.data||'[]')})));
+});
+
+app.post('/activity/upload', authenticateToken, activityUpload.single('file'), async (req, res) => {
+    const { role, kingdomId, id: userId } = req.user;
+    
+    if (!hasFileManagementAccess(req, 'activity')) {
+         return res.status(403).json({ error: 'Keine Berechtigung zum Hochladen von Activity-Dateien.' });
+    }
+    
+    let targetK = kingdomId;
+    if (role === 'admin' && req.query.slug) {
+        const k = await findKingdomBySlug(req.query.slug);
+        if (k) targetK = k.id;
+    }
+    const finalK = targetK || (role === 'admin' ? 'kdm-default' : null);
+    
+    if (!finalK || !req.file) return res.status(400).json({ error: 'Error: Kein Kingdom oder Datei' });
+
+    try {
+        const { headers, data } = await parseExcel(req.file.path);
+        const id = 'act-' + Date.now();
+        await query(
+          `INSERT INTO activity_files (id, name, filename, path, size, uploadDate, headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          [id, req.file.originalname, req.file.filename, req.file.path, req.file.size, new Date().toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, userId]
+        );
+        res.json({ success: true });
+    } catch(e) { 
+        console.error(e);
+        res.status(500).json({ error: 'Upload failed' }); 
+    }
+});
+
+app.delete('/activity/files/:id', authenticateToken, async (req, res) => {
+    const f = await get('SELECT kingdom_id, path FROM activity_files WHERE id=$1', [req.params.id]);
+    if (!f) return res.status(404).json({ error: 'Not found' });
+    
+    if (!hasFileManagementAccess(req, 'activity')) return res.status(403).json({ error: 'Forbidden' });
+    
+    // Sicherstellen, dass man nicht im fremden Kingdom löscht (außer Admin)
+    if (req.user.role !== 'admin' && f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
+
+    if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
+    await query('DELETE FROM activity_files WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+});
+
+app.post('/activity/files/reorder', authenticateToken, async (req, res) => {
+    const { order } = req.body;
+    if (!hasFileManagementAccess(req, 'activity')) return res.status(403).json({ error: 'Forbidden' });
+    
+    // (Optional: Hier könnte man noch Kingdom-Check einbauen wie bei Overview, aber für R4/R5 passt es meist so)
+    
+    for (let i = 0; i < order.length; i++) {
+        await query('UPDATE activity_files SET fileOrder = $1 WHERE id = $2', [i, order[i]]);
+    }
     res.json({ success: true });
 });
 
