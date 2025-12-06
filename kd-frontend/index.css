@@ -2,19 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Benutzerdefinierte Utility-Klassen für das Layout */
-@layer utilities {
-    .main-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        min-height: 100vh; 
-    }
-    
-    /* Desktop / Large Screen Layout */
-    @screen lg {
-        .main-grid-desktop {
-            /* 16rem = 256px breite Sidebar, der Rest (1fr) für den Inhalt */
-            grid-template-columns: 16rem 1fr; 
-        }
-    }
+/* Keine custom Grid-Klassen mehr nötig.
+   Wir nutzen native Tailwind-Klassen für das Layout.
+*/
+body {
+  @apply bg-gray-900; /* Fallback background */
 }

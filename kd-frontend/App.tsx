@@ -14,7 +14,7 @@ const BACKEND_URL =
 
 type ActiveView = 'overview' | 'honor' | 'analytics' | 'admin';
 
-// 📝 NEU: Sidebar Navigation Item Component
+// Sidebar Navigation Item
 const NavItem: React.FC<{
   view: ActiveView;
   currentActiveView: ActiveView;
@@ -24,14 +24,15 @@ const NavItem: React.FC<{
   isDisabled?: boolean;
 }> = ({ view, currentActiveView, setActiveView, label, icon, isDisabled = false }) => {
   const isActive = view === currentActiveView;
-  const baseClasses = 'flex items-center w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap';
-  const activeClasses = 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/25';
-  const inactiveClasses = 'text-gray-300 hover:bg-gray-800 hover:text-white lg:border lg:border-gray-700';
+  // Layout angepasst für Sidebar: Volle Breite, Linksausgerichtet
+  const baseClasses = 'flex items-center w-full px-4 py-3 text-sm font-medium transition-colors duration-200 rounded-lg group';
+  const activeClasses = 'bg-blue-600 text-white shadow-lg shadow-blue-900/50';
+  const inactiveClasses = 'text-gray-400 hover:bg-gray-800 hover:text-white';
 
   if (isDisabled) {
     return (
       <div className={`${baseClasses} opacity-50 cursor-not-allowed`} title="Access Denied">
-        {icon}
+        <span className="mr-3">{icon}</span>
         <span>{label}</span>
       </div>
     );
@@ -42,7 +43,9 @@ const NavItem: React.FC<{
       onClick={() => setActiveView(view)}
       className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses}`}
     >
-      {icon}
+      <span className={`${isActive ? 'text-white' : 'text-gray-400 group-hover:text-white'} mr-3`}>
+        {icon}
+      </span>
       <span>{label}</span>
     </button>
   );
@@ -53,13 +56,6 @@ const AppContent: React.FC = () => {
   const { user, logout, isLoading } = useAuth();
   const [activeView, setActiveView] = useState<ActiveView>('overview');
   const [headerTitle, setHeaderTitle] = useState<string>('Rise of Stats');
-  
-  // 📝 Temporäre State für Gov ID (nur zur Vermeidung von Fehlern, da die Logik noch nicht implementiert ist)
-  const [editingGovId, setEditingGovId] = useState<string | null>(null);
-  const [currentGovIdValue, setCurrentGovIdValue] = useState<string>('');
-  const [govIdValidationMessage, setGovIdValidationMessage] = useState<string | null>(null);
-  const [govIdValidationStatus, setGovIdValidationStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
-
 
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
@@ -72,17 +68,9 @@ const AppContent: React.FC = () => {
   const isPublicView = !!publicSlug && !user && !isRegisterInvite;
   const isRegistrationInviteView = !!publicSlug && !user && isRegisterInvite;
   const isAdminOverrideView = isSuperAdmin && !!publicSlug; 
-
-  // -------- Gov ID Handlers (Placeholder da Logik im Backend nicht implementiert ist) --------
-  const handleEditGovIdStart = (userId: string, currentGovId: string | null | undefined) => {
-      alert(`Editing Gov ID for user ${userId}. Gov ID: ${currentGovId}`);
-  }
   
-  const validateAndSaveGovId = async (userId: string) => {
-      alert(`Saving new Gov ID ${currentGovIdValue} for user ${userId}. (Disabled)`);
-  }
-  // ---------------------------------------------------------------------------------
-
+  // Nur anzeigen, wenn eingeloggt oder Admin im Override-Modus
+  const showDashboardInterface = user || isAdminOverrideView;
 
   // 1. VIEW ROUTING
   useEffect(() => {
@@ -98,7 +86,7 @@ const AppContent: React.FC = () => {
   }, [publicSlug, isSuperAdmin, activeView, user, isRegisterInvite, isRegistrationInviteView]);
 
 
-  // 2. R5/R4 REDIRECT (Redirect von Root-URL zu Kingdom-URL, wenn Kingdom zugewiesen)
+  // 2. R5/R4 REDIRECT
   useEffect(() => {
     const redirectToSlug = async () => {
         if (user && user.kingdomId && !publicSlug && !isSuperAdmin) {
@@ -121,10 +109,7 @@ const AppContent: React.FC = () => {
             } catch (e) { console.error('Redirect failed', e); }
         }
     };
-    
-    if (!isLoading) {
-        redirectToSlug();
-    }
+    if (!isLoading) redirectToSlug();
   }, [user, isLoading, publicSlug, isSuperAdmin]);
 
 
@@ -137,65 +122,42 @@ const AppContent: React.FC = () => {
           if (res.ok) {
             const data = await res.json();
             const displayName = data.displayName && data.displayName.trim() ? data.displayName : publicSlug.toUpperCase();
-            
-            if (displayName.toUpperCase() === publicSlug.toUpperCase()) {
-                 setHeaderTitle(displayName);
-            } else {
-                 setHeaderTitle(`${displayName} - ${publicSlug}`);
-            }
+            setHeaderTitle(displayName);
           } else {
-            setHeaderTitle(`Kingdom Analytics - ${publicSlug}`);
+            setHeaderTitle(`Kingdom ${publicSlug}`);
           }
-        } catch (e) { setHeaderTitle(`Kingdom Analytics - ${publicSlug}`); }
+        } catch (e) { setHeaderTitle(`Kingdom ${publicSlug}`); }
         return;
       }
-
       if (user && user.kingdomId) {
-        try {
-          const token = localStorage.getItem('authToken');
-          const res = await fetch(`${BACKEND_URL}/api/admin/kingdoms`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.length > 0) {
-                const slug = data[0].slug.trim();
-                const displayName = data[0].displayName && data[0].displayName.trim() ? data[0].displayName : slug.toUpperCase();
-                
-                if (displayName.toUpperCase() === slug.toUpperCase()) {
-                     setHeaderTitle(displayName);
-                } else {
-                     setHeaderTitle(`${displayName} - ${slug}`);
-                }
-            }
-          }
-        } catch (e) { setHeaderTitle('Kingdom Analytics'); }
+        // (Vereinfachte Logik für eingeloggte User: wir zeigen den Standard-Titel an, 
+        // da der Kingdom-Name oft schon bekannt ist)
+        setHeaderTitle('Kingdom Analytics');
         return;
       }
-
       if (isSuperAdmin) {
         setHeaderTitle('Superadmin Dashboard');
         return;
       }
-
       setHeaderTitle('Rise of Stats');
     };
-
     fetchTitle();
   }, [publicSlug, user, isSuperAdmin]);
 
 
-  // LANDING PAGE / LOGIN
-  if (!user && !publicSlug && !isLoading || isRegistrationInviteView) {
+  // ------------------------------------------------------------------
+  // RENDER: LANDING / LOGIN (Wenn nicht eingeloggt und kein Dashboard)
+  // ------------------------------------------------------------------
+  if (!showDashboardInterface && !isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md">
           <LoginPrompt />
-          <div className="mt-8 text-center text-gray-500">
+          <div className="mt-8 text-center text-gray-500 text-sm">
             <p>
               {isRegistrationInviteView 
-                ? 'Login with an existing account or register for the Kingdom above.' 
-                : 'Or access a Kingdom directly using a public link.'}
+                ? 'Please login or register to access this kingdom.' 
+                : 'Access requires a valid link or login.'}
             </p> 
             {isRegistrationInviteView && (
                 <button
@@ -204,9 +166,9 @@ const AppContent: React.FC = () => {
                         newUrl.searchParams.delete('register');
                         window.location.href = newUrl.toString();
                     }}
-                    className="text-sm text-gray-400 hover:text-gray-200 mt-2 inline-block"
+                    className="text-blue-400 hover:text-blue-300 mt-2 underline"
                 >
-                    Switch to Public Dashboard View
+                    View Public Dashboard
                 </button>
             )}
           </div>
@@ -215,214 +177,170 @@ const AppContent: React.FC = () => {
     );
   }
   
-  const showDashboardTabs = user || isAdminOverrideView;
-  
-  // Haupt-Layout-Struktur
+  // ------------------------------------------------------------------
+  // RENDER: DASHBOARD LAYOUT
+  // ------------------------------------------------------------------
   return (
-    // 📝 KORRIGIERTE KLASSEN: Die Hauptansicht ist das Grid, das die volle Höhe einnimmt.
-    <div className={`min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100 ${showDashboardTabs ? 'main-grid lg:main-grid-desktop' : ''}`}>
+    <div className="min-h-screen bg-gray-900 text-white">
       
-      {/* 📝 KORREKTUR: Sidebar. Auf Desktop fixed links, nimmt 16rem Breite. Content ist rechts davon. */}
-      {showDashboardTabs && (
-        <aside className="lg:fixed lg:top-0 lg:left-0 lg:h-screen lg:w-64 bg-gray-900/50 border-b lg:border-r border-gray-800 p-4 shadow-xl z-10 flex flex-col lg:flex-shrink-0">
-          <div className="flex justify-between items-center h-full lg:flex-col lg:items-start lg:space-y-6">
-            
-            {/* Logo/Title (Desktop only) */}
-            <div className="hidden lg:flex items-center gap-3 lg:w-full lg:mb-4">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg flex-shrink-0">
-                <span className="font-bold text-lg text-white">KD</span>
-              </div>
-              <div className="flex-grow min-w-0">
-                  <h1 className="text-lg font-bold tracking-tight text-white truncate">
-                      {headerTitle}
-                  </h1>
-                   <p className="text-xs text-gray-400 truncate">
-                      {isAdminOverrideView ? 'Admin Viewing Mode' : 'Analytics Platform'}
-                   </p>
-              </div>
-            </div>
-
-            {/* Navigation Links (Horizontal on small, Vertical on large) */}
-            <nav className="flex flex-row lg:flex-col gap-2 lg:w-full overflow-x-auto pb-2">
-                <NavItem
-                  view="overview"
-                  currentActiveView={activeView}
-                  setActiveView={setActiveView}
-                  label="Kingdom Analytics"
-                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>}
-                />
-
-                <NavItem
-                  view="honor"
-                  currentActiveView={activeView}
-                  setActiveView={setActiveView}
-                  label="Honor Ranking"
-                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
-                />
-
-                <NavItem
-                  view="analytics"
-                  currentActiveView={activeView}
-                  setActiveView={setActiveView}
-                  label="Player Analytics"
-                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                />
-                
-                {isAdmin && (
-                  <NavItem
-                    view="admin"
-                    currentActiveView={activeView}
-                    setActiveView={setActiveView}
-                    label="Admin · Users"
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.525.32 1.157.495 1.724.319v0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-                  />
-                )}
-            </nav>
-            
-            {/* User Info / Logout (Desktop Only) */}
-            <div className="hidden lg:flex flex-col items-start w-full border-t border-gray-700 pt-4 mt-auto">
-                {user ? (
-                    <>
-                        <div className="text-left">
-                            <div className="text-sm font-semibold text-white">
-                                {user.username}
-                                {(user.role === 'admin' || user.role === 'r5' || user.role === 'r4') && (
-                                    <span className="ml-2 text-xs text-purple-400">
-                                        ({user.role.toUpperCase()})
-                                    </span>
-                                )}
-                            </div>
-                            <div className="text-xs text-gray-400">
-                                {user.isApproved ? 'Approved' : 'Pending'}
-                            </div>
-                        </div>
-                        <button
-                            onClick={logout}
-                            className="mt-3 text-xs px-3 py-1.5 rounded-md border border-gray-600 text-gray-200 hover:bg-gray-800 transition-colors w-full text-center"
-                        >
-                            Log out
-                        </button>
-                    </>
-                ) : (
-                    <span className="text-xs text-gray-400">Not logged in</span>
-                )}
-            </div>
-
-          </div>
-        </aside>
-      )}
-
-      {/* MAIN CONTENT AREA */}
-      {/* 📝 KORREKTUR: Auf Desktop wird linker Platz (16rem) freigehalten. Auf Mobilgeräten wird die Sidebar versteckt, der Content nutzt die volle Breite. */}
-      <main className={`lg:col-span-1 px-4 sm:px-6 lg:px-8 py-6 ${showDashboardTabs ? 'lg:ml-64' : 'mx-auto max-w-7xl'}`}>
+      {/* ================= SIDEBAR (Desktop Only) ================= */}
+      {/* Fixed position, full height, width 64 (16rem/256px) */}
+      <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col bg-gray-900 border-r border-gray-800 z-50">
         
-        {/* HEADER (Mobile Only) */}
-        <header className="mb-6 border-b border-gray-800 pb-4 lg:hidden">
-          <div className="flex items-center justify-between gap-4">
-            
-            {/* Logo + Title (Mobile Only) */}
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg">
-                <span className="font-bold text-xl text-white">KD</span>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white">
-                  {headerTitle}
-                </h1>
-                <p className="text-xs text-gray-400">
-                  {isAdminOverrideView ? 'Admin Viewing Mode' : 'Analytics Platform'}
-                </p>
-              </div>
-            </div>
+        {/* Sidebar Header (Logo) */}
+        <div className="flex h-16 items-center px-6 border-b border-gray-800 bg-gray-900">
+           <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg mr-3">
+             <span className="font-bold text-white text-sm">KD</span>
+           </div>
+           <span className="text-lg font-bold text-white tracking-wide truncate" title={headerTitle}>
+             {headerTitle.length > 15 ? headerTitle.substring(0,15)+'...' : headerTitle}
+           </span>
+        </div>
 
-            {/* RECHTS OBEN: User Info ODER Login Button (Mobile Only) */}
-            <div className="flex items-center gap-4 ml-auto">
-              {isLoading && <span className="text-xs text-gray-400">Checking login…</span>}
-              
-              {user ? (
-                /* Logout Button (Mobile Only) */
-                <button
-                    onClick={logout}
-                    className="text-xs px-3 py-1.5 rounded-md border border-gray-600 text-gray-200 hover:bg-gray-800 transition-colors lg:hidden"
-                >
-                    Log out
-                </button>
-              ) : (
-                /* Fall B: Nicht eingeloggt (Public View) -> Zeige Login Button */
-                !isLoading && (
+        {/* Sidebar Nav */}
+        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-2">
+            <NavItem
+              view="overview"
+              currentActiveView={activeView}
+              setActiveView={setActiveView}
+              label="Analytics"
+              icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>}
+            />
+            <NavItem
+              view="honor"
+              currentActiveView={activeView}
+              setActiveView={setActiveView}
+              label="Honor"
+              icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
+            />
+            <NavItem
+              view="analytics"
+              currentActiveView={activeView}
+              setActiveView={setActiveView}
+              label="Players"
+              icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
+            />
+            {isAdmin && (
+              <div className="pt-4 mt-4 border-t border-gray-800">
+                <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  Administration
+                </p>
+                <NavItem
+                  view="admin"
+                  currentActiveView={activeView}
+                  setActiveView={setActiveView}
+                  label="User Management"
+                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.525.32 1.157.495 1.724.319v0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+                  isDisabled={user?.role === 'r4' && !isSuperAdmin}
+                />
+              </div>
+            )}
+        </div>
+
+        {/* Sidebar Footer (User Info) */}
+        <div className="p-4 border-t border-gray-800 bg-gray-900/50">
+            {user ? (
+                <div className="flex flex-col space-y-3">
+                    <div className="flex items-center">
+                        <div className="ml-0">
+                            <p className="text-sm font-medium text-white">{user.username}</p>
+                            <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                        </div>
+                    </div>
                     <button
-                      onClick={() => (window.location.href = '/')}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20"
+                        onClick={logout}
+                        className="w-full flex items-center justify-center px-4 py-2 border border-gray-700 rounded-md shadow-sm text-xs font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 focus:outline-none"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
-                      Login
+                        Log out
                     </button>
-                )
-              )}
-            </div>
-          </div>
+                </div>
+            ) : (
+                 <div className='text-xs text-gray-500 text-center'>Not logged in</div>
+            )}
+        </div>
+      </aside>
+
+      {/* ================= MAIN CONTENT WRAPPER ================= */}
+      {/* WICHTIG: lg:pl-64 addiert Padding links (256px), damit der Inhalt 
+          RECHTS neben der Sidebar (die 256px breit ist) beginnt.
+      */}
+      <div className="lg:pl-64 flex flex-col min-h-screen">
+        
+        {/* Mobile Header (Nur sichtbar bis lg) */}
+        <header className="lg:hidden sticky top-0 z-40 flex h-16 items-center gap-x-4 border-b border-gray-800 bg-gray-900 px-4 shadow-sm">
+             <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                 <span className="font-bold text-white text-xs">KD</span>
+             </div>
+             <div className="flex-1 text-sm font-bold text-white truncate">{headerTitle}</div>
+             
+             {/* Mobile Logout */}
+             {user && (
+                <button onClick={logout} className="text-gray-400 hover:text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
+                </button>
+             )}
         </header>
 
-        {/* MAIN DASHBOARD CONTENT */}
-        <div className="space-y-6">
-          
-          {activeView === 'overview' && (
-            <PublicOrProtectedRoute
-              isPublic={isPublicView}
-              publicSlug={publicSlug}
-              accessType="overview"
-              isAdminOverride={isAdminOverrideView}
-            >
-              <OverviewDashboard
-                isAdmin={!!isAdmin}
-                backendUrl={BACKEND_URL}
-                publicSlug={publicSlug}
-                isAdminOverride={isAdminOverrideView}
-              />
-            </PublicOrProtectedRoute>
-          )}
+        {/* Content Area */}
+        <main className="flex-1 py-8 px-4 sm:px-6 lg:px-8 bg-black/20">
+            <div className="max-w-7xl mx-auto">
+                {activeView === 'overview' && (
+                    <PublicOrProtectedRoute
+                    isPublic={isPublicView}
+                    publicSlug={publicSlug}
+                    accessType="overview"
+                    isAdminOverride={isAdminOverrideView}
+                    >
+                    <OverviewDashboard
+                        isAdmin={!!isAdmin}
+                        backendUrl={BACKEND_URL}
+                        publicSlug={publicSlug}
+                        isAdminOverride={isAdminOverrideView}
+                    />
+                    </PublicOrProtectedRoute>
+                )}
 
-          {activeView === 'honor' && (
-            <PublicOrProtectedRoute
-              isPublic={isPublicView}
-              publicSlug={publicSlug}
-              accessType="honor"
-              isAdminOverride={isAdminOverrideView}
-            >
-              <HonorDashboard
-                isAdmin={!!isAdmin}
-                backendUrl={BACKEND_URL}
-                publicSlug={publicSlug}
-                isAdminOverride={isAdminOverrideView}
-              />
-            </PublicOrProtectedRoute>
-          )}
+                {activeView === 'honor' && (
+                    <PublicOrProtectedRoute
+                    isPublic={isPublicView}
+                    publicSlug={publicSlug}
+                    accessType="honor"
+                    isAdminOverride={isAdminOverrideView}
+                    >
+                    <HonorDashboard
+                        isAdmin={!!isAdmin}
+                        backendUrl={BACKEND_URL}
+                        publicSlug={publicSlug}
+                        isAdminOverride={isAdminOverrideView}
+                    />
+                    </PublicOrProtectedRoute>
+                )}
 
-          {activeView === 'analytics' && (
-            <PublicOrProtectedRoute
-              isPublic={isPublicView}
-              publicSlug={publicSlug}
-              accessType="analytics"
-              isAdminOverride={isAdminOverrideView}
-            >
-              <PowerAnalyticsDashboard
-                isAdmin={!!isAdmin}
-                backendUrl={BACKEND_URL}
-                publicSlug={publicSlug}
-                isAdminOverride={isAdminOverrideView}
-              />
-            </PublicOrProtectedRoute>
-          )}
+                {activeView === 'analytics' && (
+                    <PublicOrProtectedRoute
+                    isPublic={isPublicView}
+                    publicSlug={publicSlug}
+                    accessType="analytics"
+                    isAdminOverride={isAdminOverrideView}
+                    >
+                    <PowerAnalyticsDashboard
+                        isAdmin={!!isAdmin}
+                        backendUrl={BACKEND_URL}
+                        publicSlug={publicSlug}
+                        isAdminOverride={isAdminOverrideView}
+                    />
+                    </PublicOrProtectedRoute>
+                )}
 
-          {/* Admin Panel */}
-          {activeView === 'admin' && user && isAdmin && (
-            <ProtectedRoute accessType='admin'>
-              <AdminUserManagement />
-            </ProtectedRoute>
-          )}
+                {activeView === 'admin' && user && isAdmin && (
+                    <ProtectedRoute accessType='admin'>
+                    <AdminUserManagement />
+                    </ProtectedRoute>
+                )}
+            </div>
+        </main>
 
-        </div>
-      </main>
+      </div>
     </div>
   );
 };
@@ -445,7 +363,7 @@ const PublicOrProtectedRoute: React.FC<PublicOrProtectedRouteProps> = ({
   if (isPublic || isAdminOverride) {
     if (!publicSlug && isPublic) {
       return (
-        <div className="text-center p-8 text-red-400 bg-gray-800 rounded-xl">
+        <div className="text-center p-8 text-red-400 bg-gray-800 rounded-xl mt-10">
           Invalid Public Link.
         </div>
       );
