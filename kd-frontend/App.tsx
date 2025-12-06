@@ -70,7 +70,7 @@ const AppContent: React.FC = () => {
   const isAdminOverrideView = isSuperAdmin && !!publicSlug; 
   
   // Nur anzeigen, wenn eingeloggt oder Admin im Override-Modus
-  const showDashboardInterface = user || isAdminOverrideView;
+  const showDashboardInterface = user || isAdminOverrideView || isPublicView;
 
   // 1. VIEW ROUTING
   useEffect(() => {
