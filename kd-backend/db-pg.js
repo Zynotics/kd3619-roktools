@@ -41,13 +41,8 @@ async function all(text, params = []) {
 
 /**
  * Weist einem Königreich einen R5-Benutzer zu.
- * Setzt die Rolle des Benutzers auf 'r5' und weist ihm die kingdom_id zu.
- * Außerdem wird der owner_user_id des Königreichs gesetzt.
- * @param {string} userId - ID des Benutzers, der R5 wird.
- * @param {string} kingdomId - ID des Königreichs.
  */
 async function assignR5(userId, kingdomId) {
-  // 1. Benutzer-Rolle und Kingdom-Zuweisung aktualisieren
   const userSql = `
     UPDATE users 
     SET role = 'r5', kingdom_id = $1
@@ -60,7 +55,6 @@ async function assignR5(userId, kingdomId) {
     throw new Error('User not found or role update failed');
   }
 
-  // 2. owner_user_id des Königreichs setzen
   const kingdomSql = `
     UPDATE kingdoms
     SET owner_user_id = $1, updated_at = NOW()
@@ -70,9 +64,7 @@ async function assignR5(userId, kingdomId) {
 }
 
 /**
- * Aktualisiert den Status eines Königreichs ('active' oder 'inactive').
- * @param {string} kingdomId - ID des Königreichs.
- * @param {string} status - Neuer Status ('active' oder 'inactive').
+ * Aktualisiert den Status eines Königreichs.
  */
 async function updateKingdomStatus(kingdomId, status) {
   const sql = `
@@ -84,33 +76,146 @@ async function updateKingdomStatus(kingdomId, status) {
 }
 
 /**
- * Löscht ein Königreich, setzt zugehörige Benutzer zurück und löscht Dateien.
- * @param {string} kingdomId - ID des Königreichs.
+ * Löscht ein Königreich.
  */
 async function deleteKingdom(kingdomId) {
-  // 1. Benutzer zurücksetzen (Rolle auf 'user', kingdom_id auf NULL)
   await query(`
     UPDATE users 
     SET role = 'user', kingdom_id = NULL
     WHERE kingdom_id = $1
   `, [kingdomId]);
 
-  // 2. Zugehörige Dateien löschen
   await query(`DELETE FROM overview_files WHERE kingdom_id = $1`, [kingdomId]);
   await query(`DELETE FROM honor_files WHERE kingdom_id = $1`, [kingdomId]);
+  
+  // Auch KvK Events löschen
+  await query(`DELETE FROM kvk_events WHERE kingdom_id = $1`, [kingdomId]);
 
-  // 3. Königreich löschen
   const res = await query(`DELETE FROM kingdoms WHERE id = $1`, [kingdomId]);
   return res.rowCount;
 }
 
+// ------------------------------------------------
+// KVK EVENT FUNKTIONEN (NEU)
+// ------------------------------------------------
+
+// Tabelle initialisieren (wird beim Start ausgeführt, falls nicht existiert)
+async function initKvkTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS kvk_events (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      kingdom_id TEXT NOT NULL,
+      start_file_id TEXT,
+      end_file_id TEXT,
+      honor_file_ids TEXT, 
+      is_public BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+}
+initKvkTable().catch(e => console.error("Fehler beim Erstellen der kvk_events Tabelle:", e));
+
+/**
+ * Neues KvK Event erstellen
+ */
+async function createKvkEvent(event) {
+  const sql = `
+    INSERT INTO kvk_events (id, name, kingdom_id, start_file_id, end_file_id, honor_file_ids, is_public, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING *
+  `;
+  const honorFilesStr = JSON.stringify(event.honorFileIds || []);
+  const res = await query(sql, [
+    event.id, 
+    event.name, 
+    event.kingdomId,
+    event.startFileId, 
+    event.endFileId, 
+    honorFilesStr, 
+    !!event.isPublic, 
+    event.createdAt || new Date()
+  ]);
+  return res.rows[0];
+}
+
+/**
+ * Alle KvK Events eines Königreichs holen
+ */
+async function getKvkEvents(kingdomId) {
+  const sql = `SELECT * FROM kvk_events WHERE kingdom_id = $1 ORDER BY created_at DESC`;
+  const rows = await all(sql, [kingdomId]);
+  
+  return rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    kingdomId: row.kingdom_id,
+    startFileId: row.start_file_id,
+    endFileId: row.end_file_id,
+    honorFileIds: JSON.parse(row.honor_file_ids || '[]'),
+    isPublic: row.is_public,
+    createdAt: row.created_at
+  }));
+}
+
+/**
+ * Einzelnes KvK Event holen
+ */
+async function getKvkEventById(id) {
+  const row = await get('SELECT * FROM kvk_events WHERE id = $1', [id]);
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    kingdomId: row.kingdom_id,
+    startFileId: row.start_file_id,
+    endFileId: row.end_file_id,
+    honorFileIds: JSON.parse(row.honor_file_ids || '[]'),
+    isPublic: row.is_public,
+    createdAt: row.created_at
+  };
+}
+
+/**
+ * KvK Event aktualisieren
+ */
+async function updateKvkEvent(id, data) {
+  const sql = `
+    UPDATE kvk_events
+    SET name = $1, start_file_id = $2, end_file_id = $3, honor_file_ids = $4, is_public = $5
+    WHERE id = $6
+    RETURNING *
+  `;
+  const honorFilesStr = JSON.stringify(data.honorFileIds || []);
+  const res = await query(sql, [
+    data.name, 
+    data.startFileId, 
+    data.endFileId, 
+    honorFilesStr, 
+    !!data.isPublic, 
+    id
+  ]);
+  return res.rows[0];
+}
+
+/**
+ * KvK Event löschen
+ */
+async function deleteKvkEvent(id) {
+  await query('DELETE FROM kvk_events WHERE id = $1', [id]);
+}
 
 module.exports = {
   query,
   get,
   all,
-  // NEUE FUNKTIONEN EXPORTIEREN
   assignR5,
   updateKingdomStatus,
   deleteKingdom,
+  // Neue Exporte
+  createKvkEvent,
+  getKvkEvents,
+  getKvkEventById,
+  updateKvkEvent,
+  deleteKvkEvent
 };
