@@ -3,8 +3,9 @@ import { KvkEvent, UploadedFile, HonorPlayerInfo, PlayerHonorHistory } from '../
 import { fetchPublicKvkEvents, API_BASE_URL } from '../api'; 
 import { findColumnIndex, formatNumber, parseGermanNumber } from '../utils';
 import HonorOverviewTable from './HonorOverviewTable'; 
-import HonorHistoryChart from './HonorHistoryChart'; // 🆕 Import
-import HonorPlayerSearch from './HonorPlayerSearch'; // 🆕 Import
+import HonorHistoryChart from './HonorHistoryChart'; // Diese Komponente muss existieren
+import HonorPlayerSearch from './HonorPlayerSearch'; // Diese Komponente muss existieren
+import { Card } from './Card'; // Optional, für schönes Layout
 
 // --- Typen ---
 type StatProgressRow = {
@@ -35,7 +36,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   // Verarbeitete Daten
   const [statsData, setStatsData] = useState<StatProgressRow[]>([]);
   
-  // 🆕 Honor Historie Daten
+  // Honor Historie & Selection
   const [honorHistory, setHonorHistory] = useState<PlayerHonorHistory[]>([]);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   
@@ -43,7 +44,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // 1. Events laden
+  // 1. Initiales Laden der Events
   useEffect(() => {
     if (slug) loadEvents();
   }, [slug]);
@@ -96,9 +97,11 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       }
 
       // --- B. HONOR HISTORIE BERECHNUNG ---
+      // Hole alle Honor-Dateien, die diesem Event zugeordnet sind
       const relevantHonorFiles = allHonor
         .filter(f => event.honorFileIds.includes(f.id))
-        .sort((a, b) => (a.name > b.name ? 1 : -1)); // Sortierung nach Datum/Name wichtig für Chart
+        // Sortiere chronologisch (anhand Upload-Datum oder Name, falls Datum nicht verfügbar)
+        .sort((a, b) => (new Date(a.uploadDate || 0).getTime() - new Date(b.uploadDate || 0).getTime()));
 
       if (relevantHonorFiles.length > 0) {
         const history = processHonorHistory(relevantHonorFiles);
@@ -113,15 +116,32 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     }
   };
 
+  /**
+   * 🛠 Robuster Number Parser
+   * Akzeptiert sowohl Strings ("23.456") als auch rohe Numbers (23456)
+   */
+  const parseAnyNumber = (val: any): number => {
+    if (val === undefined || val === null || val === '') return 0;
+    if (typeof val === 'number') return val;
+    // Versuche parseGermanNumber, fallback auf parseFloat
+    const ger = parseGermanNumber(String(val));
+    return isNaN(ger) ? 0 : ger;
+  };
+
   // --- Helper: Honor History Builder ---
   const processHonorHistory = (files: UploadedFile[]): PlayerHonorHistory[] => {
     const map = new Map<string, PlayerHonorHistory>();
 
     files.forEach(file => {
-      const parsedRows = parseHonorFile(file); // Nutzt den existierenden Parser
+      // Nutze den Helper, um eine Datei zu parsen
+      const parsedRows = parseHonorFile(file); 
       
-      // Dateiname etwas bereinigen für Chart-Legende (optional)
-      const label = file.name.replace('.xlsx', '').replace('.csv', '');
+      // Label für den Chart (z.B. kurzes Datum aus dem Dateinamen oder UploadDate)
+      let label = file.name.replace('.xlsx', '').replace('.csv', '');
+      // Optional: Versuche Datum aus Dateiname zu extrahieren oder nutze UploadDate
+      if (file.uploadDate) {
+          label = new Date(file.uploadDate).toLocaleDateString(undefined, { day:'2-digit', month:'2-digit' });
+      }
 
       parsedRows.forEach(row => {
         if (!map.has(row.governorId)) {
@@ -132,8 +152,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
           });
         }
         const entry = map.get(row.governorId)!;
-        // Aktualisiere Namen falls er sich geändert hat (optional, nehmen wir den neuesten)
-        entry.name = row.name; 
+        entry.name = row.name; // Update Name auf aktuellsten Stand
         entry.history.push({
           fileName: label,
           honorPoint: row.honorPoint
@@ -144,11 +163,38 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     return Array.from(map.values());
   };
 
+  // --- Helper: Honor File Parser (Einzeldatei) ---
+  const parseHonorFile = (file: UploadedFile): HonorPlayerInfo[] => {
+    // 🔍 Erweiterte Header-Suche
+    const govIdIdx = findColumnIndex(file.headers, ['governor id', 'id', 'user id', 'gov id']);
+    const nameIdx = findColumnIndex(file.headers, ['name', 'display name', 'spieler', 'governor name', 'governor']);
+    
+    // Honor Spalte oft "Honor Points", "Score", "Ehre"
+    const honorIdx = findColumnIndex(file.headers, ['honor', 'honor points', 'score', 'points', 'ehre']);
+
+    if (govIdIdx === undefined || honorIdx === undefined) {
+       console.warn(`Spalten nicht gefunden in ${file.name}:`, file.headers);
+       return [];
+    }
+
+    return file.data.map(row => {
+        const val = row[honorIdx];
+        const points = parseAnyNumber(val); // Nutze den robusten Parser
+
+        return {
+            governorId: String(row[govIdIdx]),
+            name: nameIdx !== undefined ? String(row[nameIdx]) : 'Unknown',
+            honorPoint: points
+        };
+    }).filter(p => p.honorPoint > 0); // Filtere 0er Einträge raus
+  };
+
   // --- Helper: Stats Parser ---
   const calculateStatsProgress = (start: UploadedFile, end: UploadedFile): StatProgressRow[] => {
     const parseRow = (headers: string[], row: any[]) => {
       const getIdx = (keys: string[]) => findColumnIndex(headers, keys);
       const idIdx = getIdx(['id', 'governor id', 'user id']);
+      // Ausschluss von 'id' im Namens-Suchfeld, um Verwechslung zu vermeiden
       const nameIdx = getIdx(['name', 'display name', 'spieler']); 
       const allyIdx = getIdx(['alliance', 'allianz', 'tag']);
       const powerIdx = getIdx(['power', 'kraft']);
@@ -162,10 +208,10 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         id: String(row[idIdx]),
         name: nameIdx !== undefined ? String(row[nameIdx]) : 'Unknown',
         alliance: allyIdx !== undefined ? String(row[allyIdx]) : '',
-        power: powerIdx !== undefined ? parseGermanNumber(row[powerIdx]) : 0,
-        t4: t4Idx !== undefined ? parseGermanNumber(row[t4Idx]) : 0,
-        t5: t5Idx !== undefined ? parseGermanNumber(row[t5Idx]) : 0,
-        dead: deadIdx !== undefined ? parseGermanNumber(row[deadIdx]) : 0,
+        power: parseAnyNumber(row[powerIdx]),
+        t4: parseAnyNumber(row[t4Idx]),
+        t5: parseAnyNumber(row[t5Idx]),
+        dead: parseAnyNumber(row[deadIdx]),
       };
     };
 
@@ -204,37 +250,22 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     return result.sort((a, b) => b.totalKillsDiff - a.totalKillsDiff);
   };
 
-  // --- Helper: Honor File Parser ---
-  const parseHonorFile = (file: UploadedFile): HonorPlayerInfo[] => {
-    const govIdIdx = findColumnIndex(file.headers, ['governor id', 'id', 'user id']);
-    const nameIdx = findColumnIndex(file.headers, ['name', 'display name', 'spieler', 'governor name']);
-    const honorIdx = findColumnIndex(file.headers, ['honor', 'honor points', 'score', 'points', 'ehre']);
-
-    if (govIdIdx === undefined || honorIdx === undefined) return [];
-
-    return file.data.map(row => ({
-      governorId: String(row[govIdIdx]),
-      name: nameIdx !== undefined ? String(row[nameIdx]) : 'Unknown',
-      honorPoint: parseGermanNumber(row[honorIdx])
-    })).filter(p => !isNaN(p.honorPoint)); // Filtere ungültige Zeilen
-  };
-
-  // --- Rendering Helpers für Honor View ---
-  // Berechne die aktuellen Top-Werte für die Tabelle (basierend auf der letzten Datei im Verlauf)
+  // --- Rendering Data ---
   const currentHonorTableData = useMemo(() => {
     if (honorHistory.length === 0) return [];
     
-    // Wir nehmen den letzten Eintrag im History-Array jedes Spielers als "Aktuellen Stand"
+    // Nimm den letzten Wert (aktuellster Stand)
     return honorHistory.map(h => {
         const lastEntry = h.history[h.history.length - 1];
+        const firstEntry = h.history[0]; // Optional: Vergleich zum Start des Events
         return {
             governorId: h.id,
             name: h.name,
-            oldHonor: 0,
+            oldHonor: firstEntry ? firstEntry.honorPoint : 0, // Zeige Startwert als "Old"
             newHonor: lastEntry.honorPoint,
-            diffHonor: lastEntry.honorPoint // Für Sortierung
+            diffHonor: lastEntry.honorPoint // Zum Sortieren
         };
-    }).sort((a, b) => b.newHonor - a.newHonor); // Sortiere nach absolutem Honor absteigend
+    }).sort((a, b) => b.newHonor - a.newHonor);
   }, [honorHistory]);
 
   const activeEvent = events.find(e => e.id === selectedEventId);
@@ -345,7 +376,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                         </tr>
                       ))}
                       {statsData.length === 0 && (
-                        <tr><td colSpan={8} className="p-8 text-center text-gray-500">Keine Daten verfügbar oder Start/End Dateien nicht kompatibel.</td></tr>
+                        <tr><td colSpan={8} className="p-8 text-center text-gray-500">Keine Daten verfügbar. Prüfe Start/End Konfiguration.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -353,17 +384,16 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
               </div>
             )}
 
-            {/* --- VIEW B: HONOR DASHBOARD (Integriert) --- */}
+            {/* --- VIEW B: HONOR DASHBOARD --- */}
             {viewMode === 'honor' && (
               <div className="space-y-6">
-                 {/* 1. Suche & Chart Area */}
+                 {/* Chart & Search Section */}
                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Suche */}
+                    {/* SEARCH */}
                     <div className="lg:col-span-1">
                         <HonorPlayerSearch 
                             data={honorHistory}
                             onSelect={(playerId) => {
-                                // Toggle Selection
                                 setSelectedPlayerIds(prev => 
                                     prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
                                 );
@@ -371,27 +401,27 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             selectedIds={selectedPlayerIds}
                         />
                          <div className="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700 text-sm text-gray-400">
-                            <p>Wähle Spieler aus, um ihren Verlauf im Chart zu vergleichen.</p>
+                            <p>Wähle Spieler aus, um ihren Verlauf zu vergleichen.</p>
                             <p className="mt-2 text-xs text-gray-500">Datenpunkte: {honorHistory.length > 0 ? honorHistory[0].history.length : 0} Scans</p>
                         </div>
                     </div>
 
-                    {/* Chart */}
+                    {/* CHART */}
                     <div className="lg:col-span-2">
                         {honorHistory.length > 0 ? (
                              <HonorHistoryChart 
                                 data={honorHistory} 
-                                selectedPlayerIds={selectedPlayerIds.length > 0 ? selectedPlayerIds : undefined} // Wenn leer, zeigt Chart oft Top 5 default
+                                selectedPlayerIds={selectedPlayerIds.length > 0 ? selectedPlayerIds : undefined} 
                              />
                         ) : (
                             <div className="h-64 bg-gray-800 rounded-xl flex items-center justify-center text-gray-500 border border-gray-700">
-                                Keine Honor-Historie verfügbar.
+                                Keine Honor-Daten für den Verlauf verfügbar.
                             </div>
                         )}
                     </div>
                  </div>
 
-                {/* 2. Ranking Tabelle */}
+                {/* RANKING TABLE */}
                 {currentHonorTableData.length > 0 ? (
                   <HonorOverviewTable 
                     stats={{ playerHonorChanges: currentHonorTableData }} 
