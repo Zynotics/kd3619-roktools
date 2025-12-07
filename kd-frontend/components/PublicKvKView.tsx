@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+// import { useParams } from 'react-router-dom'; // ❌ ENTFERNT
 import { KvkEvent, UploadedFile, HonorPlayerInfo } from '../types';
 import { fetchPublicKvkEvents } from '../api';
-import { findColumnIndex, formatNumber, cleanFileName, parseGermanNumber } from '../utils';
-import HonorOverviewTable from './HonorOverviewTable'; // Wir nutzen die existierende Tabelle wieder
+import { findColumnIndex, formatNumber, parseGermanNumber } from '../utils';
+import HonorOverviewTable from './HonorOverviewTable'; 
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -18,8 +18,15 @@ type StatProgressRow = {
   deadDiff: number;
 };
 
-const PublicKvkView: React.FC = () => {
-  const { slug } = useParams<{ slug: string }>();
+// 🆕 NEU: Props Definition
+interface PublicKvKViewProps {
+  kingdomSlug: string;
+}
+
+const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
+  // const { slug } = useParams<{ slug: string }>(); // ❌ ENTFERNT
+  const slug = kingdomSlug; // Wir nutzen den Prop
+
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   
@@ -97,10 +104,9 @@ const PublicKvkView: React.FC = () => {
       // --- BERECHNUNG HONOR RANKING ---
       // Wir nehmen vereinfacht an: Die Honor-Files sind Schnappschüsse. 
       // Wir wollen das Ranking basierend auf der *neuesten* Datei im Event anzeigen.
-      // (Alternativ könnte man Files mergen, aber Honor ist meist "Total Honor" im Export)
       const relevantHonorFiles = allHonor
         .filter(f => event.honorFileIds.includes(f.id))
-        .sort((a, b) => (a.name > b.name ? 1 : -1)); // Oder nach UploadDate sortieren wenn vorhanden
+        .sort((a, b) => (a.name > b.name ? 1 : -1)); 
 
       if (relevantHonorFiles.length > 0) {
         // Nimm die letzte (aktuellste) Datei für das Ranking
@@ -158,15 +164,13 @@ const PublicKvkView: React.FC = () => {
 
       const prev = startMap.get(curr.id);
       
-      // Wenn Spieler vorher nicht da war, nehmen wir 0 als Basis (New Joiner)
-      // Oder man könnte sie filtern. Hier nehmen wir 0 an = voller Zuwachs.
       const prevPower = prev ? prev.power : 0;
       const prevT4 = prev ? prev.t4 : 0;
       const prevT5 = prev ? prev.t5 : 0;
       const prevDead = prev ? prev.dead : 0;
 
       // Berechnung Delta
-      const t4Diff = Math.max(0, curr.t4 - prevT4); // Negative vermeiden bei Glitches
+      const t4Diff = Math.max(0, curr.t4 - prevT4); 
       const t5Diff = Math.max(0, curr.t5 - prevT5);
       
       result.push({
@@ -181,7 +185,6 @@ const PublicKvkView: React.FC = () => {
       });
     });
 
-    // Sortierung nach Total Kills Delta (Default)
     return result.sort((a, b) => b.totalKillsDiff - a.totalKillsDiff);
   };
 
@@ -225,7 +228,6 @@ const PublicKvkView: React.FC = () => {
             )}
           </div>
           
-          {/* Event Selector (falls mehrere vorhanden) */}
           {events.length > 1 && (
             <select 
               className="bg-gray-800 border border-gray-600 text-white p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
@@ -277,7 +279,7 @@ const PublicKvkView: React.FC = () => {
               <div className="bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-700">
                 <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
                   <h2 className="text-lg font-semibold text-blue-200">Fortschritt (Start bis Heute)</h2>
-                  <span className="text-xs text-gray-500">Sortiert nach T4+T5 Kills</span>
+                  <span className="text-xs text-gray-500">Sortiert nach Total Kills</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
@@ -323,8 +325,6 @@ const PublicKvkView: React.FC = () => {
                 <div className="bg-purple-900/20 border border-purple-500/30 p-4 rounded text-center text-purple-200 text-sm mb-4">
                   Zeigt den aktuellen Stand basierend auf dem neuesten Honor-Scan.
                 </div>
-                {/* Reuse existing component logic by passing data props if it supported it. 
-                    Since HonorOverviewTable accepts data, we can use it directly! */}
                 {honorData.length > 0 ? (
                   <HonorOverviewTable data={honorData} />
                 ) : (
@@ -340,4 +340,4 @@ const PublicKvkView: React.FC = () => {
   );
 };
 
-export default PublicKvkView;
+export default PublicKvKView;
