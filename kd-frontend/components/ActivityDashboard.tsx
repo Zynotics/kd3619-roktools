@@ -45,9 +45,11 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
   // 🔍 Allianz Filter State
   const [selectedAlliances, setSelectedAlliances] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const filterRef = useRef<div className="relative inline-block text-left">(null); // Cast für TS
   
-  useOutsideAlerter(filterRef as any, () => setIsFilterOpen(false));
+  // 🛠️ FIX: Hier war der Fehler. Korrekte TypeScript Syntax:
+  const filterRef = useRef<HTMLDivElement>(null);
+  
+  useOutsideAlerter(filterRef, () => setIsFilterOpen(false));
 
 
   // Sortierung
@@ -310,7 +312,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                     </div>
 
                     {/* Alliance Filter Dropdown */}
-                    <div className="relative" ref={filterRef as any}>
+                    <div className="relative" ref={filterRef}>
                         <button 
                             onClick={() => setIsFilterOpen(!isFilterOpen)}
                             className="flex items-center justify-between w-40 px-3 py-2 text-xs font-medium text-white bg-gray-700 border border-gray-600 rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
