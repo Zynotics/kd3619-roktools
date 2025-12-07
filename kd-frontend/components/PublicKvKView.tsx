@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { KvkEvent, UploadedFile, HonorPlayerInfo } from '../types';
-import { fetchPublicKvkEvents, API_BASE_URL } from '../api'; // 🆕 Import API_BASE_URL
+import { fetchPublicKvkEvents, API_BASE_URL } from '../api'; 
 import { findColumnIndex, formatNumber, parseGermanNumber } from '../utils';
 import HonorOverviewTable from './HonorOverviewTable'; 
 
@@ -322,7 +322,18 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                   Zeigt den aktuellen Stand basierend auf dem neuesten Honor-Scan.
                 </div>
                 {honorData.length > 0 ? (
-                  <HonorOverviewTable data={honorData} />
+                  // 🔧 KORREKTUR: Wir transformieren die Daten in das erwartete 'stats' Format für HonorOverviewTable
+                  <HonorOverviewTable 
+                    stats={{
+                      playerHonorChanges: honorData.map(h => ({
+                        governorId: h.governorId,
+                        name: h.name,
+                        oldHonor: 0, // Da kein Vergleich, setzen wir Alt auf 0
+                        newHonor: h.honorPoint,
+                        diffHonor: h.honorPoint // Wir nutzen diffHonor als "Total", damit die Sortierung in der Tabelle greift
+                      }))
+                    }} 
+                  />
                 ) : (
                   <div className="bg-gray-800 p-8 rounded text-center text-gray-500">Keine Honor-Daten verknüpft.</div>
                 )}
