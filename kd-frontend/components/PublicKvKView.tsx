@@ -27,12 +27,24 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   
+  // Rohdaten
   const [overviewFiles, setOverviewFiles] = useState<UploadedFile[]>([]);
   const [honorFiles, setHonorFiles] = useState<UploadedFile[]>([]);
   
+  // Verarbeitete Daten
   const [statsData, setStatsData] = useState<StatProgressRow[]>([]);
-  const [honorHistory, setHonorHistory] = useState<PlayerHonorHistory[]>([]);
   
+  // Honor Specifics
+  const [honorHistory, setHonorHistory] = useState<PlayerHonorHistory[]>([]);
+  const [kvkHonorFiles, setKvkHonorFiles] = useState<UploadedFile[]>([]); // Alle relevanten, sortierten Dateien
+  
+  // Auswahl für Honor-Vergleich
+  const [honorStartFileId, setHonorStartFileId] = useState<string>('');
+  const [honorEndFileId, setHonorEndFileId] = useState<string>('');
+
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+  
+  // View & UI
   const [viewMode, setViewMode] = useState<'stats' | 'honor'>('stats');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -40,10 +52,16 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<HonorPlayerInfo[] | 'not_found' | null>(null);
-  const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
 
-  useEffect(() => { if (slug) loadEvents(); }, [slug]);
-  useEffect(() => { if (slug && selectedEventId) loadFilesAndCalculate(); }, [slug, selectedEventId]);
+  // 1. Load Events
+  useEffect(() => {
+    if (slug) loadEvents();
+  }, [slug]);
+
+  // 2. Load Files when Event Selected
+  useEffect(() => {
+    if (slug && selectedEventId) loadFilesAndCalculate();
+  }, [slug, selectedEventId]);
 
   const loadEvents = async () => {
     try {
@@ -64,6 +82,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     setSelectedPlayerIds([]);
     setSearchResults(null);
     setSearchQuery('');
+    setKvkHonorFiles([]);
 
     try {
       const event = events.find(e => e.id === selectedEventId);
@@ -82,23 +101,32 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       setOverviewFiles(allOverview);
       setHonorFiles(allHonor);
 
-      // A. Stats
+      // --- A. STATS BERECHNUNG ---
       const startFile = allOverview.find(f => f.id === event.startFileId);
       const endFile = allOverview.find(f => f.id === event.endFileId);
       if (startFile && endFile) {
         setStatsData(calculateStatsProgress(startFile, endFile));
       }
 
-      // B. Honor History
+      // --- B. HONOR BERECHNUNG & SETUP ---
+      // Filter & Sortierung
       const relevantHonorFiles = allHonor
         .filter(f => event.honorFileIds.includes(f.id))
         .sort((a, b) => {
             const dateA = a.uploadDate ? new Date(a.uploadDate).getTime() : 0;
             const dateB = b.uploadDate ? new Date(b.uploadDate).getTime() : 0;
+            // Fallback auf Name, falls Datum gleich/fehlt
+            if (dateA === dateB) return a.name.localeCompare(b.name);
             return dateA - dateB;
         });
 
       if (relevantHonorFiles.length > 0) {
+        setKvkHonorFiles(relevantHonorFiles);
+        
+        // Default Auswahl: Start = Erste Datei, Ende = Letzte Datei
+        setHonorStartFileId(relevantHonorFiles[0].id);
+        setHonorEndFileId(relevantHonorFiles[relevantHonorFiles.length - 1].id);
+
         const history = processHonorHistory(relevantHonorFiles);
         setHonorHistory(history);
       }
@@ -115,13 +143,19 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const handleSearch = () => {
     if (!searchQuery.trim()) return;
     const lowerQ = searchQuery.toLowerCase();
+    
+    // Suche im History Array nach dem aktuellsten Eintrag
     const results = honorHistory
         .filter(p => p.name.toLowerCase().includes(lowerQ) || p.id.toLowerCase().includes(lowerQ))
-        .map(p => ({
-            governorId: p.id,
-            name: p.name,
-            honorPoint: p.history[p.history.length - 1].honorPoint 
-        }));
+        .map(p => {
+            // Finde Wert im aktuell gewählten "End"-File, sonst den allerletzten
+            const lastEntry = p.history.find(h => h.fileId === honorEndFileId) || p.history[p.history.length - 1];
+            return {
+                governorId: p.id,
+                name: p.name,
+                honorPoint: lastEntry ? lastEntry.honorPoint : 0
+            };
+        });
     setSearchResults(results.length > 0 ? results : 'not_found');
   };
 
@@ -131,17 +165,14 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
   const handleClearSearch = () => { setSearchQuery(''); setSearchResults(null); };
 
-  // --- Parsing Helpers ---
+  // --- Helpers ---
   const parseAnyNumber = (val: any): number => parseGermanNumber(val);
 
+  // Parse einer einzelnen Honor-Datei
   const parseHonorFile = (file: UploadedFile): HonorPlayerInfo[] => {
-    // 🔍 ID:
     const govIdIdx = findColumnIndex(file.headers, ['governor id', 'id', 'user id']);
-    
-    // 🔍 Name: Exakte Begriffe. "Governor" entfernt, da es "Governor ID" matchen würde!
+    // Wichtig: 'governor' ausgeschlossen bei Namenssuche, da 'Governor ID' sonst matchen würde
     const nameIdx = findColumnIndex(file.headers, ['name', 'display name', 'spieler']);
-    
-    // 🔍 Honor:
     const honorIdx = findColumnIndex(file.headers, ['honor', 'points', 'score', 'ehre']);
 
     if (govIdIdx === undefined || honorIdx === undefined) return [];
@@ -149,7 +180,6 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     return file.data.map(row => {
         const val = row[honorIdx];
         const points = parseAnyNumber(val);
-        // Fallback Name:
         let pName = 'Unknown';
         if (nameIdx !== undefined && row[nameIdx]) pName = String(row[nameIdx]);
 
@@ -157,27 +187,35 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     }).filter(p => p.honorPoint > 0);
   };
 
+  // Erstellt die Historie für alle Spieler über alle Dateien
   const processHonorHistory = (files: UploadedFile[]): PlayerHonorHistory[] => {
     const map = new Map<string, PlayerHonorHistory>();
+
     files.forEach(file => {
       const parsedRows = parseHonorFile(file);
+      
+      // Label für Chart
       let label = file.name.replace(/\.(xlsx|xls|csv)$/i, '').replace(/_/g, ' ');
       if (file.uploadDate) {
            const d = new Date(file.uploadDate);
            label = d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' }) + ` (${label.substring(0,5)})`;
       }
+
       parsedRows.forEach(row => {
         if (!map.has(row.governorId)) {
           map.set(row.governorId, { id: row.governorId, name: row.name, history: [] });
         }
         const entry = map.get(row.governorId)!;
-        entry.name = row.name; 
-        entry.history.push({ fileName: label, honorPoint: row.honorPoint });
+        entry.name = row.name; // Name aktualisieren
+        // Wir speichern fileId zusätzlich für exakte Zuordnung in der Tabelle
+        // @ts-ignore (Erweiterung des Typs on-the-fly, sauberer wäre Update in types.ts)
+        entry.history.push({ fileName: label, fileId: file.id, honorPoint: row.honorPoint });
       });
     });
     return Array.from(map.values());
   };
 
+  // Stats Progress Berechnung
   const calculateStatsProgress = (start: UploadedFile, end: UploadedFile): StatProgressRow[] => {
     const parseRow = (headers: string[], row: any[]) => {
       const getIdx = (keys: string[]) => findColumnIndex(headers, keys);
@@ -210,6 +248,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       const curr = parseRow(end.headers, row);
       if (!curr) return;
       const prev = startMap.get(curr.id);
+      
       const prevPower = prev ? prev.power : 0;
       const prevT4 = prev ? prev.t4 : 0;
       const prevT5 = prev ? prev.t5 : 0;
@@ -231,21 +270,52 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     return result.sort((a, b) => b.totalKillsDiff - a.totalKillsDiff);
   };
 
-  const currentHonorTableData = useMemo(() => {
-    if (honorHistory.length === 0) return [];
+  // --- DYNAMISCHE TABELLEN DATEN ---
+  // Berechnet die Differenz zwischen gewählter Start- und End-Datei
+  const comparisonHonorTableData = useMemo(() => {
+    if (honorHistory.length === 0 || !honorStartFileId || !honorEndFileId) return [];
+    
     return honorHistory.map(h => {
-        const lastEntry = h.history[h.history.length - 1];
+        // Suche den Eintrag für die gewählte Start-Datei
+        // @ts-ignore (fileId property usage)
+        const startEntry = h.history.find(entry => entry.fileId === honorStartFileId);
+        
+        // Suche den Eintrag für die gewählte End-Datei
+        // @ts-ignore
+        const endEntry = h.history.find(entry => entry.fileId === honorEndFileId);
+
+        const startVal = startEntry ? startEntry.honorPoint : 0;
+        const endVal = endEntry ? endEntry.honorPoint : 0;
+
+        // Wenn beide 0 sind (Spieler in beiden Dateien nicht da), filtern wir ihn später raus oder zeigen ihn mit 0 an
+        // Hier: diffHonor ist der Zuwachs
+        let diff = endVal - startVal;
+        
+        // Edge Case: Wenn StartVal 0 ist (Spieler neu), ist diff = endVal.
+        // Wenn EndVal 0 ist (Spieler weg), ist diff negativ.
+        
         return {
             governorId: h.id,
             name: h.name,
-            oldHonor: 0,
-            newHonor: lastEntry.honorPoint,
-            diffHonor: lastEntry.honorPoint
+            oldHonor: startVal,
+            newHonor: endVal,
+            diffHonor: diff
         };
-    }).sort((a, b) => b.newHonor - a.newHonor);
-  }, [honorHistory]);
+    })
+    // Filter: Zeige nur Spieler, die mindestens im End-Snapshot Punkte haben oder Punkte verloren haben (komisch, aber möglich)
+    // Oder einfach alle, die eine Veränderung haben?
+    // Üblicherweise will man sehen, wer am meisten gemacht hat.
+    .filter(p => p.newHonor > 0 || p.diffHonor !== 0)
+    .sort((a, b) => b.diffHonor - a.diffHonor); // Sortiere nach Zuwachs
+  }, [honorHistory, honorStartFileId, honorEndFileId]);
 
   const activeEvent = events.find(e => e.id === selectedEventId);
+
+  // Helper für Dateinamenanzeige in Dropdown
+  const getFileName = (id: string) => {
+      const f = kvkHonorFiles.find(file => file.id === id);
+      return f ? f.name : 'Unbekannt';
+  };
 
   if (events.length === 0 && !loading) {
     return <div className="p-8 text-center text-gray-400">Keine öffentlichen KvK Events gefunden.</div>;
@@ -253,15 +323,23 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
   return (
     <div className="bg-gray-900 min-h-screen text-gray-100 font-sans pb-20">
+      
+      {/* Header */}
       <div className="bg-gradient-to-r from-blue-900 to-gray-900 p-6 shadow-lg border-b border-gray-700">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-white tracking-wider flex items-center">
-              <span className="text-4xl mr-2">⚔️</span> {activeEvent ? activeEvent.name : 'KvK Tracker'}
+              <span className="text-4xl mr-2">⚔️</span> 
+              {activeEvent ? activeEvent.name : 'KvK Tracker'}
             </h1>
           </div>
+          
           {events.length > 1 && (
-            <select className="bg-gray-800 border border-gray-600 text-white p-2 rounded outline-none" value={selectedEventId} onChange={e => setSelectedEventId(e.target.value)}>
+            <select 
+              className="bg-gray-800 border border-gray-600 text-white p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+              value={selectedEventId}
+              onChange={e => setSelectedEventId(e.target.value)}
+            >
               {events.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
             </select>
           )}
@@ -269,28 +347,57 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       </div>
 
       <div className="max-w-7xl mx-auto p-4 md:p-6">
+        
+        {/* Navigation Tabs */}
         <div className="flex justify-center mb-8">
           <div className="bg-gray-800 p-1 rounded-lg inline-flex shadow-md border border-gray-700">
-            <button onClick={() => setViewMode('stats')} className={`px-6 py-2 rounded-md font-bold transition-all ${viewMode === 'stats' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700'}`}>Stats Progress</button>
-            <button onClick={() => setViewMode('honor')} className={`px-6 py-2 rounded-md font-bold transition-all ${viewMode === 'honor' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700'}`}>Honor Dashboard</button>
+            <button
+              onClick={() => setViewMode('stats')}
+              className={`px-6 py-2 rounded-md font-bold transition-all duration-200 ${
+                viewMode === 'stats' 
+                  ? 'bg-blue-600 text-white shadow' 
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              Stats Progress
+            </button>
+            <button
+              onClick={() => setViewMode('honor')}
+              className={`px-6 py-2 rounded-md font-bold transition-all duration-200 ${
+                viewMode === 'honor' 
+                  ? 'bg-purple-600 text-white shadow' 
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              Honor Dashboard
+            </button>
           </div>
         </div>
 
         {error && <div className="bg-red-900/50 border border-red-500 text-red-200 p-4 rounded mb-6 text-center">{error}</div>}
-        {loading && <div className="text-center py-12 text-blue-400 animate-pulse text-xl">Lade Daten...</div>}
+        {loading && <div className="text-center py-12 text-blue-400 animate-pulse text-xl">Lade Daten der Kämpfer...</div>}
 
         {!loading && !error && activeEvent && (
           <div className="animate-fade-in-up">
+            
+            {/* VIEW A: STATS PROGRESS */}
             {viewMode === 'stats' && (
               <div className="bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-700">
+                <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
+                  <h2 className="text-lg font-semibold text-blue-200">Stats Differenz (Start bis Heute)</h2>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
-                        <th className="p-3">#</th><th className="p-3">Name</th><th className="p-3">Allianz</th>
+                        <th className="p-3">#</th>
+                        <th className="p-3">Name</th>
+                        <th className="p-3">Allianz</th>
                         <th className="p-3 text-right text-yellow-500">Power $\Delta$</th>
-                        <th className="p-3 text-right text-red-400">T4 $\Delta$</th><th className="p-3 text-right text-red-500">T5 $\Delta$</th>
-                        <th className="p-3 text-right text-red-300 font-bold">Total $\Delta$</th><th className="p-3 text-right text-gray-400">Dead $\Delta$</th>
+                        <th className="p-3 text-right text-red-400">T4 $\Delta$</th>
+                        <th className="p-3 text-right text-red-500">T5 $\Delta$</th>
+                        <th className="p-3 text-right text-red-300 font-bold">Total $\Delta$</th>
+                        <th className="p-3 text-right text-gray-400">Dead $\Delta$</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700 text-sm">
@@ -299,36 +406,45 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                           <td className="p-3 text-gray-500 font-mono">{idx + 1}</td>
                           <td className="p-3 font-medium text-white">{row.name}</td>
                           <td className="p-3 text-gray-300">[{row.alliance}]</td>
-                          <td className={`p-3 text-right font-mono ${row.powerDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>{row.powerDiff > 0 ? '+' : ''}{formatNumber(row.powerDiff)}</td>
+                          <td className={`p-3 text-right font-mono ${row.powerDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {row.powerDiff > 0 ? '+' : ''}{formatNumber(row.powerDiff)}
+                          </td>
                           <td className="p-3 text-right font-mono text-gray-300">+{formatNumber(row.t4KillsDiff)}</td>
                           <td className="p-3 text-right font-mono text-gray-300">+{formatNumber(row.t5KillsDiff)}</td>
                           <td className="p-3 text-right font-mono font-bold text-yellow-400">+{formatNumber(row.totalKillsDiff)}</td>
                           <td className="p-3 text-right font-mono text-gray-400">+{formatNumber(row.deadDiff)}</td>
                         </tr>
                       ))}
+                      {statsData.length === 0 && (
+                        <tr><td colSpan={8} className="p-8 text-center text-gray-500">Keine Daten verfügbar oder unpassende Dateien.</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
 
+            {/* VIEW B: HONOR DASHBOARD */}
             {viewMode === 'honor' && (
-              <div className="space-y-6">
+              <div className="space-y-8">
+                 
+                 {/* 1. Chart Section */}
                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-1">
+                    {/* Search / Filter */}
+                    <div className="lg:col-span-1 space-y-4">
                         <HonorPlayerSearch 
                             query={searchQuery}
                             setQuery={setSearchQuery}
                             onSearch={handleSearch}
                             onClear={handleClearSearch}
                             results={searchResults}
-                            selectedPlayerHistory={null} 
+                            selectedPlayerHistory={null}
                             onSelectPlayer={handleSelectPlayer}
                             isDataLoaded={honorHistory.length > 0}
                         />
                          {selectedPlayerIds.length > 0 && (
-                             <div className="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
-                                 <h4 className="text-sm font-semibold text-gray-300 mb-2">Ausgewählt:</h4>
+                             <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                                 <h4 className="text-sm font-semibold text-gray-300 mb-2">Ausgewählte Spieler im Chart:</h4>
                                  <div className="flex flex-wrap gap-2">
                                      {selectedPlayerIds.map(id => {
                                          const p = honorHistory.find(h => h.id === id);
@@ -343,18 +459,78 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                              </div>
                          )}
                     </div>
+
+                    {/* Chart */}
                     <div className="lg:col-span-2">
                         {honorHistory.length > 0 ? (
                              <HonorHistoryChart 
                                 data={honorHistory} 
                                 selectedPlayerIds={selectedPlayerIds.length > 0 ? selectedPlayerIds : undefined} 
                              />
-                        ) : <div className="h-64 bg-gray-800 rounded-xl flex items-center justify-center text-gray-500 border border-gray-700">Keine Honor-Daten verfügbar.</div>}
+                        ) : (
+                            <div className="h-64 bg-gray-800 rounded-xl flex items-center justify-center text-gray-500 border border-gray-700">
+                                Keine Honor-Daten verfügbar.
+                            </div>
+                        )}
                     </div>
                  </div>
-                {currentHonorTableData.length > 0 && <HonorOverviewTable stats={{ playerHonorChanges: currentHonorTableData }} />}
+
+                {/* 2. Comparison / Ranking Table Section */}
+                <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
+                    <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4 border-b border-gray-700 pb-4">
+                        <div>
+                            <h2 className="text-xl font-bold text-white">Honor Ranking & Vergleich</h2>
+                            <p className="text-sm text-gray-400">Vergleiche den Fortschritt zwischen zwei Zeitpunkten.</p>
+                        </div>
+                        
+                        {/* 🆕 Start / End Selector */}
+                        <div className="flex gap-2 items-center bg-gray-900 p-2 rounded-lg">
+                            <div className="flex flex-col">
+                                <label className="text-[10px] text-gray-500 uppercase font-bold pl-1">Start</label>
+                                <select 
+                                    className="bg-gray-800 text-white text-sm border border-gray-600 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500 outline-none max-w-[150px] truncate"
+                                    value={honorStartFileId}
+                                    onChange={(e) => setHonorStartFileId(e.target.value)}
+                                >
+                                    {kvkHonorFiles.map(f => (
+                                        <option key={f.id} value={f.id}>
+                                            {f.uploadDate ? new Date(f.uploadDate).toLocaleDateString() : f.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <span className="text-gray-500 mt-3">➜</span>
+                            <div className="flex flex-col">
+                                <label className="text-[10px] text-gray-500 uppercase font-bold pl-1">Ende</label>
+                                <select 
+                                    className="bg-gray-800 text-white text-sm border border-gray-600 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500 outline-none max-w-[150px] truncate"
+                                    value={honorEndFileId}
+                                    onChange={(e) => setHonorEndFileId(e.target.value)}
+                                >
+                                    {kvkHonorFiles.map(f => (
+                                        <option key={f.id} value={f.id}>
+                                            {f.uploadDate ? new Date(f.uploadDate).toLocaleDateString() : f.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    {comparisonHonorTableData.length > 0 ? (
+                      <HonorOverviewTable 
+                        stats={{ playerHonorChanges: comparisonHonorTableData }} 
+                        startFileName={getFileName(honorStartFileId)}
+                        endFileName={getFileName(honorEndFileId)}
+                      />
+                    ) : (
+                      <div className="p-8 text-center text-gray-500">Keine Daten für diesen Zeitraum verfügbar.</div>
+                    )}
+                </div>
+
               </div>
             )}
+            
           </div>
         )}
       </div>
