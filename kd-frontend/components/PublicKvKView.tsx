@@ -15,7 +15,6 @@ type StatProgressRow = {
   deadDiff: number;
 };
 
-// Props Definition
 interface PublicKvKViewProps {
   kingdomSlug: string;
 }
@@ -26,11 +25,9 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   
-  // Rohdaten (alle Files des Kingdoms)
   const [overviewFiles, setOverviewFiles] = useState<UploadedFile[]>([]);
   const [honorFiles, setHonorFiles] = useState<UploadedFile[]>([]);
   
-  // Berechnete Daten für die Anzeige
   const [statsData, setStatsData] = useState<StatProgressRow[]>([]);
   const [honorData, setHonorData] = useState<HonorPlayerInfo[]>([]);
   
@@ -45,7 +42,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     }
   }, [slug]);
 
-  // 2. Laden der Files, wenn ein Event ausgewählt ist (oder das erste automatisch)
+  // 2. Laden der Files, wenn ein Event ausgewählt ist
   useEffect(() => {
     if (slug && selectedEventId) {
       loadFilesAndCalculate();
@@ -57,7 +54,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       const evs = await fetchPublicKvkEvents(slug!);
       setEvents(evs);
       if (evs.length > 0) {
-        setSelectedEventId(evs[0].id); // Wähle das neueste Event standardmäßig
+        setSelectedEventId(evs[0].id);
       }
     } catch (e) {
       console.error(e);
@@ -72,7 +69,6 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       const event = events.find(e => e.id === selectedEventId);
       if (!event) return;
 
-      // Parallel Files laden (Optimierung: Könnte man auch cachen)
       const [ovRes, honRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/public/kingdom/${slug}/overview-files`),
         fetch(`${API_BASE_URL}/api/public/kingdom/${slug}/honor-files`)
@@ -86,7 +82,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       setOverviewFiles(allOverview);
       setHonorFiles(allHonor);
 
-      // --- BERECHNUNG STATS PROGRESS ---
+      // --- STATS ---
       const startFile = allOverview.find(f => f.id === event.startFileId);
       const endFile = allOverview.find(f => f.id === event.endFileId);
 
@@ -94,18 +90,17 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         const calculated = calculateStatsProgress(startFile, endFile);
         setStatsData(calculated);
       } else {
-        setStatsData([]); // Keine vollständigen Daten für Stats
+        setStatsData([]);
       }
 
-      // --- BERECHNUNG HONOR RANKING ---
-      // Wir nehmen vereinfacht an: Die Honor-Files sind Schnappschüsse. 
-      // Wir wollen das Ranking basierend auf der *neuesten* Datei im Event anzeigen.
+      // --- HONOR ---
+      // Filtere Honor-Dateien, die zu diesem Event gehören
       const relevantHonorFiles = allHonor
         .filter(f => event.honorFileIds.includes(f.id))
-        .sort((a, b) => (a.name > b.name ? 1 : -1)); 
+        .sort((a, b) => (a.name > b.name ? 1 : -1)); // Sortiere nach Name/Datum
 
       if (relevantHonorFiles.length > 0) {
-        // Nimm die letzte (aktuellste) Datei für das Ranking
+        // Wir nehmen die aktuellste Datei für das Ranking
         const latestHonorFile = relevantHonorFiles[relevantHonorFiles.length - 1];
         const parsedHonor = parseHonorFile(latestHonorFile);
         setHonorData(parsedHonor);
@@ -125,8 +120,11 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const calculateStatsProgress = (start: UploadedFile, end: UploadedFile): StatProgressRow[] => {
     const parseRow = (headers: string[], row: any[]) => {
       const getIdx = (keys: string[]) => findColumnIndex(headers, keys);
-      const idIdx = getIdx(['id', 'governor', 'fid']);
-      const nameIdx = getIdx(['name', 'spieler', 'governor name']);
+      
+      // 🔍 PRÄZISERE SUCHE:
+      const idIdx = getIdx(['id', 'governor id', 'user id']);
+      // 'name' soll nicht 'governor id' finden, daher spezifischer oder 'governor' weglassen
+      const nameIdx = getIdx(['name', 'display name', 'spieler']); 
       const allyIdx = getIdx(['alliance', 'allianz', 'tag']);
       const powerIdx = getIdx(['power', 'kraft']);
       const t4Idx = getIdx(['t4 kills', 'tier 4 kills']);
@@ -165,7 +163,6 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       const prevT5 = prev ? prev.t5 : 0;
       const prevDead = prev ? prev.dead : 0;
 
-      // Berechnung Delta
       const t4Diff = Math.max(0, curr.t4 - prevT4); 
       const t5Diff = Math.max(0, curr.t5 - prevT5);
       
@@ -186,11 +183,22 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
   // --- Helper: Honor Parsing ---
   const parseHonorFile = (file: UploadedFile): HonorPlayerInfo[] => {
-    const govIdIdx = findColumnIndex(file.headers, ['governor id', 'id']);
-    const nameIdx = findColumnIndex(file.headers, ['governor', 'name']);
-    const honorIdx = findColumnIndex(file.headers, ['honor', 'points', 'score']);
+    // 🔍 FIX: Bessere Keywords für exakte Spaltenerkennung
+    
+    // ID: Suche nach "id" oder "governor id"
+    const govIdIdx = findColumnIndex(file.headers, ['governor id', 'id', 'user id']);
+    
+    // Name: Suche explizit nach "name" oder "display name". 
+    // WICHTIG: "governor" wurde entfernt, da es sonst "Governor ID" matcht!
+    const nameIdx = findColumnIndex(file.headers, ['name', 'display name', 'spieler', 'governor name']);
+    
+    // Honor: Suche nach "honor", "points", "score"
+    const honorIdx = findColumnIndex(file.headers, ['honor', 'honor points', 'score', 'points', 'ehre']);
 
-    if (govIdIdx === undefined || honorIdx === undefined) return [];
+    if (govIdIdx === undefined || honorIdx === undefined) {
+      console.warn('Honor columns not found:', { govIdIdx, nameIdx, honorIdx, headers: file.headers });
+      return [];
+    }
 
     return file.data.map(row => ({
       governorId: String(row[govIdIdx]),
@@ -322,15 +330,14 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                   Zeigt den aktuellen Stand basierend auf dem neuesten Honor-Scan.
                 </div>
                 {honorData.length > 0 ? (
-                  // 🔧 KORREKTUR: Wir transformieren die Daten in das erwartete 'stats' Format für HonorOverviewTable
                   <HonorOverviewTable 
                     stats={{
                       playerHonorChanges: honorData.map(h => ({
                         governorId: h.governorId,
                         name: h.name,
-                        oldHonor: 0, // Da kein Vergleich, setzen wir Alt auf 0
+                        oldHonor: 0,
                         newHonor: h.honorPoint,
-                        diffHonor: h.honorPoint // Wir nutzen diffHonor als "Total", damit die Sortierung in der Tabelle greift
+                        diffHonor: h.honorPoint 
                       }))
                     }} 
                   />
