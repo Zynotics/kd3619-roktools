@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import FileUpload from './FileUpload';
 import FileList from './FileList';
-// 🛠️ FIX: Named Imports statt Default Import
-import { Table, TableHeader, TableRow, TableCell } from './Table'; 
+import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { useAuth } from './AuthContext';
 import { cleanFileName, parseGermanNumber, findColumnIndex } from '../utils';
 import type { UploadedFile, ActivityPlayerInfo } from '../types';
@@ -12,6 +11,11 @@ interface ActivityDashboardProps {
   backendUrl: string;
 }
 
+// Erweitertes Interface für die Anzeige inkl. Score
+interface ScoredPlayerInfo extends ActivityPlayerInfo {
+    score: number;
+}
+
 const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendUrl }) => {
   const { user } = useAuth();
   const [files, setFiles] = useState<UploadedFile[]>([]);
@@ -19,8 +23,15 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
   const [activityData, setActivityData] = useState<ActivityPlayerInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 🛠️ FIX: Eigener State für Sortierung, da Table.tsx dies nicht kann
-  const [sortColumn, setSortColumn] = useState<keyof ActivityPlayerInfo | 'rank'>('techDonation');
+  // ⚖️ NEU: State für die Gewichtung (Multiplikatoren)
+  const [weights, setWeights] = useState({
+      helps: 2,      // Standard: Helps zählen doppelt (Beispiel)
+      tech: 1,       // Standard: Tech zählt einfach
+      building: 1    // Standard: Building zählt einfach
+  });
+
+  // Sortierung
+  const [sortColumn, setSortColumn] = useState<keyof ScoredPlayerInfo | 'rank'>('score');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // 1. Dateien laden
@@ -91,20 +102,22 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
       if (selectedFileId) parseFile(selectedFileId); 
   }, [selectedFileId, parseFile]);
 
-  // 🛠️ FIX: Logik für Sortierung implementieren
-  const handleSort = (column: keyof ActivityPlayerInfo | 'rank') => {
-      if (sortColumn === column) {
-          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-      } else {
-          setSortColumn(column);
-          setSortDirection('desc');
-      }
-  };
+  // 🔢 NEU: Daten mit Score berechnen und sortieren
+  const processedData = useMemo(() => {
+      // 1. Score berechnen
+      const scored: ScoredPlayerInfo[] = activityData.map(p => ({
+          ...p,
+          score: (p.helpTimes * weights.helps) + (p.buildingScore * weights.building) + (p.techDonation * weights.tech)
+      }));
 
-  const sortedData = useMemo(() => {
-      if (sortColumn === 'rank') return activityData; // Rank ist implizit durch Index
+      // 2. Sortieren
+      return scored.sort((a, b) => {
+          if (sortColumn === 'rank') {
+              // Wenn nach Rank sortiert wird, ist das eigentlich implizit nach Score sortiert
+              // (höchster Score = Rank 1)
+              return sortDirection === 'asc' ? a.score - b.score : b.score - a.score;
+          }
 
-      return [...activityData].sort((a, b) => {
           // @ts-ignore
           const valA = a[sortColumn]; 
           // @ts-ignore
@@ -113,19 +126,40 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
           if (typeof valA === 'number' && typeof valB === 'number') {
               return sortDirection === 'asc' ? valA - valB : valB - valA;
           }
-          return 0; // Fallback für Strings, falls nötig
+          if (typeof valA === 'string' && typeof valB === 'string') {
+               return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+          }
+          return 0; 
       });
-  }, [activityData, sortColumn, sortDirection]);
+  }, [activityData, weights, sortColumn, sortDirection]);
+
+
+  const handleSort = (column: keyof ScoredPlayerInfo | 'rank') => {
+      if (sortColumn === column) {
+          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+      } else {
+          setSortColumn(column);
+          setSortDirection('desc'); // Bei Wechsel Default desc (meistens sinnvoller für Zahlen)
+      }
+  };
 
   // 3. Spalten Definition
   const columns = [
-    { header: 'Rank', accessor: 'rank', className: "w-16 text-center text-gray-500", sortable: false },
+    { header: 'Rank', accessor: 'rank', className: "w-16 text-center text-gray-500", sortable: false }, // Rank ist dynamisch
     { header: 'Name', accessor: 'name', className: "font-medium text-white", sortable: false },
     { header: 'ID', accessor: 'id', className: "text-gray-400 text-xs hidden sm:table-cell", sortable: false },
     { header: 'Alliance', accessor: 'alliance', className: "text-blue-400", sortable: false },
+    // Score Spalte
+    { 
+        header: 'Total Score', 
+        accessor: 'score', 
+        sortable: true, 
+        className: "font-bold text-yellow-400 bg-yellow-900/10",
+        format: (v: number) => Math.round(v).toLocaleString() 
+    },
     { header: 'Helps', accessor: 'helpTimes', sortable: true, format: (v: number) => v.toLocaleString() },
-    { header: 'Tech Donation', accessor: 'techDonation', sortable: true, format: (v: number) => v.toLocaleString() },
-    { header: 'Construction', accessor: 'buildingScore', sortable: true, format: (v: number) => v.toLocaleString() },
+    { header: 'Tech', accessor: 'techDonation', sortable: true, format: (v: number) => v.toLocaleString() },
+    { header: 'Build', accessor: 'buildingScore', sortable: true, format: (v: number) => v.toLocaleString() },
     { header: 'RSS Assist', accessor: 'rssTrading', sortable: true, format: (v: number) => v.toLocaleString() },
     { header: 'Power', accessor: 'power', sortable: true, format: (v: number) => v.toLocaleString(), className: "text-gray-400" },
   ];
@@ -141,7 +175,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                 </svg>
                 Upload Weekly Activity
              </h3>
-             <p className="text-sm text-gray-400 mb-4">Upload .xlsx or .csv files containing weekly activity data (Helps, Tech, etc.).</p>
+             <p className="text-sm text-gray-400 mb-4">Upload .xlsx or .csv files containing weekly activity data.</p>
              <FileUpload uploadUrl={`${backendUrl}/activity/upload`} onUploadComplete={fetchFiles} />
           </div>
 
@@ -170,24 +204,57 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
 
       {/* Daten-Anzeige */}
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 min-h-[500px]">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <div>
-                <h2 className="text-xl font-bold text-white">Activity Report</h2>
-                <p className="text-sm text-gray-400">
-                    {files.length > 0 ? 'Select a week/file to view details.' : 'No data available.'}
-                </p>
-            </div>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-6">
             
-            {files.length > 0 && (
+            {/* Linke Seite: Titel & File Select */}
+            <div>
+                <h2 className="text-xl font-bold text-white mb-2">Activity Ranking</h2>
                 <div className="flex items-center space-x-2">
-                    <label className="text-sm text-gray-300">View File:</label>
+                    <label className="text-sm text-gray-400">Week:</label>
                     <select 
-                        className="bg-gray-700 text-white p-2 rounded border border-gray-600 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="bg-gray-700 text-white p-1.5 rounded border border-gray-600 text-xs focus:ring-2 focus:ring-blue-500 outline-none max-w-[200px]"
                         value={selectedFileId}
                         onChange={(e) => setSelectedFileId(e.target.value)}
+                        disabled={files.length === 0}
                     >
+                        {files.length === 0 && <option>No files</option>}
                         {files.map(f => <option key={f.id} value={f.id}>{cleanFileName(f.name)}</option>)}
                     </select>
+                </div>
+            </div>
+            
+            {/* Rechte Seite: Score Settings (nur sichtbar, wenn Daten da sind) */}
+            {activityData.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center gap-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 sm:mb-0">Score Weights:</span>
+                    
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs text-blue-300">Helps ×</label>
+                        <input 
+                            type="number" min="0" step="0.1"
+                            value={weights.helps}
+                            onChange={(e) => setWeights(p => ({ ...p, helps: parseFloat(e.target.value) || 0 }))}
+                            className="w-12 bg-gray-800 border border-gray-600 rounded text-center text-xs text-white p-1 focus:border-blue-500 outline-none"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs text-green-300">Build ×</label>
+                        <input 
+                            type="number" min="0" step="0.1"
+                            value={weights.building}
+                            onChange={(e) => setWeights(p => ({ ...p, building: parseFloat(e.target.value) || 0 }))}
+                            className="w-12 bg-gray-800 border border-gray-600 rounded text-center text-xs text-white p-1 focus:border-green-500 outline-none"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs text-purple-300">Tech ×</label>
+                        <input 
+                            type="number" min="0" step="0.1"
+                            value={weights.tech}
+                            onChange={(e) => setWeights(p => ({ ...p, tech: parseFloat(e.target.value) || 0 }))}
+                            className="w-12 bg-gray-800 border border-gray-600 rounded text-center text-xs text-white p-1 focus:border-purple-500 outline-none"
+                        />
+                    </div>
                 </div>
             )}
         </div>
@@ -195,7 +262,6 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
         {isLoading ? (
             <div className="text-center text-gray-500 py-20">Loading data...</div>
         ) : activityData.length > 0 ? (
-            // 🛠️ FIX: Manuelles Rendering der Tabelle mit den primitiven Komponenten aus Table.tsx
             <Table>
                 <TableHeader>
                     <TableRow hover={false}>
@@ -204,9 +270,9 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                                 key={idx} 
                                 header 
                                 className={`cursor-pointer select-none ${col.className || ''}`}
-                                onClick={() => col.sortable ? handleSort(col.accessor as keyof ActivityPlayerInfo) : undefined}
+                                onClick={() => col.sortable ? handleSort(col.accessor as keyof ScoredPlayerInfo) : undefined}
                             >
-                                <div className="flex items-center gap-1">
+                                <div className={`flex items-center gap-1 ${col.accessor === 'score' ? 'justify-end' : ''}`}>
                                     {col.header}
                                     {col.sortable && sortColumn === col.accessor && (
                                         <span className='text-blue-400 text-xs'>{sortDirection === 'asc' ? '▲' : '▼'}</span>
@@ -217,11 +283,13 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                     </TableRow>
                 </TableHeader>
                 <tbody>
-                    {sortedData.map((row, rowIdx) => (
+                    {processedData.map((row, rowIdx) => (
                         <TableRow key={row.id || rowIdx}>
                             {columns.map((col, colIdx) => {
                                 let content;
                                 if (col.accessor === 'rank') {
+                                    // Rank ist einfach die Zeilennummer im sortierten Array + 1
+                                    // (ggf. noch mit Pagination verrechnen, wenn Pagination eingebaut wird)
                                     content = rowIdx + 1;
                                 } else {
                                     // @ts-ignore
@@ -229,7 +297,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                                     content = col.format ? col.format(val) : val;
                                 }
                                 return (
-                                    <TableCell key={colIdx} className={col.className}>
+                                    <TableCell key={colIdx} className={col.className} align={col.accessor === 'score' ? 'right' : 'left'}>
                                         {content}
                                     </TableCell>
                                 );
