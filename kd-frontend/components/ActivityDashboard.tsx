@@ -35,18 +35,30 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
   const [activityData, setActivityData] = useState<ActivityPlayerInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // ⚖️ Score Gewichtung
-  const [weights, setWeights] = useState({
-      helps: 2,
-      tech: 1,
-      building: 1
+  // ⚖️ Score Gewichtung (mit LocalStorage Persistence)
+  const [weights, setWeights] = useState(() => {
+      const saved = localStorage.getItem('activity_weights');
+      if (saved) {
+          try {
+              return JSON.parse(saved);
+          } catch (e) {
+              console.error("Failed to parse saved weights", e);
+          }
+      }
+      // Default Werte
+      return { helps: 2, tech: 1, building: 1 };
   });
+
+  // Speichern der Weights bei Änderung
+  useEffect(() => {
+      localStorage.setItem('activity_weights', JSON.stringify(weights));
+  }, [weights]);
+
 
   // 🔍 Allianz Filter State
   const [selectedAlliances, setSelectedAlliances] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   
-  // 🛠️ FIX: Hier war der Fehler. Korrekte TypeScript Syntax:
   const filterRef = useRef<HTMLDivElement>(null);
   
   useOutsideAlerter(filterRef, () => setIsFilterOpen(false));
