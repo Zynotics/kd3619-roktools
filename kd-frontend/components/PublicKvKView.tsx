@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
-// import { useParams } from 'react-router-dom'; // ❌ ENTFERNT
 import { KvkEvent, UploadedFile, HonorPlayerInfo } from '../types';
-import { fetchPublicKvkEvents } from '../api';
+import { fetchPublicKvkEvents, API_BASE_URL } from '../api'; // 🆕 Import API_BASE_URL
 import { findColumnIndex, formatNumber, parseGermanNumber } from '../utils';
 import HonorOverviewTable from './HonorOverviewTable'; 
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 type StatProgressRow = {
   id: string;
@@ -18,14 +15,13 @@ type StatProgressRow = {
   deadDiff: number;
 };
 
-// 🆕 NEU: Props Definition
+// Props Definition
 interface PublicKvKViewProps {
   kingdomSlug: string;
 }
 
 const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
-  // const { slug } = useParams<{ slug: string }>(); // ❌ ENTFERNT
-  const slug = kingdomSlug; // Wir nutzen den Prop
+  const slug = kingdomSlug;
 
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
