@@ -13,61 +13,64 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ data, selectedPla
     const chartRef = useRef<HTMLCanvasElement>(null);
     const chartInstanceRef = useRef<Chart | null>(null);
 
-    // Filtere die Daten basierend auf der Auswahl
     const chartData = useMemo(() => {
         if (!data || data.length === 0) return null;
 
-        // Wenn keine Spieler ausgewählt sind, zeigen wir standardmäßig die Top 5 (nach aktuellem Honor)
-        let playersToShow = [];
-        if (selectedPlayerIds && selectedPlayerIds.length > 0) {
-            playersToShow = data.filter(p => selectedPlayerIds.includes(p.id));
-        } else {
-            // Sortiere nach dem letzten bekannten Honor-Wert
-            playersToShow = [...data]
-                .sort((a, b) => {
-                    const lastA = a.history[a.history.length - 1]?.honorPoint || 0;
-                    const lastB = b.history[b.history.length - 1]?.honorPoint || 0;
-                    return lastB - lastA;
-                })
-                .slice(0, 5);
-        }
-
-        if (playersToShow.length === 0) return null;
-
-        // Alle einzigartigen Labels (Zeitpunkte/Dateinamen) sammeln
-        // Wir nehmen an, dass alle Spieler ähnliche History-Einträge haben, aber sicherheitshalber sammeln wir alle.
+        // 1. Alle Zeitpunkte (Labels) sammeln (aus allen Datensätzen, um Lücken zu vermeiden)
         const allLabelsSet = new Set<string>();
-        playersToShow.forEach(p => {
-            p.history.forEach(h => allLabelsSet.add(h.fileName));
-        });
+        data.forEach(p => p.history.forEach(h => allLabelsSet.add(h.fileName)));
         const labels = Array.from(allLabelsSet); 
-        // Optional: Sortieren, falls die Labels Datumsinformationen enthalten, 
-        // hier verlassen wir uns auf die Reihenfolge der Verarbeitung.
+        // Hinweis: Wir gehen davon aus, dass die Reihenfolge durch die Sortierung im Parent (PublicKvKView) stimmt.
 
-        const datasets = playersToShow.map((player, index) => {
-            // Farben rotieren
-            const colors = [
-                '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', 
-                '#ec4899', '#6366f1', '#14b8a6'
-            ];
-            const color = colors[index % colors.length];
+        let datasets = [];
+        const hasSelection = selectedPlayerIds && selectedPlayerIds.length > 0;
 
-            // Datenpunkte mappen (falls ein Spieler zu einem Zeitpunkt keinen Eintrag hat, nutzen wir null oder den vorherigen Wert)
-            const dataPoints = labels.map(label => {
-                const entry = player.history.find(h => h.fileName === label);
-                return entry ? entry.honorPoint : null;
+        if (hasSelection) {
+            // --- MODUS A: Ausgewählte Spieler vergleichen ---
+            const playersToShow = data.filter(p => selectedPlayerIds!.includes(p.id));
+            
+            datasets = playersToShow.map((player, index) => {
+                const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'];
+                const color = colors[index % colors.length];
+
+                // Datenpunkte mappen
+                const dataPoints = labels.map(label => {
+                    const entry = player.history.find(h => h.fileName === label);
+                    return entry ? entry.honorPoint : null; // null unterbricht die Linie oder wird interpoliert
+                });
+
+                return {
+                    label: player.name,
+                    data: dataPoints,
+                    borderColor: color,
+                    backgroundColor: color,
+                    tension: 0.2,
+                    pointRadius: 4,
+                    spanGaps: true
+                };
+            });
+        } else {
+            // --- MODUS B: Gesamtverlauf (Summe aller Spieler) ---
+            const totalData = labels.map(label => {
+                let sum = 0;
+                // Summiere Honor aller Spieler zu diesem Zeitpunkt
+                data.forEach(player => {
+                    const entry = player.history.find(h => h.fileName === label);
+                    if (entry) sum += entry.honorPoint;
+                });
+                return sum;
             });
 
-            return {
-                label: player.name,
-                data: dataPoints,
-                borderColor: color,
-                backgroundColor: color,
-                tension: 0.1,
-                pointRadius: 4,
-                pointHoverRadius: 6
-            };
-        });
+            datasets.push({
+                label: 'Gesamt Honor (Königreich)',
+                data: totalData,
+                borderColor: '#fbbf24', // Amber/Gold
+                backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4
+            });
+        }
 
         return { labels, datasets };
     }, [data, selectedPlayerIds]);
@@ -102,12 +105,8 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ data, selectedPla
                         callbacks: {
                             label: function(context: any) {
                                 let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': ';
-                                }
-                                if (context.parsed.y !== null) {
-                                    label += formatNumber(context.parsed.y);
-                                }
+                                if (label) label += ': ';
+                                if (context.parsed.y !== null) label += formatNumber(context.parsed.y);
                                 return label;
                             }
                         }
@@ -115,7 +114,7 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ data, selectedPla
                 },
                 scales: {
                     x: {
-                        ticks: { color: '#9ca3af' },
+                        ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 0 },
                         grid: { color: 'rgba(255, 255, 255, 0.05)' }
                     },
                     y: {
@@ -123,7 +122,8 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ data, selectedPla
                             color: '#9ca3af',
                             callback: (value: any) => abbreviateNumber(value)
                         },
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        beginAtZero: true
                     }
                 }
             }
@@ -137,17 +137,13 @@ const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ data, selectedPla
     }, [chartData]);
 
     if (!data || data.length === 0) {
-        return (
-            <Card className="p-6 text-center text-gray-500 bg-gray-800">
-                Keine Daten für den Chart verfügbar.
-            </Card>
-        );
+        return <Card className="p-6 text-center text-gray-500 bg-gray-800">Keine Daten für den Chart verfügbar.</Card>;
     }
 
     return (
         <Card className="p-6 bg-gray-800 border-gray-700 shadow-xl">
             <h3 className="text-lg font-semibold text-gray-200 mb-4">
-                Honor Verlauf {selectedPlayerIds && selectedPlayerIds.length > 0 ? '(Ausgewählt)' : '(Top 5)'}
+                {selectedPlayerIds && selectedPlayerIds.length > 0 ? 'Spieler Vergleich' : 'Verlauf Gesamtpunkte'}
             </h3>
             <div className="relative h-80 w-full">
                 <canvas ref={chartRef}></canvas>
