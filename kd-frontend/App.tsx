@@ -7,8 +7,8 @@ import OverviewDashboard from './components/OverviewDashboard';
 import ActivityDashboard from './components/ActivityDashboard';
 import PowerAnalyticsDashboard from './components/PowerAnalyticsDashboard';
 import LoginPrompt from './components/LoginPrompt';
-import KvkManager from './components/KvkManager';     // 🆕 NEU
-import PublicKvkView from './components/PublicKvkView'; // 🆕 NEU
+import KvkManager from './components/KvkManager';     
+import PublicKvKView from './components/PublicKvKView'; // ✏️ KORRIGIERT (Großes 'K' bei KvK)
 
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
@@ -334,7 +334,7 @@ const AppContent: React.FC = () => {
                     accessType="honor" // Nutzt 'honor' Access-Recht als Fallback für Logged-In User
                     isAdminOverride={isAdminOverrideView}
                     >
-                      {isAdmin ? <KvkManager /> : <PublicKvkView />}
+                      {isAdmin ? <KvkManager /> : <PublicKvKView />}
                     </PublicOrProtectedRoute>
                 )}
 
@@ -367,7 +367,6 @@ const AppContent: React.FC = () => {
   );
 };
 
-// ... (Rest bleibt gleich)
 interface PublicOrProtectedRouteProps {
   children: React.ReactNode;
   isPublic: boolean;
