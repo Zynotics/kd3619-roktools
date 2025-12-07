@@ -1,19 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminUserManagement from './components/AdminUserManagement';
 import OverviewDashboard from './components/OverviewDashboard';
-import HonorDashboard from './components/HonorDashboard';
+// HonorDashboard importieren wir nicht mehr direkt für die Sidebar, wird aber evtl. intern genutzt
 import ActivityDashboard from './components/ActivityDashboard';
 import PowerAnalyticsDashboard from './components/PowerAnalyticsDashboard';
 import LoginPrompt from './components/LoginPrompt';
+import KvkManager from './components/KvkManager';     // 🆕 NEU
+import PublicKvkView from './components/PublicKvkView'; // 🆕 NEU
 
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
     ? 'https://api.rise-of-stats.com'
     : 'http://localhost:4000';
 
-type ActiveView = 'overview' | 'honor' | 'analytics' | 'admin' | 'activity';
+// 🆕 'honor' entfernt, 'kvk' hinzugefügt
+type ActiveView = 'overview' | 'kvk' | 'analytics' | 'admin' | 'activity';
 
 // Sidebar Navigation Item
 const NavItem: React.FC<{
@@ -67,8 +70,7 @@ const AppContent: React.FC = () => {
   const isR4 = user?.role === 'r4';
   const isAdmin = isSuperAdmin || isR5; 
 
-  // 🔒 Sunkbarkeit Activity: Nur für eingeloggte User mit Rolle R4, R5 oder Admin
-  // Public Link User (user === null) und normale User (role === 'user') sind ausgeschlossen.
+  // 🔒 Activity: Nur für eingeloggte User mit Rolle R4, R5 oder Admin
   const canViewActivity = user && (isSuperAdmin || isR5 || isR4);
 
   const isPublicView = !!publicSlug && !user && !isRegisterInvite;
@@ -208,7 +210,7 @@ const AppContent: React.FC = () => {
               label="Analytics"
               icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>}
             />
-            {/* 🔒 Activity: Nur anzeigen, wenn berechtigt (R4/R5/Admin) */}
+            {/* 🔒 Activity */}
             {canViewActivity && (
               <NavItem
                 view="activity"
@@ -218,13 +220,15 @@ const AppContent: React.FC = () => {
                 icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>}
               />
             )}
+            {/* 🆕 KVK statt HONOR */}
             <NavItem
-              view="honor"
+              view="kvk"
               currentActiveView={activeView}
               setActiveView={setActiveView}
-              label="Honor"
+              label="KvK"
               icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
             />
+            
             <NavItem
               view="analytics"
               currentActiveView={activeView}
@@ -308,7 +312,6 @@ const AppContent: React.FC = () => {
                     </PublicOrProtectedRoute>
                 )}
 
-                {/* 🔒 Activity: Nur rendern, wenn canViewActivity (R4/R5/Admin) wahr ist */}
                 {activeView === 'activity' && canViewActivity && (
                     <PublicOrProtectedRoute
                     isPublic={isPublicView}
@@ -323,19 +326,15 @@ const AppContent: React.FC = () => {
                     </PublicOrProtectedRoute>
                 )}
 
-                {activeView === 'honor' && (
+                {/* 🆕 KVK: Zeigt Manager für Admins/R5, PublicView für alle anderen */}
+                {activeView === 'kvk' && (
                     <PublicOrProtectedRoute
                     isPublic={isPublicView}
                     publicSlug={publicSlug}
-                    accessType="honor"
+                    accessType="honor" // Nutzt 'honor' Access-Recht als Fallback für Logged-In User
                     isAdminOverride={isAdminOverrideView}
                     >
-                    <HonorDashboard
-                        isAdmin={!!isAdmin}
-                        backendUrl={BACKEND_URL}
-                        publicSlug={publicSlug}
-                        isAdminOverride={isAdminOverrideView}
-                    />
+                      {isAdmin ? <KvkManager /> : <PublicKvkView />}
                     </PublicOrProtectedRoute>
                 )}
 
@@ -368,11 +367,12 @@ const AppContent: React.FC = () => {
   );
 };
 
+// ... (Rest bleibt gleich)
 interface PublicOrProtectedRouteProps {
   children: React.ReactNode;
   isPublic: boolean;
   publicSlug: string | null;
-  accessType: 'overview' | 'honor' | 'analytics' | 'activity';
+  accessType: 'overview' | 'honor' | 'analytics' | 'activity' | 'admin';
   isAdminOverride: boolean;
 }
 

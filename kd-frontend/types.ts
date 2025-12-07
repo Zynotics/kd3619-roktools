@@ -148,3 +148,24 @@ export type ActivityPlayerInfo = {
     buildingScore: number;
     techDonation: number;
 };
+
+// 🆕 NEU: KvK Manager Typen
+export interface KvkEvent {
+  id: string;
+  name: string;
+  kingdomId: string;
+  startFileId: string;
+  endFileId: string;
+  honorFileIds: string[];
+  isPublic: boolean;
+  createdAt: string;
+}
+
+export interface CreateKvkEventPayload {
+  name: string;
+  kingdomId?: string; // Optional, defaults to user's kingdom
+  startFileId: string;
+  endFileId: string;
+  honorFileIds: string[];
+  isPublic: boolean;
+}
