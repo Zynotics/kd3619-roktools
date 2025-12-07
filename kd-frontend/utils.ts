@@ -1,129 +1,78 @@
-/**
- * Formats a number as an integer with thousand separators (dots).
- * e.g., 1234567 -> "1.234.567", -9876 -> "-9.876"
- */
-export const formatNumber = (num: number): string => {
-  if (typeof num !== 'number' || isNaN(num)) {
-    return '0';
-  }
+// utils.ts
 
+// ... (formatNumber, parseGermanNumber, cleanFileName, abbreviateNumber bleiben gleich - hier der Fokus auf findColumnIndex)
+
+export const formatNumber = (num: number): string => {
+  if (typeof num !== 'number' || isNaN(num)) return '0';
   const isNegative = num < 0;
   const absInt = Math.round(Math.abs(num));
-
-  const withDots = absInt
-    .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-
+  const withDots = absInt.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   return isNegative ? `-${withDots}` : withDots;
 };
 
-/**
- * Safely parses a (German) formatted number string to an integer.
- *
- * Examples:
- *   "1.234.567"   -> 1234567
- *   "12,345"      -> 12345
- *   9876          -> 9876
- *   undefined     -> 0
- *   null          -> 0
- *   ""            -> 0
- */
 export const parseGermanNumber = (value: any): number => {
-  // null / undefined → 0
-  if (value === null || value === undefined) {
-    return 0;
-  }
-
-  // Already a number
-  if (typeof value === 'number') {
-    return isNaN(value) ? 0 : value;
-  }
-
-  // Convert everything to string
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return isNaN(value) ? 0 : value;
+  
+  // Entferne alles außer Ziffern (auch Punkte und Kommas, da wir von Ganzzahlen ausgehen)
+  // Wenn es Kommazahlen wären, müsste man komplexer parsen, aber bei Honor/Kills sind es meist Integer.
   const s = String(value);
-
-  // Remove everything that is not a digit
-  const cleaned = s.replace(/[^0-9]/g, '');
-  if (!cleaned) {
-    return 0;
-  }
-
+  const cleaned = s.replace(/[^0-9]/g, ''); 
+  if (!cleaned) return 0;
+  
   const n = parseInt(cleaned, 10);
   return isNaN(n) ? 0 : n;
 };
 
-/**
- * Cleans file names for display:
- * - removes .csv / .CSV
- * - replaces underscores with spaces
- * - trims whitespace at both ends (ohne String.trim)
- */
 export const cleanFileName = (filename: string): string => {
   if (!filename) return '';
-
-  const s = String(filename);
-  // remove .csv or .CSV at end
-  const noExt = s.replace(/\.csv$/i, '');
-  // replace underscores with spaces
-  const withSpaces = noExt.replace(/_/g, ' ');
-  // "trim" über Regex (kein .trim())
-  return withSpaces.replace(/^\s+|\s+$/g, '');
+  return String(filename).replace(/\.(csv|xlsx|xls)$/i, '').replace(/_/g, ' ').trim();
 };
 
-/**
- * Abbreviates large numbers:
- *   950              -> "950"
- *   12_300           -> "12.3K"
- *   1_200_000        -> "1.2M"
- *   2_500_000_000    -> "2.5B"
- */
 export const abbreviateNumber = (num: number): string => {
   if (typeof num !== 'number' || isNaN(num)) return '0';
-
   const abs = Math.abs(num);
   const sign = num < 0 ? '-' : '';
-
-  if (abs < 1_000) return num.toString();
-  if (abs < 1_000_000) return sign + (abs / 1_000).toFixed(1) + 'K';
-  if (abs < 1_000_000_000) return sign + (abs / 1_000_000).toFixed(1) + 'M';
-
-  return sign + (abs / 1_000_000_000).toFixed(1) + 'B';
+  if (abs < 1000) return String(num);
+  if (abs < 1000000) return sign + (abs / 1000).toFixed(1) + 'K';
+  if (abs < 1000000000) return sign + (abs / 1000000).toFixed(1) + 'M';
+  return sign + (abs / 1000000000).toFixed(1) + 'B';
 };
 
 /**
- * Finds the index of a column in the header row by matching one of the given keywords.
- *
- * Matching:
- * - case-insensitive
- * - ignores non-alphanumeric characters on both sides
- *
- * Example:
- *   headers: ["GovernorID", "Total Kill Points"]
- *   keywords: ["killpoints", "kill points"]
- *   => returns index of "Total Kill Points"
+ * Findet den Index einer Spalte, priorisiert exakte Treffer.
  */
 export const findColumnIndex = (
   headers: string[],
   keywords: string[]
 ): number | undefined => {
-  if (!Array.isArray(headers) || headers.length === 0) {
-    return undefined;
-  }
+  if (!Array.isArray(headers) || headers.length === 0) return undefined;
 
   const normalizedKeywords = keywords.map((k) =>
     String(k).toLowerCase().replace(/[^a-z0-9]/g, '')
   );
 
+  // 1. Priorität: Exakter Treffer (Normalisiert)
   for (let i = 0; i < headers.length; i++) {
     const header = headers[i];
-    if (header === undefined || header === null) continue;
+    if (!header) continue;
+    const normHeader = String(header).toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    if (normalizedKeywords.includes(normHeader)) {
+        return i;
+    }
+  }
 
-    const normalizedHeader = String(header)
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '');
+  // 2. Priorität: Enthält Keyword (aber Vorsicht bei "Name" vs "Governor Name")
+  for (let i = 0; i < headers.length; i++) {
+    const header = headers[i];
+    if (!header) continue;
+    const normHeader = String(header).toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    if (normalizedKeywords.some((kw) => normalizedHeader.includes(kw))) {
-      return i;
+    for (const kw of normalizedKeywords) {
+        if (normHeader.includes(kw)) {
+            return i;
+        }
     }
   }
 
