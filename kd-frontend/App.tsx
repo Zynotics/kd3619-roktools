@@ -8,14 +8,13 @@ import ActivityDashboard from './components/ActivityDashboard';
 import PowerAnalyticsDashboard from './components/PowerAnalyticsDashboard';
 import LoginPrompt from './components/LoginPrompt';
 import KvkManager from './components/KvkManager';     
-import PublicKvKView from './components/PublicKvKView'; // ✏️ KORRIGIERT (Großes 'K' bei KvK)
+import PublicKvKView from './components/PublicKvKView'; // ✏️ Korrektes Casing beachten!
 
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
     ? 'https://api.rise-of-stats.com'
     : 'http://localhost:4000';
 
-// 🆕 'honor' entfernt, 'kvk' hinzugefügt
 type ActiveView = 'overview' | 'kvk' | 'analytics' | 'admin' | 'activity';
 
 // Sidebar Navigation Item
@@ -28,7 +27,6 @@ const NavItem: React.FC<{
   isDisabled?: boolean;
 }> = ({ view, currentActiveView, setActiveView, label, icon, isDisabled = false }) => {
   const isActive = view === currentActiveView;
-  // Layout angepasst für Sidebar: Volle Breite, Linksausgerichtet
   const baseClasses = 'flex items-center w-full px-4 py-3 text-sm font-medium transition-colors duration-200 rounded-lg group';
   const activeClasses = 'bg-blue-600 text-white shadow-lg shadow-blue-900/50';
   const inactiveClasses = 'text-gray-400 hover:bg-gray-800 hover:text-white';
@@ -70,20 +68,17 @@ const AppContent: React.FC = () => {
   const isR4 = user?.role === 'r4';
   const isAdmin = isSuperAdmin || isR5; 
 
-  // 🔒 Activity: Nur für eingeloggte User mit Rolle R4, R5 oder Admin
   const canViewActivity = user && (isSuperAdmin || isR5 || isR4);
 
   const isPublicView = !!publicSlug && !user && !isRegisterInvite;
   const isRegistrationInviteView = !!publicSlug && !user && isRegisterInvite;
   const isAdminOverrideView = isSuperAdmin && !!publicSlug; 
   
-  // Nur anzeigen, wenn eingeloggt oder Admin im Override-Modus oder Public Link
   const showDashboardInterface = user || isAdminOverrideView || isPublicView;
 
   // 1. VIEW ROUTING & RESET
   useEffect(() => {
     if (publicSlug && !user && !isRegisterInvite) {
-        // Wenn man public unterwegs ist, aber 'admin' oder 'activity' aktiv war -> Reset
         if (activeView === 'admin' || activeView === 'activity') setActiveView('overview');
     } 
     else if (isSuperAdmin && !publicSlug && activeView !== 'admin') {
@@ -152,9 +147,6 @@ const AppContent: React.FC = () => {
   }, [publicSlug, user, isSuperAdmin]);
 
 
-  // ------------------------------------------------------------------
-  // RENDER: LANDING / LOGIN (Wenn nicht eingeloggt und kein Dashboard)
-  // ------------------------------------------------------------------
   if (!showDashboardInterface && !isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-4">
@@ -184,13 +176,9 @@ const AppContent: React.FC = () => {
     );
   }
   
-  // ------------------------------------------------------------------
-  // RENDER: DASHBOARD LAYOUT
-  // ------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       
-      {/* ================= SIDEBAR (Desktop Only) ================= */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col bg-gray-900 border-r border-gray-800 z-50">
         
         <div className="flex h-16 items-center px-6 border-b border-gray-800 bg-gray-900">
@@ -210,7 +198,6 @@ const AppContent: React.FC = () => {
               label="Analytics"
               icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>}
             />
-            {/* 🔒 Activity */}
             {canViewActivity && (
               <NavItem
                 view="activity"
@@ -220,7 +207,6 @@ const AppContent: React.FC = () => {
                 icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>}
               />
             )}
-            {/* 🆕 KVK statt HONOR */}
             <NavItem
               view="kvk"
               currentActiveView={activeView}
@@ -253,7 +239,6 @@ const AppContent: React.FC = () => {
             )}
         </div>
 
-        {/* Sidebar Footer (User Info) */}
         <div className="p-4 border-t border-gray-800 bg-gray-900/50">
             {user ? (
                 <div className="flex flex-col space-y-3">
@@ -276,10 +261,8 @@ const AppContent: React.FC = () => {
         </div>
       </aside>
 
-      {/* ================= MAIN CONTENT WRAPPER ================= */}
       <div className="lg:pl-64 flex flex-col min-h-screen">
         
-        {/* Mobile Header (Nur sichtbar bis lg) */}
         <header className="lg:hidden sticky top-0 z-40 flex h-16 items-center gap-x-4 border-b border-gray-800 bg-gray-900 px-4 shadow-sm">
              <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
                  <span className="font-bold text-white text-xs">KD</span>
@@ -293,7 +276,6 @@ const AppContent: React.FC = () => {
              )}
         </header>
 
-        {/* Content Area */}
         <main className="flex-1 py-8 px-4 sm:px-6 lg:px-8 bg-black/20">
             <div className="max-w-7xl mx-auto">
                 {activeView === 'overview' && (
@@ -326,15 +308,15 @@ const AppContent: React.FC = () => {
                     </PublicOrProtectedRoute>
                 )}
 
-                {/* 🆕 KVK: Zeigt Manager für Admins/R5, PublicView für alle anderen */}
                 {activeView === 'kvk' && (
                     <PublicOrProtectedRoute
                     isPublic={isPublicView}
                     publicSlug={publicSlug}
-                    accessType="honor" // Nutzt 'honor' Access-Recht als Fallback für Logged-In User
+                    accessType="honor" 
                     isAdminOverride={isAdminOverrideView}
                     >
-                      {isAdmin ? <KvkManager /> : <PublicKvKView />}
+                      {/* 🆕 Wir übergeben den Slug jetzt als Prop */}
+                      {isAdmin ? <KvkManager /> : <PublicKvKView kingdomSlug={publicSlug || ''} />}
                     </PublicOrProtectedRoute>
                 )}
 
