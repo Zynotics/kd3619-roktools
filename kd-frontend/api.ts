@@ -1,7 +1,7 @@
 // api.ts
 import { CreateKvkEventPayload, KvkEvent } from './types';
 
-// 🔧 KORREKTUR: Einheitliche URL-Logik wie in App.tsx
+// Zentrale URL-Konfiguration
 const API_BASE_URL =
   process.env.NODE_ENV === 'production'
     ? 'https://api.rise-of-stats.com'
@@ -11,19 +11,23 @@ const API_BASE_URL =
  * Hilfsfunktion für Header mit Auth-Token
  */
 function getAuthHeaders() {
-  const token = localStorage.getItem('token'); // Achtung: Prüfe, ob du 'token' oder 'authToken' nutzt. App.tsx nutzt 'authToken' beim Redirect, Login nutzt 'token'.
-  // Um sicherzugehen, nutzen wir hier das, was im AuthContext gespeichert wird (meist 'token').
+  // 🔧 KORREKTUR: Wir müssen 'authToken' lesen, nicht 'token'
+  const token = localStorage.getItem('authToken'); 
+  
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
 
-// Exportiere die URL, damit Komponenten sie nutzen können
+// Exportiere die URL für die Nutzung in Komponenten
 export { API_BASE_URL };
 
 // ==================== KVK ADMIN API ====================
 
+/**
+ * Holt alle KvK Events (für Admin/R5)
+ */
 export async function fetchKvkEvents(kingdomId?: string): Promise<KvkEvent[]> {
   let url = `${API_BASE_URL}/api/admin/kvk/events`;
   if (kingdomId) {
@@ -42,6 +46,9 @@ export async function fetchKvkEvents(kingdomId?: string): Promise<KvkEvent[]> {
   return res.json();
 }
 
+/**
+ * Erstellt ein neues KvK Event
+ */
 export async function createKvkEvent(payload: CreateKvkEventPayload): Promise<KvkEvent> {
   const res = await fetch(`${API_BASE_URL}/api/admin/kvk/events`, {
     method: 'POST',
@@ -57,6 +64,9 @@ export async function createKvkEvent(payload: CreateKvkEventPayload): Promise<Kv
   return res.json();
 }
 
+/**
+ * Aktualisiert ein bestehendes KvK Event
+ */
 export async function updateKvkEvent(id: string, payload: Partial<CreateKvkEventPayload>): Promise<KvkEvent> {
   const res = await fetch(`${API_BASE_URL}/api/admin/kvk/events/${id}`, {
     method: 'PUT',
@@ -72,6 +82,9 @@ export async function updateKvkEvent(id: string, payload: Partial<CreateKvkEvent
   return res.json();
 }
 
+/**
+ * Löscht ein KvK Event
+ */
 export async function deleteKvkEvent(id: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/api/admin/kvk/events/${id}`, {
     method: 'DELETE',
@@ -86,6 +99,9 @@ export async function deleteKvkEvent(id: string): Promise<void> {
 
 // ==================== PUBLIC API ====================
 
+/**
+ * Holt öffentliche KvK Events für ein Königreich
+ */
 export async function fetchPublicKvkEvents(kingdomSlug: string): Promise<KvkEvent[]> {
   const res = await fetch(`${API_BASE_URL}/api/public/kingdom/${kingdomSlug}/kvk-events`);
   
