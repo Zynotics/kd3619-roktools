@@ -64,19 +64,25 @@ const AppContent: React.FC = () => {
 
   const isSuperAdmin = user?.role === 'admin';
   const isR5 = user?.role === 'r5';
+  const isR4 = user?.role === 'r4';
   const isAdmin = isSuperAdmin || isR5; 
+
+  // 🔒 Sunkbarkeit Activity: Nur für eingeloggte User mit Rolle R4, R5 oder Admin
+  // Public Link User (user === null) und normale User (role === 'user') sind ausgeschlossen.
+  const canViewActivity = user && (isSuperAdmin || isR5 || isR4);
 
   const isPublicView = !!publicSlug && !user && !isRegisterInvite;
   const isRegistrationInviteView = !!publicSlug && !user && isRegisterInvite;
   const isAdminOverrideView = isSuperAdmin && !!publicSlug; 
   
-  // Nur anzeigen, wenn eingeloggt oder Admin im Override-Modus
+  // Nur anzeigen, wenn eingeloggt oder Admin im Override-Modus oder Public Link
   const showDashboardInterface = user || isAdminOverrideView || isPublicView;
 
-  // 1. VIEW ROUTING
+  // 1. VIEW ROUTING & RESET
   useEffect(() => {
     if (publicSlug && !user && !isRegisterInvite) {
-        if (activeView === 'admin') setActiveView('overview');
+        // Wenn man public unterwegs ist, aber 'admin' oder 'activity' aktiv war -> Reset
+        if (activeView === 'admin' || activeView === 'activity') setActiveView('overview');
     } 
     else if (isSuperAdmin && !publicSlug && activeView !== 'admin') {
         setActiveView('admin');
@@ -131,8 +137,6 @@ const AppContent: React.FC = () => {
         return;
       }
       if (user && user.kingdomId) {
-        // (Vereinfachte Logik für eingeloggte User: wir zeigen den Standard-Titel an, 
-        // da der Kingdom-Name oft schon bekannt ist)
         setHeaderTitle('Kingdom Analytics');
         return;
       }
@@ -185,10 +189,8 @@ const AppContent: React.FC = () => {
     <div className="min-h-screen bg-gray-900 text-white">
       
       {/* ================= SIDEBAR (Desktop Only) ================= */}
-      {/* Fixed position, full height, width 64 (16rem/256px) */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col bg-gray-900 border-r border-gray-800 z-50">
         
-        {/* Sidebar Header (Logo) */}
         <div className="flex h-16 items-center px-6 border-b border-gray-800 bg-gray-900">
            <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg mr-3">
              <span className="font-bold text-white text-sm">KD</span>
@@ -198,7 +200,6 @@ const AppContent: React.FC = () => {
            </span>
         </div>
 
-        {/* Sidebar Nav */}
         <div className="flex-1 overflow-y-auto px-4 py-6 space-y-2">
             <NavItem
               view="overview"
@@ -207,13 +208,16 @@ const AppContent: React.FC = () => {
               label="Analytics"
               icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>}
             />
-            <NavItem
-              view="activity"
-              currentActiveView={activeView}
-              setActiveView={setActiveView}
-              label="Activity"
-              icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>}
-            />
+            {/* 🔒 Activity: Nur anzeigen, wenn berechtigt (R4/R5/Admin) */}
+            {canViewActivity && (
+              <NavItem
+                view="activity"
+                currentActiveView={activeView}
+                setActiveView={setActiveView}
+                label="Activity"
+                icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>}
+              />
+            )}
             <NavItem
               view="honor"
               currentActiveView={activeView}
@@ -269,9 +273,6 @@ const AppContent: React.FC = () => {
       </aside>
 
       {/* ================= MAIN CONTENT WRAPPER ================= */}
-      {/* WICHTIG: lg:pl-64 addiert Padding links (256px), damit der Inhalt 
-          RECHTS neben der Sidebar (die 256px breit ist) beginnt.
-      */}
       <div className="lg:pl-64 flex flex-col min-h-screen">
         
         {/* Mobile Header (Nur sichtbar bis lg) */}
@@ -281,7 +282,6 @@ const AppContent: React.FC = () => {
              </div>
              <div className="flex-1 text-sm font-bold text-white truncate">{headerTitle}</div>
              
-             {/* Mobile Logout */}
              {user && (
                 <button onClick={logout} className="text-gray-400 hover:text-white">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
@@ -308,7 +308,8 @@ const AppContent: React.FC = () => {
                     </PublicOrProtectedRoute>
                 )}
 
-                {activeView === 'activity' && (
+                {/* 🔒 Activity: Nur rendern, wenn canViewActivity (R4/R5/Admin) wahr ist */}
+                {activeView === 'activity' && canViewActivity && (
                     <PublicOrProtectedRoute
                     isPublic={isPublicView}
                     publicSlug={publicSlug}
