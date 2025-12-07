@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { KvkEvent, UploadedFile, CreateKvkEventPayload } from '../types';
-import { fetchKvkEvents, createKvkEvent, deleteKvkEvent } from '../api';
-import { formatNumber } from '../utils'; // Optional, für schöne Darstellung falls nötig
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+import { fetchKvkEvents, createKvkEvent, deleteKvkEvent, API_BASE_URL } from '../api'; // 🆕 Import API_BASE_URL
 
 const KvkManager: React.FC = () => {
   const { token, user } = useAuth();
@@ -36,7 +33,7 @@ const KvkManager: React.FC = () => {
       const eventsData = await fetchKvkEvents();
       setEvents(eventsData);
 
-      // 2. Dateien laden (Wir nutzen hier direkt fetch, da wir die Endpoints kennen)
+      // 2. Dateien laden
       const ovRes = await fetch(`${API_BASE_URL}/overview/files-data`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -69,7 +66,6 @@ const KvkManager: React.FC = () => {
         endFileId,
         honorFileIds: selectedHonorFileIds,
         isPublic,
-        // kingdomId wird im Backend automatisch vom User genommen (außer Admin überschreibt es)
       };
 
       await createKvkEvent(payload);
@@ -99,7 +95,6 @@ const KvkManager: React.FC = () => {
     }
   };
 
-  // Helper für Checkbox-Handling bei Honor Files
   const toggleHonorFile = (id: string) => {
     setSelectedHonorFileIds(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -121,7 +116,6 @@ const KvkManager: React.FC = () => {
         <h2 className="text-xl font-semibold mb-4 text-white">Neues Event anlegen</h2>
         <form onSubmit={handleCreate} className="space-y-4">
           
-          {/* Name & Public Toggle */}
           <div className="flex gap-4">
             <div className="flex-1">
               <label className="block text-sm text-gray-400 mb-1">Event Name</label>
@@ -148,7 +142,6 @@ const KvkManager: React.FC = () => {
             </div>
           </div>
 
-          {/* Stats Config */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-750 bg-opacity-50 rounded border border-gray-700">
             <div>
               <label className="block text-sm text-yellow-200 mb-1">Start-Datei (Basis)</label>
@@ -182,7 +175,6 @@ const KvkManager: React.FC = () => {
             </div>
           </div>
 
-          {/* Honor Config */}
           <div className="p-4 bg-gray-750 bg-opacity-50 rounded border border-gray-700">
             <label className="block text-sm text-purple-300 mb-2">Verknüpfte Honor-Dateien (für Ranking)</label>
             <div className="max-h-40 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
