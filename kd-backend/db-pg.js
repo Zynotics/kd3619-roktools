@@ -88,7 +88,7 @@ async function deleteKingdom(kingdomId) {
   await query(`DELETE FROM overview_files WHERE kingdom_id = $1`, [kingdomId]);
   await query(`DELETE FROM honor_files WHERE kingdom_id = $1`, [kingdomId]);
   
-  // Auch KvK Events löschen
+  // Auch KvK Events löschen (Cascade würde Fights löschen, aber sicher ist sicher)
   await query(`DELETE FROM kvk_events WHERE kingdom_id = $1`, [kingdomId]);
 
   const res = await query(`DELETE FROM kingdoms WHERE id = $1`, [kingdomId]);
@@ -96,25 +96,40 @@ async function deleteKingdom(kingdomId) {
 }
 
 // ------------------------------------------------
-// KVK EVENT FUNKTIONEN (NEU)
+// KVK EVENT & FIGHT FUNKTIONEN (NEU)
 // ------------------------------------------------
 
 // Tabelle initialisieren (wird beim Start ausgeführt, falls nicht existiert)
 async function initKvkTable() {
+  // Events Tabelle
   await query(`
     CREATE TABLE IF NOT EXISTS kvk_events (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       kingdom_id TEXT NOT NULL,
-      start_file_id TEXT,
-      end_file_id TEXT,
+      start_file_id TEXT, -- Legacy / Optional
+      end_file_id TEXT,   -- Legacy / Optional
       honor_file_ids TEXT, 
       is_public BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
+
+  // Fights Tabelle (NEU für das modulare System)
+  await query(`
+    CREATE TABLE IF NOT EXISTS kvk_fights (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      start_file_id TEXT,
+      end_file_id TEXT,
+      fight_order INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW(),
+      FOREIGN KEY (event_id) REFERENCES kvk_events(id) ON DELETE CASCADE
+    )
+  `);
 }
-initKvkTable().catch(e => console.error("Fehler beim Erstellen der kvk_events Tabelle:", e));
+initKvkTable().catch(e => console.error("Fehler beim Erstellen der kvk Tabellen:", e));
 
 /**
  * Neues KvK Event erstellen
@@ -130,8 +145,8 @@ async function createKvkEvent(event) {
     event.id, 
     event.name, 
     event.kingdomId,
-    event.startFileId, 
-    event.endFileId, 
+    event.startFileId || null, 
+    event.endFileId || null, 
     honorFilesStr, 
     !!event.isPublic, 
     event.createdAt || new Date()
@@ -140,30 +155,66 @@ async function createKvkEvent(event) {
 }
 
 /**
- * Alle KvK Events eines Königreichs holen
+ * Alle KvK Events eines Königreichs holen (inklusive Fights!)
  */
 async function getKvkEvents(kingdomId) {
-  const sql = `SELECT * FROM kvk_events WHERE kingdom_id = $1 ORDER BY created_at DESC`;
-  const rows = await all(sql, [kingdomId]);
+  // 1. Events holen
+  const eventSql = `SELECT * FROM kvk_events WHERE kingdom_id = $1 ORDER BY created_at DESC`;
+  const events = await all(eventSql, [kingdomId]);
   
-  return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    kingdomId: row.kingdom_id,
-    startFileId: row.start_file_id,
-    endFileId: row.end_file_id,
-    honorFileIds: JSON.parse(row.honor_file_ids || '[]'),
-    isPublic: row.is_public,
-    createdAt: row.created_at
-  }));
+  // 2. Fights für diese Events holen
+  const eventIds = events.map(e => e.id);
+  let fights = [];
+  if (eventIds.length > 0) {
+      // Postgres: ANY($1) erwartet ein Array
+      const fightSql = `SELECT * FROM kvk_fights WHERE event_id = ANY($1) ORDER BY fight_order ASC, created_at ASC`;
+      fights = await all(fightSql, [eventIds]);
+  }
+
+  // 3. Zusammenfügen
+  return events.map(row => {
+    const eventFights = fights.filter(f => f.event_id === row.id).map(f => ({
+        id: f.id,
+        eventId: f.event_id,
+        name: f.name,
+        startFileId: f.start_file_id,
+        endFileId: f.end_file_id,
+        fightOrder: f.fight_order
+    }));
+
+    return {
+      id: row.id,
+      name: row.name,
+      kingdomId: row.kingdom_id,
+      startFileId: row.start_file_id, // Legacy
+      endFileId: row.end_file_id,     // Legacy
+      honorFileIds: JSON.parse(row.honor_file_ids || '[]'),
+      isPublic: row.is_public,
+      createdAt: row.created_at,
+      fights: eventFights // 🆕 Liste der Kämpfe
+    };
+  });
 }
 
 /**
- * Einzelnes KvK Event holen
+ * Einzelnes KvK Event holen (inkl. Fights)
  */
 async function getKvkEventById(id) {
   const row = await get('SELECT * FROM kvk_events WHERE id = $1', [id]);
   if (!row) return null;
+
+  // Fights dazu laden
+  const fights = await all('SELECT * FROM kvk_fights WHERE event_id = $1 ORDER BY fight_order ASC, created_at ASC', [id]);
+  
+  const mappedFights = fights.map(f => ({
+      id: f.id,
+      eventId: f.event_id,
+      name: f.name,
+      startFileId: f.start_file_id,
+      endFileId: f.end_file_id,
+      fightOrder: f.fight_order
+  }));
+
   return {
     id: row.id,
     name: row.name,
@@ -172,12 +223,13 @@ async function getKvkEventById(id) {
     endFileId: row.end_file_id,
     honorFileIds: JSON.parse(row.honor_file_ids || '[]'),
     isPublic: row.is_public,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    fights: mappedFights
   };
 }
 
 /**
- * KvK Event aktualisieren
+ * KvK Event aktualisieren (Name, Public, HonorFiles)
  */
 async function updateKvkEvent(id, data) {
   const sql = `
@@ -189,8 +241,8 @@ async function updateKvkEvent(id, data) {
   const honorFilesStr = JSON.stringify(data.honorFileIds || []);
   const res = await query(sql, [
     data.name, 
-    data.startFileId, 
-    data.endFileId, 
+    data.startFileId || null, 
+    data.endFileId || null, 
     honorFilesStr, 
     !!data.isPublic, 
     id
@@ -202,7 +254,51 @@ async function updateKvkEvent(id, data) {
  * KvK Event löschen
  */
 async function deleteKvkEvent(id) {
+  // Fights werden durch CASCADE in DB gelöscht, aber sicherheitshalber:
+  await query('DELETE FROM kvk_fights WHERE event_id = $1', [id]);
   await query('DELETE FROM kvk_events WHERE id = $1', [id]);
+}
+
+
+// --- FIGHT CRUD ---
+
+async function createKvkFight(fight) {
+    const sql = `
+      INSERT INTO kvk_fights (id, event_id, name, start_file_id, end_file_id, fight_order, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `;
+    const res = await query(sql, [
+        fight.id,
+        fight.eventId,
+        fight.name,
+        fight.startFileId,
+        fight.endFileId,
+        fight.fightOrder || 0,
+        new Date()
+    ]);
+    return res.rows[0];
+}
+
+async function updateKvkFight(id, data) {
+    const sql = `
+      UPDATE kvk_fights
+      SET name = $1, start_file_id = $2, end_file_id = $3, fight_order = $4
+      WHERE id = $5
+      RETURNING *
+    `;
+    const res = await query(sql, [
+        data.name,
+        data.startFileId,
+        data.endFileId,
+        data.fightOrder || 0,
+        id
+    ]);
+    return res.rows[0];
+}
+
+async function deleteKvkFight(id) {
+    await query('DELETE FROM kvk_fights WHERE id = $1', [id]);
 }
 
 module.exports = {
@@ -217,5 +313,9 @@ module.exports = {
   getKvkEvents,
   getKvkEventById,
   updateKvkEvent,
-  deleteKvkEvent
+  deleteKvkEvent,
+  // Fight Exporte
+  createKvkFight,
+  updateKvkFight,
+  deleteKvkFight
 };

@@ -22,13 +22,13 @@ db.serialize(() => {
     )
   `);
 
-  // Neue Tabelle für KvK Events
+  // NEUE Tabelle für KvK Events (angepasst für das modulare Konzept)
+  // 'fights' speichert ein JSON-Array von Kampf-Objekten: [{ id, name, startFileId, endFileId }, ...]
   db.run(`
     CREATE TABLE IF NOT EXISTS kvk_events (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      startFileId TEXT,
-      endFileId TEXT,
+      fights TEXT, 
       honorFileIds TEXT,
       isPublic INTEGER DEFAULT 0,
       createdAt TEXT NOT NULL
@@ -79,24 +79,26 @@ function getFileById(id, callback) {
   );
 }
 
-// --- KvK Event Funktionen ---
+// --- KvK Event Funktionen (Modular Update) ---
 
 /**
  * Neues KvK Event erstellen
- * event = { id, name, startFileId, endFileId, honorFileIds, isPublic, createdAt }
+ * event = { id, name, fights, honorFileIds, isPublic, createdAt }
  */
 function createKvkEvent(event, callback) {
   const sql = `
-    INSERT INTO kvk_events (id, name, startFileId, endFileId, honorFileIds, isPublic, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO kvk_events (id, name, fights, honorFileIds, isPublic, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?)
   `;
-  // honorFileIds wird als JSON-String gespeichert
+  
+  // Arrays als JSON-String speichern
+  const fightsStr = JSON.stringify(event.fights || []);
   const honorFilesStr = JSON.stringify(event.honorFileIds || []);
   const isPublicInt = event.isPublic ? 1 : 0;
 
   db.run(
     sql,
-    [event.id, event.name, event.startFileId, event.endFileId, honorFilesStr, isPublicInt, event.createdAt],
+    [event.id, event.name, fightsStr, honorFilesStr, isPublicInt, event.createdAt],
     function (err) {
       if (callback) callback(err);
     }
@@ -117,6 +119,7 @@ function getKvkEvents(callback) {
       // JSON Strings zurück parsen
       const events = rows.map(row => ({
         ...row,
+        fights: JSON.parse(row.fights || '[]'),
         honorFileIds: JSON.parse(row.honorFileIds || '[]'),
         isPublic: !!row.isPublic
       }));
@@ -143,6 +146,7 @@ function getKvkEventById(id, callback) {
       }
       const event = {
         ...row,
+        fights: JSON.parse(row.fights || '[]'),
         honorFileIds: JSON.parse(row.honorFileIds || '[]'),
         isPublic: !!row.isPublic
       };
@@ -153,19 +157,22 @@ function getKvkEventById(id, callback) {
 
 /**
  * KvK Event aktualisieren
+ * data kann fights, honorFileIds, name oder isPublic enthalten
  */
 function updateKvkEvent(id, data, callback) {
   const sql = `
     UPDATE kvk_events
-    SET name = ?, startFileId = ?, endFileId = ?, honorFileIds = ?, isPublic = ?
+    SET name = ?, fights = ?, honorFileIds = ?, isPublic = ?
     WHERE id = ?
   `;
+  
+  const fightsStr = JSON.stringify(data.fights || []);
   const honorFilesStr = JSON.stringify(data.honorFileIds || []);
   const isPublicInt = data.isPublic ? 1 : 0;
 
   db.run(
     sql,
-    [data.name, data.startFileId, data.endFileId, honorFilesStr, isPublicInt, id],
+    [data.name, fightsStr, honorFilesStr, isPublicInt, id],
     function (err) {
       if (callback) callback(err);
     }
