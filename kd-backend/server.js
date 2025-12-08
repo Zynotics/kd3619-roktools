@@ -684,7 +684,7 @@ app.delete('/api/admin/kingdoms/:id', authenticateToken, requireAdmin, async (re
 });
 
 
-// ==================== KVK MANAGER ENDPOINTS ====================
+// ==================== KVK MANAGER ENDPOINTS (MODULAR UPDATE) ====================
 
 // 1. GET /api/admin/kvk/events - Liste der Events (für Admin/R5)
 app.get('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, res) => {
@@ -692,9 +692,6 @@ app.get('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, re
     const kingdomId = req.user.kingdomId || (req.user.role === 'admin' ? req.query.kingdomId : null);
     
     if (!kingdomId) {
-        // Wenn Admin kein spezifisches Kingdom wählt, leer zurückgeben oder alle? 
-        // Für Konsistenz: Fehler oder leere Liste, wenn kein Context da ist.
-        // Hier: Wenn Admin und kein query, ggf. default kingdom oder leere Liste.
         if (req.user.role === 'admin' && !req.query.kingdomId) {
              return res.json([]); 
         }
@@ -709,10 +706,11 @@ app.get('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, re
   }
 });
 
-// 2. POST /api/admin/kvk/events - Neues Event erstellen
+// 2. POST /api/admin/kvk/events - Neues Event erstellen (mit Fights Array)
 app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { name, startFileId, endFileId, honorFileIds, isPublic, kingdomId: bodyKingdomId } = req.body;
+    // fights statt startFileId/endFileId
+    const { name, fights, honorFileIds, isPublic, kingdomId: bodyKingdomId } = req.body;
     
     // Kingdom Zuordnung: R5 nimmt sein eigenes, Admin kann wählen (sonst eigenes)
     const targetKingdomId = req.user.role === 'admin' && bodyKingdomId ? bodyKingdomId : req.user.kingdomId;
@@ -721,16 +719,15 @@ app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, r
       return res.status(400).json({ error: 'Kein Königreich zugewiesen.' });
     }
 
-    if (!name || !startFileId || !endFileId) {
-      return res.status(400).json({ error: 'Name, Start-Datei und End-Datei sind Pflichtfelder.' });
+    if (!name) {
+      return res.status(400).json({ error: 'Name ist erforderlich.' });
     }
 
     const newEvent = {
       id: 'kvk-' + Date.now(),
       name,
       kingdomId: targetKingdomId,
-      startFileId,
-      endFileId,
+      fights: fights || [], // Array von Kampf-Objekten
       honorFileIds: honorFileIds || [], // Array von IDs
       isPublic: !!isPublic,
       createdAt: new Date()
@@ -744,10 +741,10 @@ app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, r
   }
 });
 
-// 3. PUT /api/admin/kvk/events/:id - Event bearbeiten
+// 3. PUT /api/admin/kvk/events/:id - Event bearbeiten (mit Fights Array)
 app.put('/api/admin/kvk/events/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { name, startFileId, endFileId, honorFileIds, isPublic } = req.body;
+    const { name, fights, honorFileIds, isPublic } = req.body;
     const eventId = req.params.id;
 
     // Check ownership
@@ -759,7 +756,7 @@ app.put('/api/admin/kvk/events/:id', authenticateToken, requireAdmin, async (req
     }
 
     const updated = await updateKvkEvent(eventId, {
-      name, startFileId, endFileId, honorFileIds, isPublic
+      name, fights, honorFileIds, isPublic
     });
     res.json(updated);
   } catch (error) {
@@ -818,8 +815,6 @@ app.get('/api/public/kingdom/:slug/kvk-events', async (req, res) => {
       if (!k) return res.status(404).json({ error: 'Not found' });
 
       // Hole alle Events für dieses Kingdom
-      // Optional: Filtere serverseitig nur "public" events, falls gewünscht.
-      // Hier geben wir alle zurück, aber das Frontend filtert oder wir filtern hier:
       const events = await getKvkEvents(k.id);
       
       // Nur Public Events zurückgeben
