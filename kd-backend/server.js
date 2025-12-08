@@ -13,7 +13,7 @@ const jwt = require('jsonwebtoken');
 const { 
   query, get, all, assignR5, updateKingdomStatus, deleteKingdom,
   createKvkEvent, getKvkEvents, getKvkEventById, updateKvkEvent, deleteKvkEvent
-} = require('./db-pg');
+} = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
