@@ -11,7 +11,7 @@ const API_BASE_URL =
  * Hilfsfunktion für Header mit Auth-Token
  */
 function getAuthHeaders() {
-  // 🔧 KORREKTUR: Wir müssen 'authToken' lesen, nicht 'token'
+  // Wir lesen 'authToken', wie es im AuthContext gesetzt wird
   const token = localStorage.getItem('authToken'); 
   
   return {
@@ -27,6 +27,7 @@ export { API_BASE_URL };
 
 /**
  * Holt alle KvK Events (für Admin/R5)
+ * Endpoint: GET /api/admin/kvk/events
  */
 export async function fetchKvkEvents(kingdomId?: string): Promise<KvkEvent[]> {
   let url = `${API_BASE_URL}/api/admin/kvk/events`;
@@ -47,7 +48,8 @@ export async function fetchKvkEvents(kingdomId?: string): Promise<KvkEvent[]> {
 }
 
 /**
- * Erstellt ein neues KvK Event
+ * Erstellt ein neues KvK Event (Modular: Mit Fights Array)
+ * Endpoint: POST /api/admin/kvk/events
  */
 export async function createKvkEvent(payload: CreateKvkEventPayload): Promise<KvkEvent> {
   const res = await fetch(`${API_BASE_URL}/api/admin/kvk/events`, {
@@ -66,6 +68,7 @@ export async function createKvkEvent(payload: CreateKvkEventPayload): Promise<Kv
 
 /**
  * Aktualisiert ein bestehendes KvK Event
+ * Endpoint: PUT /api/admin/kvk/events/:id
  */
 export async function updateKvkEvent(id: string, payload: Partial<CreateKvkEventPayload>): Promise<KvkEvent> {
   const res = await fetch(`${API_BASE_URL}/api/admin/kvk/events/${id}`, {
@@ -84,6 +87,7 @@ export async function updateKvkEvent(id: string, payload: Partial<CreateKvkEvent
 
 /**
  * Löscht ein KvK Event
+ * Endpoint: DELETE /api/admin/kvk/events/:id
  */
 export async function deleteKvkEvent(id: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/api/admin/kvk/events/${id}`, {
@@ -101,6 +105,7 @@ export async function deleteKvkEvent(id: string): Promise<void> {
 
 /**
  * Holt öffentliche KvK Events für ein Königreich
+ * Endpoint: GET /api/public/kingdom/:slug/kvk-events
  */
 export async function fetchPublicKvkEvents(kingdomSlug: string): Promise<KvkEvent[]> {
   const res = await fetch(`${API_BASE_URL}/api/public/kingdom/${kingdomSlug}/kvk-events`);
@@ -114,6 +119,9 @@ export async function fetchPublicKvkEvents(kingdomSlug: string): Promise<KvkEven
 
 // ==================== FILE MANAGEMENT API ====================
 
+/**
+ * Sortiert Dateien neu (Overview, Honor oder Activity)
+ */
 export async function reorderFiles(type: 'overview' | 'honor' | 'activity', fileIds: string[]): Promise<void> {
     const res = await fetch(`${API_BASE_URL}/${type}/files/reorder`, {
         method: 'POST',
@@ -126,6 +134,9 @@ export async function reorderFiles(type: 'overview' | 'honor' | 'activity', file
     }
 }
 
+/**
+ * Löscht eine Datei
+ */
 export async function deleteFile(type: 'overview' | 'honor' | 'activity', fileId: string): Promise<void> {
      const res = await fetch(`${API_BASE_URL}/${type}/files/${fileId}`, {
         method: 'DELETE',

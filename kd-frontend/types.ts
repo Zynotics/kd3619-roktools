@@ -49,6 +49,10 @@ export type PlayerStatChange = {
     oldTroopsPower: number;
     newTroopsPower: number;
     diffTroopsPower: number;
+    
+    // Für detaillierte Analyse (optional für Total View)
+    t4KillsDiff?: number;
+    t5KillsDiff?: number;
 };
 
 
@@ -149,23 +153,32 @@ export type ActivityPlayerInfo = {
     techDonation: number;
 };
 
-// 🆕 NEU: KvK Manager Typen
+// 🆕 NEU: Modulares KvK System
+
+// Definition eines einzelnen Kampfes innerhalb eines Events
+export interface KvkFight {
+  id: string;          // Eindeutige ID für den Kampf (z.B. UUID)
+  name: string;        // z.B. "Pass 4 Öffnung"
+  startFileId: string; // Snapshot VOR dem Kampf
+  endFileId: string;   // Snapshot NACH dem Kampf
+}
+
+// Das Haupt-Event Objekt
 export interface KvkEvent {
   id: string;
   name: string;
   kingdomId: string;
-  startFileId: string;
-  endFileId: string;
-  honorFileIds: string[];
+  fights: KvkFight[];     // Array von Kämpfen statt einzelner Start/End Files
+  honorFileIds: string[]; // Liste von Honor-Files
   isPublic: boolean;
   createdAt: string;
 }
 
+// Payload zum Erstellen/Update
 export interface CreateKvkEventPayload {
   name: string;
-  kingdomId?: string; // Optional, defaults to user's kingdom
-  startFileId: string;
-  endFileId: string;
+  kingdomId?: string;
+  fights: KvkFight[];
   honorFileIds: string[];
   isPublic: boolean;
 }

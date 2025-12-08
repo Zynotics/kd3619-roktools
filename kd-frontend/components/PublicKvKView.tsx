@@ -6,6 +6,7 @@ import HonorOverviewTable from './HonorOverviewTable';
 import HonorHistoryChart from './HonorHistoryChart';
 import HonorPlayerSearch from './HonorPlayerSearch';
 
+// Datentyp für die aggregierte Zeile eines Spielers
 type StatProgressRow = {
   id: string;
   name: string;
@@ -15,6 +16,8 @@ type StatProgressRow = {
   t5KillsDiff: number;
   totalKillsDiff: number;
   deadDiff: number;
+  // Optional: Anzahl der Kämpfe, an denen der Spieler teilgenommen hat
+  fightsParticipated?: number;
 };
 
 interface PublicKvKViewProps {
@@ -27,18 +30,18 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   
-  // Rohdaten
+  // Rohdaten (Dateien)
   const [overviewFiles, setOverviewFiles] = useState<UploadedFile[]>([]);
   const [honorFiles, setHonorFiles] = useState<UploadedFile[]>([]);
   
-  // Verarbeitete Daten
+  // Verarbeitete Daten (Das Ergebnis der Berechnung)
   const [statsData, setStatsData] = useState<StatProgressRow[]>([]);
   
   // Honor Specifics
   const [honorHistory, setHonorHistory] = useState<PlayerHonorHistory[]>([]);
   const [kvkHonorFiles, setKvkHonorFiles] = useState<UploadedFile[]>([]); 
   
-  // Auswahl für Honor-Vergleich
+  // Auswahl für Honor-Vergleich (Manuell innerhalb der Public View wählbar)
   const [honorStartFileId, setHonorStartFileId] = useState<string>('');
   const [honorEndFileId, setHonorEndFileId] = useState<string>('');
 
@@ -81,6 +84,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       const event = events.find(e => e.id === selectedEventId);
       if (!event) return;
 
+      // 1. Alle Dateien vom Server holen
       const [ovRes, honRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/public/kingdom/${slug}/overview-files`),
         fetch(`${API_BASE_URL}/api/public/kingdom/${slug}/honor-files`)
@@ -94,24 +98,26 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       setOverviewFiles(allOverview);
       setHonorFiles(allHonor);
 
-      // --- A. STATS BERECHNUNG ---
-      const startFile = allOverview.find(f => f.id === event.startFileId);
-      const endFile = allOverview.find(f => f.id === event.endFileId);
-      if (startFile && endFile) {
-        setStatsData(calculateStatsProgress(startFile, endFile));
+      // --- A. MODULARE STATS BERECHNUNG (SUMME ALLER FIGHTS) ---
+      if (event.fights && event.fights.length > 0) {
+          // Neue Logik: Iteriere über alle Kämpfe und summiere
+          const calculatedStats = calculateCumulativeStats(event.fights, allOverview);
+          setStatsData(calculatedStats);
+      } else {
+          // Fallback (falls keine Fights definiert, aber alte Start/End Logik noch da wäre, 
+          // oder einfach leer lassen)
+          setStatsData([]);
       }
 
       // --- B. HONOR BERECHNUNG & SETUP ---
-      // 🔧 KORREKTUR: Wir nutzen die Reihenfolge aus 'allHonor' (Backend 'fileOrder'),
-      // anstatt hier manuell nach Datum zu sortieren.
+      // Filtert nur die Honor-Dateien, die dem Event zugeordnet sind
       const relevantHonorFiles = allHonor
-        .filter(f => event.honorFileIds.includes(f.id));
-        // .sort(...) ENTFERNT! Wir vertrauen der manuellen Sortierung.
+        .filter(f => event.honorFileIds && event.honorFileIds.includes(f.id));
 
       if (relevantHonorFiles.length > 0) {
         setKvkHonorFiles(relevantHonorFiles);
         
-        // Default: Start = Erste, Ende = Letzte (gemäß Sortierung)
+        // Default: Start = Erste, Ende = Letzte (gemäß Backend Sortierung)
         setHonorStartFileId(relevantHonorFiles[0].id);
         setHonorEndFileId(relevantHonorFiles[relevantHonorFiles.length - 1].id);
 
@@ -132,6 +138,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     if (!searchQuery.trim()) return;
     const lowerQ = searchQuery.toLowerCase();
     
+    // Suche im Honor History Array
     const results = honorHistory
         .filter(p => p.name.toLowerCase().includes(lowerQ) || p.id.toLowerCase().includes(lowerQ))
         .map(p => {
@@ -159,6 +166,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       return f ? f.name : 'Unbekannt';
   };
 
+  // 1. Honor Parsing Helper
   const parseHonorFile = (file: UploadedFile): HonorPlayerInfo[] => {
     const govIdIdx = findColumnIndex(file.headers, ['governor id', 'id', 'user id']);
     const nameIdx = findColumnIndex(file.headers, ['name', 'display name', 'spieler']);
@@ -201,60 +209,120 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     return Array.from(map.values());
   };
 
-  const calculateStatsProgress = (start: UploadedFile, end: UploadedFile): StatProgressRow[] => {
-    const parseRow = (headers: string[], row: any[]) => {
-      const getIdx = (keys: string[]) => findColumnIndex(headers, keys);
+  // 2. Core Stats Helper for a Single File
+  // Extrahiert eine Map aller Spieler aus einer Datei
+  const getSnapshotData = (file: UploadedFile) => {
+      const getIdx = (keys: string[]) => findColumnIndex(file.headers, keys);
       const idIdx = getIdx(['id', 'governor id', 'user id']);
       const nameIdx = getIdx(['name', 'display name', 'spieler']); 
       const allyIdx = getIdx(['alliance', 'allianz', 'tag']);
       const powerIdx = getIdx(['power', 'kraft']);
-      const t4Idx = getIdx(['t4 kills', 'tier 4 kills']);
-      const t5Idx = getIdx(['t5 kills', 'tier 5 kills']);
-      const deadIdx = getIdx(['dead', 'deaths', 'tote']);
+      const t4Idx = getIdx(['t4 kills', 'tier 4 kills', 'kills t4']);
+      const t5Idx = getIdx(['t5 kills', 'tier 5 kills', 'kills t5']);
+      const deadIdx = getIdx(['dead', 'deaths', 'tote', 'dead troops']);
 
-      if (idIdx === undefined) return null;
+      const map = new Map<string, {
+          name: string;
+          alliance: string;
+          power: number;
+          t4: number;
+          t5: number;
+          dead: number;
+      }>();
 
-      return {
-        id: String(row[idIdx]),
-        name: nameIdx !== undefined ? String(row[nameIdx]) : 'Unknown',
-        alliance: allyIdx !== undefined ? String(row[allyIdx]) : '',
-        power: parseAnyNumber(row[powerIdx]),
-        t4: parseAnyNumber(row[t4Idx]),
-        t5: parseAnyNumber(row[t5Idx]),
-        dead: parseAnyNumber(row[deadIdx]),
-      };
-    };
+      if (idIdx === undefined) return map; // Datei unbrauchbar ohne ID
 
-    const startMap = new Map<string, ReturnType<typeof parseRow>>();
-    start.data.forEach(row => { const p = parseRow(start.headers, row); if (p) startMap.set(p.id, p); });
+      file.data.forEach(row => {
+          const id = String(row[idIdx]);
+          if (!id || id === 'undefined') return;
 
-    const result: StatProgressRow[] = [];
-    end.data.forEach(row => {
-      const curr = parseRow(end.headers, row);
-      if (!curr) return;
-      const prev = startMap.get(curr.id);
-      
-      const prevPower = prev ? prev.power : 0;
-      const prevT4 = prev ? prev.t4 : 0;
-      const prevT5 = prev ? prev.t5 : 0;
-      const prevDead = prev ? prev.dead : 0;
-      const t4Diff = Math.max(0, curr.t4 - prevT4); 
-      const t5Diff = Math.max(0, curr.t5 - prevT5);
-      
-      result.push({
-        id: curr.id,
-        name: curr.name,
-        alliance: curr.alliance,
-        powerDiff: curr.power - prevPower,
-        t4KillsDiff: t4Diff,
-        t5KillsDiff: t5Diff,
-        totalKillsDiff: t4Diff + t5Diff,
-        deadDiff: Math.max(0, curr.dead - prevDead)
+          map.set(id, {
+              name: nameIdx !== undefined ? String(row[nameIdx]) : 'Unknown',
+              alliance: allyIdx !== undefined ? String(row[allyIdx]) : '',
+              power: parseAnyNumber(row[powerIdx]),
+              t4: parseAnyNumber(row[t4Idx]),
+              t5: parseAnyNumber(row[t5Idx]),
+              dead: parseAnyNumber(row[deadIdx])
+          });
       });
-    });
-    return result.sort((a, b) => b.totalKillsDiff - a.totalKillsDiff);
+
+      return map;
   };
 
+  // 3. THE MAIN CALCULATOR: Summiert alle Fights auf
+  const calculateCumulativeStats = (fights: { startFileId: string, endFileId: string }[], files: UploadedFile[]): StatProgressRow[] => {
+    
+    // Map zum Speichern der Summen: PlayerID -> Summe Stats
+    const grandTotals = new Map<string, StatProgressRow>();
+
+    fights.forEach(fight => {
+        const startFile = files.find(f => f.id === fight.startFileId);
+        const endFile = files.find(f => f.id === fight.endFileId);
+
+        if (!startFile || !endFile) return; // Skip broken fights
+
+        const startData = getSnapshotData(startFile);
+        const endData = getSnapshotData(endFile);
+
+        // Wir iterieren durch die END-Datei, da diese die aktiven Spieler NACH dem Kampf enthält.
+        endData.forEach((curr, playerId) => {
+            const prev = startData.get(playerId);
+            
+            // Wenn der Spieler im Start-File nicht existierte (neu), ist seine Basis 0 (oder wir ignorieren ihn? Hier nehmen wir 0 an)
+            const prevPower = prev ? prev.power : 0; // Hier vorsichtig: Bei Power ist 0 als Startbasis gefährlich, aber für Differenz okay.
+            const prevT4 = prev ? prev.t4 : 0;
+            const prevT5 = prev ? prev.t5 : 0;
+            const prevDead = prev ? prev.dead : 0;
+
+            // Berechne Delta für diesen einen Fight
+            // Wichtig: Math.max(0, ...), um negative Kills durch Migration/Bugs zu vermeiden
+            const deltaT4 = Math.max(0, curr.t4 - prevT4);
+            const deltaT5 = Math.max(0, curr.t5 - prevT5);
+            const deltaDead = Math.max(0, curr.dead - prevDead);
+            
+            // Power kann negativ sein (Truppen tot), also kein Math.max(0)
+            // Ausnahme: Wenn prevPower 0 war (Spieler neu), dann ist die PowerDiff = aktuelle Power. 
+            // Das kann das Ranking verzerren. Wir zählen PowerDiff nur, wenn der Spieler BEIDE Male da war.
+            let deltaPower = 0;
+            if (prev) {
+                deltaPower = curr.power - prevPower;
+            }
+
+            // Aufsummieren in Grand Total
+            if (!grandTotals.has(playerId)) {
+                grandTotals.set(playerId, {
+                    id: playerId,
+                    name: curr.name, // Name vom aktuellsten Fight nehmen
+                    alliance: curr.alliance,
+                    powerDiff: 0,
+                    t4KillsDiff: 0,
+                    t5KillsDiff: 0,
+                    totalKillsDiff: 0,
+                    deadDiff: 0,
+                    fightsParticipated: 0
+                });
+            }
+
+            const total = grandTotals.get(playerId)!;
+            
+            // Namen/Allianz aktualisieren (immer vom neuesten Snapshot im Loop)
+            total.name = curr.name;
+            total.alliance = curr.alliance;
+
+            total.powerDiff += deltaPower;
+            total.t4KillsDiff += deltaT4;
+            total.t5KillsDiff += deltaT5;
+            total.totalKillsDiff += (deltaT4 + deltaT5); // Einfache Summe T4+T5 als Score
+            total.deadDiff += deltaDead;
+            total.fightsParticipated = (total.fightsParticipated || 0) + 1;
+        });
+    });
+
+    // Map in Array umwandeln und Sortieren (nach Total Kills Delta descending)
+    return Array.from(grandTotals.values()).sort((a, b) => b.totalKillsDiff - a.totalKillsDiff);
+  };
+
+  // B. Honor Table Berechnung (Unverändert, vergleicht nur Start und Ende)
   const comparisonHonorTableData = useMemo(() => {
     if (honorHistory.length === 0 || !honorStartFileId || !honorEndFileId) return [];
     
@@ -283,25 +351,37 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const activeEvent = events.find(e => e.id === selectedEventId);
 
   if (events.length === 0 && !loading) {
-    return <div className="p-8 text-center text-gray-400">Keine öffentlichen KvK Events gefunden.</div>;
+    return (
+        <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+            <div className="bg-gray-800 p-8 rounded-lg shadow-lg text-center max-w-md border border-gray-700">
+                <h2 className="text-2xl font-bold text-yellow-500 mb-4">Keine Events gefunden</h2>
+                <p className="text-gray-400">Für dieses Königreich sind momentan keine öffentlichen KvK-Daten verfügbar.</p>
+            </div>
+        </div>
+    );
   }
 
   return (
     <div className="bg-gray-900 min-h-screen text-gray-100 font-sans pb-20">
       
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-900 to-gray-900 p-6 shadow-lg border-b border-gray-700">
+      <div className="bg-gradient-to-r from-blue-900 to-gray-900 p-6 shadow-lg border-b border-gray-700 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-wider flex items-center">
-              <span className="text-4xl mr-2">⚔️</span> 
+            <h1 className="text-2xl md:text-3xl font-bold text-white tracking-wider flex items-center">
+              <span className="text-3xl md:text-4xl mr-3">⚔️</span> 
               {activeEvent ? activeEvent.name : 'KvK Tracker'}
             </h1>
+            {activeEvent?.fights && activeEvent.fights.length > 0 && (
+                <p className="text-xs text-blue-300 mt-1 ml-12">
+                   {activeEvent.fights.length} Kampfphasen erfasst
+                </p>
+            )}
           </div>
           
           {events.length > 1 && (
             <select 
-              className="bg-gray-800 border border-gray-600 text-white p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+              className="bg-gray-800 border border-gray-600 text-white p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none w-full md:w-auto"
               value={selectedEventId}
               onChange={e => setSelectedEventId(e.target.value)}
             >
@@ -318,17 +398,17 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
           <div className="bg-gray-800 p-1 rounded-lg inline-flex shadow-md border border-gray-700">
             <button
               onClick={() => setViewMode('stats')}
-              className={`px-6 py-2 rounded-md font-bold transition-all duration-200 ${
+              className={`px-4 md:px-6 py-2 rounded-md font-bold text-sm md:text-base transition-all duration-200 ${
                 viewMode === 'stats' 
                   ? 'bg-blue-600 text-white shadow' 
                   : 'text-gray-400 hover:text-white hover:bg-gray-700'
               }`}
             >
-              Stats Progress
+              Gesamt Ranking
             </button>
             <button
               onClick={() => setViewMode('honor')}
-              className={`px-6 py-2 rounded-md font-bold transition-all duration-200 ${
+              className={`px-4 md:px-6 py-2 rounded-md font-bold text-sm md:text-base transition-all duration-200 ${
                 viewMode === 'honor' 
                   ? 'bg-purple-600 text-white shadow' 
                   : 'text-gray-400 hover:text-white hover:bg-gray-700'
@@ -340,48 +420,69 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         </div>
 
         {error && <div className="bg-red-900/50 border border-red-500 text-red-200 p-4 rounded mb-6 text-center">{error}</div>}
-        {loading && <div className="text-center py-12 text-blue-400 animate-pulse text-xl">Lade Daten der Kämpfer...</div>}
+        {loading && <div className="text-center py-12 text-blue-400 animate-pulse text-xl">Lade Daten & berechne Kämpfe...</div>}
 
         {!loading && !error && activeEvent && (
           <div className="animate-fade-in-up">
             
-            {/* VIEW A: STATS PROGRESS */}
+            {/* VIEW A: STATS PROGRESS (MODULAR TOTAL) */}
             {viewMode === 'stats' && (
               <div className="bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-700">
-                <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
-                  <h2 className="text-lg font-semibold text-blue-200">Stats Differenz (Start bis Heute)</h2>
+                <div className="p-4 bg-gray-800 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                  <div>
+                      <h2 className="text-lg font-semibold text-blue-200">Total War Ranking</h2>
+                      <p className="text-xs text-gray-400">Summe der Differenzen ($\Delta$) aller definierten Kampfphasen.</p>
+                  </div>
+                  <div className="text-xs text-gray-500 italic">
+                      Top {statsData.length} Spieler
+                  </div>
                 </div>
+                
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
-                        <th className="p-3">#</th>
-                        <th className="p-3">Name</th>
+                        <th className="p-3 sticky left-0 bg-gray-900 z-10 w-12 text-center">#</th>
+                        <th className="p-3 sticky left-12 bg-gray-900 z-10 min-w-[150px]">Name</th>
                         <th className="p-3">Allianz</th>
-                        <th className="p-3 text-right text-yellow-500">Power $\Delta$</th>
-                        <th className="p-3 text-right text-red-400">T4 $\Delta$</th>
-                        <th className="p-3 text-right text-red-500">T5 $\Delta$</th>
-                        <th className="p-3 text-right text-red-300 font-bold">Total $\Delta$</th>
-                        <th className="p-3 text-right text-gray-400">Dead $\Delta$</th>
+                        <th className="p-3 text-right text-yellow-500 whitespace-nowrap">Power $\Delta$</th>
+                        <th className="p-3 text-right text-red-400 whitespace-nowrap">T4 $\Delta$</th>
+                        <th className="p-3 text-right text-red-500 whitespace-nowrap">T5 $\Delta$</th>
+                        <th className="p-3 text-right text-red-300 font-bold whitespace-nowrap">Total Kills $\Delta$</th>
+                        <th className="p-3 text-right text-gray-400 whitespace-nowrap">Dead $\Delta$</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700 text-sm">
                       {statsData.map((row, idx) => (
                         <tr key={row.id} className="hover:bg-gray-750 transition-colors">
-                          <td className="p-3 text-gray-500 font-mono">{idx + 1}</td>
-                          <td className="p-3 font-medium text-white">{row.name}</td>
+                          <td className="p-3 text-gray-500 font-mono text-center sticky left-0 bg-gray-800 md:bg-transparent">{idx + 1}</td>
+                          <td className="p-3 font-medium text-white sticky left-12 bg-gray-800 md:bg-transparent truncate max-w-[180px]">{row.name}</td>
                           <td className="p-3 text-gray-300">[{row.alliance}]</td>
+                          
+                          {/* Power Diff */}
                           <td className={`p-3 text-right font-mono ${row.powerDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             {row.powerDiff > 0 ? '+' : ''}{formatNumber(row.powerDiff)}
                           </td>
+                          
+                          {/* T4 */}
                           <td className="p-3 text-right font-mono text-gray-300">+{formatNumber(row.t4KillsDiff)}</td>
+                          
+                          {/* T5 */}
                           <td className="p-3 text-right font-mono text-gray-300">+{formatNumber(row.t5KillsDiff)}</td>
-                          <td className="p-3 text-right font-mono font-bold text-yellow-400">+{formatNumber(row.totalKillsDiff)}</td>
+                          
+                          {/* Total Kills (Highlight) */}
+                          <td className="p-3 text-right font-mono font-bold text-yellow-400 bg-yellow-900/10 border-l border-r border-gray-700">
+                              +{formatNumber(row.totalKillsDiff)}
+                          </td>
+                          
+                          {/* Dead */}
                           <td className="p-3 text-right font-mono text-gray-400">+{formatNumber(row.deadDiff)}</td>
                         </tr>
                       ))}
                       {statsData.length === 0 && (
-                        <tr><td colSpan={8} className="p-8 text-center text-gray-500">Keine Daten verfügbar oder unpassende Dateien.</td></tr>
+                        <tr><td colSpan={8} className="p-12 text-center text-gray-500 italic">
+                            Noch keine Daten verfügbar. Der R5 muss erst "Kampfphasen" im Admin-Bereich definieren.
+                        </td></tr>
                       )}
                     </tbody>
                   </table>
@@ -389,7 +490,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
               </div>
             )}
 
-            {/* VIEW B: HONOR DASHBOARD */}
+            {/* VIEW B: HONOR DASHBOARD (Unverändert gut) */}
             {viewMode === 'honor' && (
               <div className="space-y-8">
                  
