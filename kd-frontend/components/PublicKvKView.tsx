@@ -36,7 +36,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   
   // Honor Specifics
   const [honorHistory, setHonorHistory] = useState<PlayerHonorHistory[]>([]);
-  const [kvkHonorFiles, setKvkHonorFiles] = useState<UploadedFile[]>([]); // Alle relevanten, sortierten Dateien
+  const [kvkHonorFiles, setKvkHonorFiles] = useState<UploadedFile[]>([]); 
   
   // Auswahl für Honor-Vergleich
   const [honorStartFileId, setHonorStartFileId] = useState<string>('');
@@ -53,15 +53,8 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<HonorPlayerInfo[] | 'not_found' | null>(null);
 
-  // 1. Load Events
-  useEffect(() => {
-    if (slug) loadEvents();
-  }, [slug]);
-
-  // 2. Load Files when Event Selected
-  useEffect(() => {
-    if (slug && selectedEventId) loadFilesAndCalculate();
-  }, [slug, selectedEventId]);
+  useEffect(() => { if (slug) loadEvents(); }, [slug]);
+  useEffect(() => { if (slug && selectedEventId) loadFilesAndCalculate(); }, [slug, selectedEventId]);
 
   const loadEvents = async () => {
     try {
@@ -109,21 +102,16 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       }
 
       // --- B. HONOR BERECHNUNG & SETUP ---
-      // Filter & Sortierung
+      // 🔧 KORREKTUR: Wir nutzen die Reihenfolge aus 'allHonor' (Backend 'fileOrder'),
+      // anstatt hier manuell nach Datum zu sortieren.
       const relevantHonorFiles = allHonor
-        .filter(f => event.honorFileIds.includes(f.id))
-        .sort((a, b) => {
-            const dateA = a.uploadDate ? new Date(a.uploadDate).getTime() : 0;
-            const dateB = b.uploadDate ? new Date(b.uploadDate).getTime() : 0;
-            // Fallback auf Name, falls Datum gleich/fehlt
-            if (dateA === dateB) return a.name.localeCompare(b.name);
-            return dateA - dateB;
-        });
+        .filter(f => event.honorFileIds.includes(f.id));
+        // .sort(...) ENTFERNT! Wir vertrauen der manuellen Sortierung.
 
       if (relevantHonorFiles.length > 0) {
         setKvkHonorFiles(relevantHonorFiles);
         
-        // Default Auswahl: Start = Erste Datei, Ende = Letzte Datei
+        // Default: Start = Erste, Ende = Letzte (gemäß Sortierung)
         setHonorStartFileId(relevantHonorFiles[0].id);
         setHonorEndFileId(relevantHonorFiles[relevantHonorFiles.length - 1].id);
 
@@ -144,11 +132,9 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     if (!searchQuery.trim()) return;
     const lowerQ = searchQuery.toLowerCase();
     
-    // Suche im History Array nach dem aktuellsten Eintrag
     const results = honorHistory
         .filter(p => p.name.toLowerCase().includes(lowerQ) || p.id.toLowerCase().includes(lowerQ))
         .map(p => {
-            // Finde Wert im aktuell gewählten "End"-File, sonst den allerletzten
             const lastEntry = p.history.find(h => h.fileId === honorEndFileId) || p.history[p.history.length - 1];
             return {
                 governorId: p.id,
@@ -168,10 +154,13 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   // --- Helpers ---
   const parseAnyNumber = (val: any): number => parseGermanNumber(val);
 
-  // Parse einer einzelnen Honor-Datei
+  const getFileName = (id: string) => {
+      const f = kvkHonorFiles.find(file => file.id === id);
+      return f ? f.name : 'Unbekannt';
+  };
+
   const parseHonorFile = (file: UploadedFile): HonorPlayerInfo[] => {
     const govIdIdx = findColumnIndex(file.headers, ['governor id', 'id', 'user id']);
-    // Wichtig: 'governor' ausgeschlossen bei Namenssuche, da 'Governor ID' sonst matchen würde
     const nameIdx = findColumnIndex(file.headers, ['name', 'display name', 'spieler']);
     const honorIdx = findColumnIndex(file.headers, ['honor', 'points', 'score', 'ehre']);
 
@@ -187,14 +176,12 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     }).filter(p => p.honorPoint > 0);
   };
 
-  // Erstellt die Historie für alle Spieler über alle Dateien
   const processHonorHistory = (files: UploadedFile[]): PlayerHonorHistory[] => {
     const map = new Map<string, PlayerHonorHistory>();
 
     files.forEach(file => {
       const parsedRows = parseHonorFile(file);
       
-      // Label für Chart
       let label = file.name.replace(/\.(xlsx|xls|csv)$/i, '').replace(/_/g, ' ');
       if (file.uploadDate) {
            const d = new Date(file.uploadDate);
@@ -206,16 +193,14 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
           map.set(row.governorId, { id: row.governorId, name: row.name, history: [] });
         }
         const entry = map.get(row.governorId)!;
-        entry.name = row.name; // Name aktualisieren
-        // Wir speichern fileId zusätzlich für exakte Zuordnung in der Tabelle
-        // @ts-ignore (Erweiterung des Typs on-the-fly, sauberer wäre Update in types.ts)
+        entry.name = row.name; 
+        // @ts-ignore
         entry.history.push({ fileName: label, fileId: file.id, honorPoint: row.honorPoint });
       });
     });
     return Array.from(map.values());
   };
 
-  // Stats Progress Berechnung
   const calculateStatsProgress = (start: UploadedFile, end: UploadedFile): StatProgressRow[] => {
     const parseRow = (headers: string[], row: any[]) => {
       const getIdx = (keys: string[]) => findColumnIndex(headers, keys);
@@ -270,29 +255,18 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     return result.sort((a, b) => b.totalKillsDiff - a.totalKillsDiff);
   };
 
-  // --- DYNAMISCHE TABELLEN DATEN ---
-  // Berechnet die Differenz zwischen gewählter Start- und End-Datei
   const comparisonHonorTableData = useMemo(() => {
     if (honorHistory.length === 0 || !honorStartFileId || !honorEndFileId) return [];
     
     return honorHistory.map(h => {
-        // Suche den Eintrag für die gewählte Start-Datei
-        // @ts-ignore (fileId property usage)
+        // @ts-ignore
         const startEntry = h.history.find(entry => entry.fileId === honorStartFileId);
-        
-        // Suche den Eintrag für die gewählte End-Datei
         // @ts-ignore
         const endEntry = h.history.find(entry => entry.fileId === honorEndFileId);
 
         const startVal = startEntry ? startEntry.honorPoint : 0;
         const endVal = endEntry ? endEntry.honorPoint : 0;
-
-        // Wenn beide 0 sind (Spieler in beiden Dateien nicht da), filtern wir ihn später raus oder zeigen ihn mit 0 an
-        // Hier: diffHonor ist der Zuwachs
         let diff = endVal - startVal;
-        
-        // Edge Case: Wenn StartVal 0 ist (Spieler neu), ist diff = endVal.
-        // Wenn EndVal 0 ist (Spieler weg), ist diff negativ.
         
         return {
             governorId: h.id,
@@ -302,20 +276,11 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             diffHonor: diff
         };
     })
-    // Filter: Zeige nur Spieler, die mindestens im End-Snapshot Punkte haben oder Punkte verloren haben (komisch, aber möglich)
-    // Oder einfach alle, die eine Veränderung haben?
-    // Üblicherweise will man sehen, wer am meisten gemacht hat.
     .filter(p => p.newHonor > 0 || p.diffHonor !== 0)
-    .sort((a, b) => b.diffHonor - a.diffHonor); // Sortiere nach Zuwachs
+    .sort((a, b) => b.diffHonor - a.diffHonor); 
   }, [honorHistory, honorStartFileId, honorEndFileId]);
 
   const activeEvent = events.find(e => e.id === selectedEventId);
-
-  // Helper für Dateinamenanzeige in Dropdown
-  const getFileName = (id: string) => {
-      const f = kvkHonorFiles.find(file => file.id === id);
-      return f ? f.name : 'Unbekannt';
-  };
 
   if (events.length === 0 && !loading) {
     return <div className="p-8 text-center text-gray-400">Keine öffentlichen KvK Events gefunden.</div>;
@@ -483,7 +448,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             <p className="text-sm text-gray-400">Vergleiche den Fortschritt zwischen zwei Zeitpunkten.</p>
                         </div>
                         
-                        {/* 🆕 Start / End Selector */}
+                        {/* Start / End Selector */}
                         <div className="flex gap-2 items-center bg-gray-900 p-2 rounded-lg">
                             <div className="flex flex-col">
                                 <label className="text-[10px] text-gray-500 uppercase font-bold pl-1">Start</label>
