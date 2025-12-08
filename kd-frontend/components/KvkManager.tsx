@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { KvkEvent, UploadedFile, CreateKvkEventPayload } from '../types';
-import { fetchKvkEvents, createKvkEvent, deleteKvkEvent, API_BASE_URL } from '../api'; // 🆕 Import API_BASE_URL
+import { fetchKvkEvents, createKvkEvent, deleteKvkEvent, API_BASE_URL } from '../api';
+import FileReorderList from './FileReorderList'; // 🆕 Import für die Sortier-Listen
 
 const KvkManager: React.FC = () => {
   const { token, user } = useAuth();
@@ -13,7 +14,7 @@ const KvkManager: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Form-State
+  // Form-State für neues Event
   const [name, setName] = useState('');
   const [startFileId, setStartFileId] = useState('');
   const [endFileId, setEndFileId] = useState('');
@@ -261,6 +262,29 @@ const KvkManager: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* --- FILE MANAGEMENT (SORTING & DELETING) --- */}
+      <div className="mt-12">
+          <h2 className="text-2xl font-bold text-white mb-4 border-b border-gray-700 pb-2">📂 Dateiverwaltung & Sortierung</h2>
+          <p className="text-gray-400 text-sm mb-4">Hier kannst du die Reihenfolge der Dateien ändern (z.B. für Charts) oder alte Dateien löschen.</p>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Overview Files Management */}
+              <FileReorderList 
+                type="overview" 
+                files={overviewFiles} 
+                onUpdate={loadData} 
+              />
+              
+              {/* Honor Files Management */}
+              <FileReorderList 
+                type="honor" 
+                files={honorFiles} 
+                onUpdate={loadData} 
+              />
+          </div>
+      </div>
+
     </div>
   );
 };

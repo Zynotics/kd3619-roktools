@@ -111,3 +111,28 @@ export async function fetchPublicKvkEvents(kingdomSlug: string): Promise<KvkEven
   
   return res.json();
 }
+
+// ==================== FILE MANAGEMENT API ====================
+
+export async function reorderFiles(type: 'overview' | 'honor' | 'activity', fileIds: string[]): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/${type}/files/reorder`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ order: fileIds }),
+    });
+
+    if (!res.ok) {
+        throw new Error('Failed to reorder files');
+    }
+}
+
+export async function deleteFile(type: 'overview' | 'honor' | 'activity', fileId: string): Promise<void> {
+     const res = await fetch(`${API_BASE_URL}/${type}/files/${fileId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+    });
+
+    if (!res.ok) {
+        throw new Error('Failed to delete file');
+    }
+}
