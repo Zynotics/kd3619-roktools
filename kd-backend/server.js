@@ -1,6 +1,8 @@
-// server.js - Backend mit Admin, Uploads, Gov-ID-Validierung, Feature-Rechten & Kingdom-Layout (Postgres)
-// UPDATED: Modulares KvK System (Fights + Honor Range)
+// server.js - VOLLSTÄNDIGE VERSION (Postgres)
+// Enthält: Auth, User-Admin, Kingdom-Admin, Activity-Files, Modulares KvK, Unified Uploads
+// + FIX: Postgres Column Mapping (normalizeFileRow)
 
+require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
@@ -9,8 +11,10 @@ const path = require('path');
 const XLSX = require('xlsx');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
 
-// 💾 Import der DB-Funktionen (inkl. KvK Manager)
+// 💾 Import der DB-Funktionen (Postgres)
+// Wir nutzen db-pg.js für alle Datenbank-Operationen
 const { 
   query, get, all, assignR5, updateKingdomStatus, deleteKingdom,
   createKvkEvent, getKvkEvents, getKvkEventById, updateKvkEvent, deleteKvkEvent
@@ -20,7 +24,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'kd3619-secret-key-change-in-production';
 
-// CORS
+// --- CORS ---
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
@@ -33,7 +37,7 @@ app.use(
     origin: function (origin, callback) {
       if (!origin) return callback(null, true);
       if (allowedOrigins.indexOf(origin) === -1) {
-        // Im Dev-Mode erlauben wir oft alles, für Production ggf. anpassen
+        // Im Dev-Mode erlauben wir oft alles. Für Production hier strenger sein.
         return callback(null, true); 
       }
       return callback(null, true);
@@ -47,19 +51,36 @@ app.use(
 app.options('*', cors());
 app.use(express.json());
 
-// 📂 Upload-Ordner
-const uploadsOverviewDir = path.join(__dirname, 'uploads', 'overview');
-const uploadsHonorDir = path.join(__dirname, 'uploads', 'honor');
-const uploadsActivityDir = path.join(__dirname, 'uploads', 'activity');
+// --- ORDNERSYSTEM ---
+const uploadDir = path.join(__dirname, 'uploads');
+const uploadsOverviewDir = path.join(uploadDir, 'overview');
+const uploadsHonorDir = path.join(uploadDir, 'honor');
+const uploadsActivityDir = path.join(uploadDir, 'activity');
 
-[uploadsOverviewDir, uploadsHonorDir, uploadsActivityDir].forEach((dir) => {
+[uploadDir, uploadsOverviewDir, uploadsHonorDir, uploadsActivityDir].forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 });
 
-// ==================== HELPER FUNCTIONS ====================
+// --- HELPER: Normalize DB Rows (Postgres Fix) ---
+// Postgres gibt Spaltennamen oft kleingeschrieben zurück. Das Frontend erwartet CamelCase.
+const normalizeFileRow = (row) => {
+    if (!row) return null;
+    return {
+        id: row.id,
+        name: row.name,
+        // Fallback für verschiedene Schreibweisen
+        uploadDate: row.uploadDate || row.uploaddate || row.created_at || new Date().toISOString(),
+        size: row.size,
+        kingdomId: row.kingdom_id,
+        // JSON Parsen falls String (bei Postgres TEXT feldern)
+        headers: typeof row.headers === 'string' ? JSON.parse(row.headers || '[]') : (row.headers || []),
+        data: typeof row.data === 'string' ? JSON.parse(row.data || '[]') : (row.data || [])
+    };
+};
 
+// --- HELPER: Excel Parser ---
 function parseExcel(filePath) {
   return new Promise((resolve, reject) => {
     try {
@@ -97,61 +118,23 @@ function findColumnIndex(headers, possibleNames) {
   return undefined;
 }
 
+// User-Gov-ID Prüfung Helper
 async function userGovIdExists(governorIdRaw) {
   if (!governorIdRaw) return false;
   const governorId = String(governorIdRaw).trim();
-  if (!governorId) return false;
-  try {
-    const row = await get('SELECT id FROM users WHERE governor_id = $1 LIMIT 1', [governorId]);
-    return !!row;
-  } catch (error) {
-    console.error('Error checking governor_id in users table:', error);
-    return false;
-  }
+  const row = await get('SELECT id FROM users WHERE governor_id = $1 LIMIT 1', [governorId]);
+  return !!row;
 }
 
-async function governorIdExists(governorIdRaw) {
-  if (!governorIdRaw) return false;
-  const governorId = String(governorIdRaw).trim();
-  if (!governorId) return false;
-  const tables = ['overview_files', 'honor_files'];
-  const possibleGovHeaders = ['governor id', 'governorid', 'gov id'];
-
-  try {
-    for (const table of tables) {
-      const rows = await all(`SELECT headers, data FROM ${table}`);
-      for (const row of rows) {
-        const headers = JSON.parse(row.headers || '[]');
-        const data = JSON.parse(row.data || '[]');
-        const govIdx = findColumnIndex(headers, possibleGovHeaders);
-        if (govIdx === undefined) continue;
-        for (const r of data) {
-          const value = r[govIdx];
-          if (value == null) continue;
-          const v = String(value).trim();
-          if (v === governorId) return true;
-        }
-      }
-    }
-  } catch (e) {
-    console.error('Error while searching governorId:', e);
-    return false;
-  }
-  return false;
-}
-
+// Kingdom Slug Helper
 async function findKingdomBySlug(slug) {
   if (!slug) return null;
   const normalized = String(slug).trim().toLowerCase();
-  try {
-    return await get('SELECT id, display_name, slug, rok_identifier, status, plan, created_at, updated_at FROM kingdoms WHERE LOWER(slug) = $1 LIMIT 1', [normalized]);
-  } catch (error) {
-    console.error('Error fetching kingdom by slug:', error);
-    return null;
-  }
+  return await get('SELECT * FROM kingdoms WHERE LOWER(slug) = $1 LIMIT 1', [normalized]);
 }
 
-// ==================== MULTER CONFIG ====================
+
+// --- MULTER STORAGE ---
 const overviewStorage = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, uploadsOverviewDir); },
   filename: (req, file, cb) => { cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname)); },
@@ -165,34 +148,12 @@ const activityStorage = multer.diskStorage({
   filename: (req, file, cb) => { cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname)); },
 });
 
-const overviewUpload = multer({
-  storage: overviewStorage,
-  fileFilter: (req, file, cb) => {
-    if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
-    else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
-  },
-  limits: { fileSize: 50 * 1024 * 1024 }, // Erhöht auf 50MB
-});
-const honorUpload = multer({
-  storage: honorStorage,
-  fileFilter: (req, file, cb) => {
-    if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
-    else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
-  },
-  limits: { fileSize: 50 * 1024 * 1024 },
-});
-const activityUpload = multer({
-  storage: activityStorage,
-  fileFilter: (req, file, cb) => {
-    if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
-    else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
-  },
-  limits: { fileSize: 50 * 1024 * 1024 },
-});
+const overviewUpload = multer({ storage: overviewStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+const honorUpload = multer({ storage: honorStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+const activityUpload = multer({ storage: activityStorage, limits: { fileSize: 50 * 1024 * 1024 } });
 
 
-// ==================== AUTH-MIDDLEWARES ====================
-
+// --- AUTH MIDDLEWARES ---
 function getKingdomId(req) {
   return req.user.role === 'admin' ? null : req.user.kingdomId;
 }
@@ -200,14 +161,13 @@ function getKingdomId(req) {
 function authenticateToken(req, res, next) {
   const header = req.headers['authorization'];
   const token = header && header.split(' ')[1];
-
-  if (!token) return res.status(401).json({ error: 'Kein Token vorhanden' });
+  if (!token) return res.status(401).json({ error: 'Token missing' });
 
   jwt.verify(token, JWT_SECRET, async (err, user) => {
-    if (err) return res.status(403).json({ error: 'Ungültiger Token' });
+    if (err) return res.status(403).json({ error: 'Invalid Token' });
     
     const dbUser = await get('SELECT role, kingdom_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files FROM users WHERE id = $1', [user.id]);
-    if (!dbUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    if (!dbUser) return res.status(404).json({ error: 'User not found' });
     
     req.user = { 
       ...user, 
@@ -225,38 +185,37 @@ function authenticateToken(req, res, next) {
 }
 
 function requireReadAccess(req, res, next) {
-    if (!req.user) return res.status(401).json({ error: 'Nicht authentifiziert' });
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
     const role = req.user.role;
     if (role !== 'admin' && role !== 'r5' && role !== 'r4') {
-        return res.status(403).json({ error: 'Admin, R5 oder R4 Rechte erforderlich' });
+        return res.status(403).json({ error: 'Access denied' });
     }
     if ((role === 'r5' || role === 'r4') && !req.user.kingdomId) {
-        return res.status(403).json({ error: `${role.toUpperCase()}-Benutzer ist keinem Königreich zugewiesen.` });
+        return res.status(403).json({ error: 'No Kingdom assigned' });
     }
     next();
 }
 
 async function requireAdmin(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: 'Nicht authentifiziert' });
+  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
   const role = req.user.role;
-  if (role !== 'admin' && role !== 'r5') return res.status(403).json({ error: 'Admin oder R5 Rechte erforderlich' });
-  if (role === 'r5' && !req.user.kingdomId) return res.status(403).json({ error: 'R5-Benutzer ist keinem Königreich zugewiesen.' });
+  if (role !== 'admin' && role !== 'r5') return res.status(403).json({ error: 'Admin/R5 Access required' });
+  if (role === 'r5' && !req.user.kingdomId) return res.status(403).json({ error: 'No Kingdom assigned' });
   next();
 }
 
-function hasFileManagementAccess(req, type) {
+function hasFileAccess(req, type) {
     const { role, canManageOverviewFiles, canManageHonorFiles, canManageActivityFiles } = req.user;
     if (role === 'admin') return true;
     if (role === 'r5' || role === 'r4') {
-        if (type === 'overview') return canManageOverviewFiles || role === 'r5'; // R5 darf immer Overview laden
-        if (type === 'honor') return canManageHonorFiles || role === 'r5'; // R5 darf immer Honor laden
-        if (type === 'activity') return true;
+        if (type === 'overview') return canManageOverviewFiles || role === 'r5';
+        if (type === 'honor') return canManageHonorFiles || role === 'r5';
+        if (type === 'activity') return canManageActivityFiles || role === 'r5';
     }
     return false;
 }
 
-
-// ==================== AUTH ENDPOINTS ====================
+// ==================== ENDPOINTS: AUTH & USERS ====================
 
 app.post('/api/auth/check-gov-id', async (req, res) => {
   try {
@@ -305,8 +264,8 @@ app.post('/api/auth/register', async (req, res) => {
     const userId = 'user-' + Date.now();
 
     await query(
-      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview, kingdom_id, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [userId, email, username, passwordHash, false, 'user', normalizedGovId, false, false, false, assignedKingdomId, false, false, false]
+      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, kingdom_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [userId, email, username, hash, false, 'user', normalizedGovId, assignedKingdomId]
     );
 
     return res.json({
@@ -319,9 +278,6 @@ app.post('/api/auth/register', async (req, res) => {
           role: 'user', 
           governorId: normalizedGovId,
           kingdomId: assignedKingdomId,
-          canManageOverviewFiles: false,
-          canManageHonorFiles: false,
-          canManageActivityFiles: false 
       }
     });
   } catch (error) {
@@ -710,10 +666,8 @@ app.get('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, re
 // 2. POST /api/admin/kvk/events - Neues Event erstellen (mit Fights Array)
 app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    // fights statt startFileId/endFileId
     const { name, fights, honorStartFileId, honorEndFileId, isPublic, kingdomId: bodyKingdomId } = req.body;
     
-    // Kingdom Zuordnung: R5 nimmt sein eigenes, Admin kann wählen (sonst eigenes)
     const targetKingdomId = req.user.role === 'admin' && bodyKingdomId ? bodyKingdomId : req.user.kingdomId;
 
     if (!targetKingdomId) {
@@ -728,7 +682,7 @@ app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, r
       id: 'kvk-' + Date.now(),
       name,
       kingdomId: targetKingdomId,
-      fights: fights || [], // Array von Kampf-Objekten
+      fights: fights || [], 
       honorStartFileId,
       honorEndFileId,
       isPublic: !!isPublic,
@@ -796,56 +750,55 @@ app.get('/api/public/kingdom/:slug', async (req, res) => {
     res.json(k);
 });
 
-app.get('/api/public/kingdom/:slug/overview-files', async (req, res) => {
-    const k = await findKingdomBySlug(req.params.slug);
-    if (!k) return res.status(404).json({ error: 'Not found' });
-    // WICHTIG: Nutzt jetzt die gemeinsame 'overview_files' Tabelle für Fights und Analytics
-    const rows = await all(`SELECT * FROM overview_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploadDate`, [k.id]);
-    res.json(rows.map(r => ({...r, headers: JSON.parse(r.headers||'[]'), data: JSON.parse(r.data||'[]')})));
-});
-
-app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
-    const k = await findKingdomBySlug(req.params.slug);
-    if (!k) return res.status(404).json({ error: 'Not found' });
-    const rows = await all(`SELECT * FROM honor_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploadDate`, [k.id]);
-    res.json(rows.map(r => ({...r, headers: JSON.parse(r.headers||'[]'), data: JSON.parse(r.data||'[]')})));
-});
-
-// NEU: Öffentliche KvK Events abrufen
+// GET Public KvK Events
 app.get('/api/public/kingdom/:slug/kvk-events', async (req, res) => {
     try {
       const k = await findKingdomBySlug(req.params.slug);
       if (!k) return res.status(404).json({ error: 'Not found' });
 
-      // Hole alle Events für dieses Kingdom
       const events = await getKvkEvents(k.id);
-      
-      // Nur Public Events zurückgeben
-      const publicEvents = events.filter(e => e.isPublic);
-      
-      res.json(publicEvents);
+      res.json(events.filter(e => e.isPublic));
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Fehler beim Laden der öffentlichen KvK Events' });
     }
 });
 
+// GET Public Overview Files (mit normalizeFileRow FIX)
+app.get('/api/public/kingdom/:slug/overview-files', async (req, res) => {
+    const k = await findKingdomBySlug(req.params.slug);
+    if (!k) return res.status(404).json({ error: 'Not found' });
+    
+    // Quotes um "uploadDate" wichtig für Postgres
+    const rows = await all(`SELECT * FROM overview_files WHERE kingdom_id = $1 ORDER BY fileOrder, "uploadDate"`, [k.id]);
+    res.json(rows.map(normalizeFileRow));
+});
+
+// GET Public Honor Files (mit normalizeFileRow FIX)
+app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
+    const k = await findKingdomBySlug(req.params.slug);
+    if (!k) return res.status(404).json({ error: 'Not found' });
+    
+    const rows = await all(`SELECT * FROM honor_files WHERE kingdom_id = $1 ORDER BY fileOrder, "uploadDate"`, [k.id]);
+    res.json(rows.map(normalizeFileRow));
+});
+
 
 // ==================== AUTH DATA (Overview/Honor/Activity) ====================
 
+// 1. OVERVIEW
 app.get('/overview/files-data', authenticateToken, async (req, res) => {
     const { role, kingdomId } = req.user;
     const kId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
     if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
     
-    const rows = await all(`SELECT * FROM overview_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploadDate`, [kId]);
-    res.json(rows.map(r => ({...r, headers: JSON.parse(r.headers||'[]'), data: JSON.parse(r.data||'[]')})));
+    const rows = await all(`SELECT * FROM overview_files WHERE kingdom_id = $1 ORDER BY fileOrder, "uploadDate"`, [kId]);
+    res.json(rows.map(normalizeFileRow));
 });
 
 app.post('/overview/upload', authenticateToken, overviewUpload.single('file'), async (req, res) => {
     const { role, kingdomId, id: userId } = req.user;
     
-    // R5 darf immer hochladen
     if (!hasFileManagementAccess(req, 'overview') && role !== 'admin') {
          return res.status(403).json({ error: 'Keine Berechtigung zum Hochladen von Overview-Dateien.' });
     }
@@ -864,7 +817,7 @@ app.post('/overview/upload', authenticateToken, overviewUpload.single('file'), a
         const { headers, data } = await parseExcel(req.file.path);
         const id = 'ov-' + Date.now();
         await query(
-          `INSERT INTO overview_files (id, name, filename, path, size, uploadDate, headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          `INSERT INTO overview_files (id, name, filename, path, size, "uploadDate", headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
           [id, req.file.originalname, req.file.filename, req.file.path, req.file.size, new Date().toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, userId]
         );
         res.json({ success: true });
@@ -904,13 +857,13 @@ app.post('/overview/files/reorder', authenticateToken, async (req, res) => {
     res.json({ success: true });
 });
 
-// HONOR
+// 2. HONOR
 app.get('/honor/files-data', authenticateToken, async (req, res) => {
     const { role, kingdomId } = req.user;
     const kId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
     if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
-    const rows = await all(`SELECT * FROM honor_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploadDate`, [kId]);
-    res.json(rows.map(r => ({...r, headers: JSON.parse(r.headers||'[]'), data: JSON.parse(r.data||'[]')})));
+    const rows = await all(`SELECT * FROM honor_files WHERE kingdom_id = $1 ORDER BY fileOrder, "uploadDate"`, [kId]);
+    res.json(rows.map(normalizeFileRow));
 });
 
 app.post('/honor/upload', authenticateToken, honorUpload.single('file'), async (req, res) => {
@@ -932,7 +885,7 @@ app.post('/honor/upload', authenticateToken, honorUpload.single('file'), async (
         const { headers, data } = await parseExcel(req.file.path);
         const id = 'hon-' + Date.now();
         await query(
-          `INSERT INTO honor_files (id, name, filename, path, size, uploadDate, headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          `INSERT INTO honor_files (id, name, filename, path, size, "uploadDate", headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
           [id, req.file.originalname, req.file.filename, req.file.path, req.file.size, new Date().toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, userId]
         );
         res.json({ success: true });
@@ -970,8 +923,7 @@ app.post('/honor/files/reorder', authenticateToken, async (req, res) => {
     res.json({ success: true });
 });
 
-// ==================== ACTIVITY DATA (R4/R5 Only) ====================
-
+// 3. ACTIVITY (R4/R5 Only)
 app.get('/activity/files-data', authenticateToken, async (req, res) => {
     if (!['admin', 'r5', 'r4'].includes(req.user.role)) return res.status(403).json({ error: 'Kein Zugriff' });
 
@@ -980,8 +932,8 @@ app.get('/activity/files-data', authenticateToken, async (req, res) => {
     
     if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
     
-    const rows = await all(`SELECT * FROM activity_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploadDate`, [kId]);
-    res.json(rows.map(r => ({...r, headers: JSON.parse(r.headers||'[]'), data: JSON.parse(r.data||'[]')})));
+    const rows = await all(`SELECT * FROM activity_files WHERE kingdom_id = $1 ORDER BY fileOrder, "uploadDate"`, [kId]);
+    res.json(rows.map(normalizeFileRow));
 });
 
 app.post('/activity/upload', authenticateToken, activityUpload.single('file'), async (req, res) => {
@@ -1004,7 +956,7 @@ app.post('/activity/upload', authenticateToken, activityUpload.single('file'), a
         const { headers, data } = await parseExcel(req.file.path);
         const id = 'act-' + Date.now();
         await query(
-          `INSERT INTO activity_files (id, name, filename, path, size, uploadDate, headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          `INSERT INTO activity_files (id, name, filename, path, size, "uploadDate", headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
           [id, req.file.originalname, req.file.filename, req.file.path, req.file.size, new Date().toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, userId]
         );
         res.json({ success: true });
