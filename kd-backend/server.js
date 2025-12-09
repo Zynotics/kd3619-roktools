@@ -1,4 +1,5 @@
 // server.js - Backend mit Admin, Uploads, Gov-ID-Validierung, Feature-Rechten & Kingdom-Layout (Postgres)
+// UPDATED: Modulares KvK System (Fights + Honor Range)
 
 const express = require('express');
 const multer = require('multer');
@@ -32,8 +33,8 @@ app.use(
     origin: function (origin, callback) {
       if (!origin) return callback(null, true);
       if (allowedOrigins.indexOf(origin) === -1) {
-        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-        return callback(new Error(msg), false);
+        // Im Dev-Mode erlauben wir oft alles, für Production ggf. anpassen
+        return callback(null, true); 
       }
       return callback(null, true);
     },
@@ -170,7 +171,7 @@ const overviewUpload = multer({
     if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
     else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
   },
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 }, // Erhöht auf 50MB
 });
 const honorUpload = multer({
   storage: honorStorage,
@@ -178,7 +179,7 @@ const honorUpload = multer({
     if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
     else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
   },
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 const activityUpload = multer({
   storage: activityStorage,
@@ -186,7 +187,7 @@ const activityUpload = multer({
     if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
     else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
   },
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
 
@@ -247,8 +248,8 @@ function hasFileManagementAccess(req, type) {
     const { role, canManageOverviewFiles, canManageHonorFiles, canManageActivityFiles } = req.user;
     if (role === 'admin') return true;
     if (role === 'r5' || role === 'r4') {
-        if (type === 'overview') return canManageOverviewFiles;
-        if (type === 'honor') return canManageHonorFiles;
+        if (type === 'overview') return canManageOverviewFiles || role === 'r5'; // R5 darf immer Overview laden
+        if (type === 'honor') return canManageHonorFiles || role === 'r5'; // R5 darf immer Honor laden
         if (type === 'activity') return true;
     }
     return false;
@@ -710,7 +711,7 @@ app.get('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, re
 app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, res) => {
   try {
     // fights statt startFileId/endFileId
-    const { name, fights, honorFileIds, isPublic, kingdomId: bodyKingdomId } = req.body;
+    const { name, fights, honorStartFileId, honorEndFileId, isPublic, kingdomId: bodyKingdomId } = req.body;
     
     // Kingdom Zuordnung: R5 nimmt sein eigenes, Admin kann wählen (sonst eigenes)
     const targetKingdomId = req.user.role === 'admin' && bodyKingdomId ? bodyKingdomId : req.user.kingdomId;
@@ -728,7 +729,8 @@ app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, r
       name,
       kingdomId: targetKingdomId,
       fights: fights || [], // Array von Kampf-Objekten
-      honorFileIds: honorFileIds || [], // Array von IDs
+      honorStartFileId,
+      honorEndFileId,
       isPublic: !!isPublic,
       createdAt: new Date()
     };
@@ -744,7 +746,7 @@ app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, r
 // 3. PUT /api/admin/kvk/events/:id - Event bearbeiten (mit Fights Array)
 app.put('/api/admin/kvk/events/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { name, fights, honorFileIds, isPublic } = req.body;
+    const { name, fights, honorStartFileId, honorEndFileId, isPublic } = req.body;
     const eventId = req.params.id;
 
     // Check ownership
@@ -756,7 +758,7 @@ app.put('/api/admin/kvk/events/:id', authenticateToken, requireAdmin, async (req
     }
 
     const updated = await updateKvkEvent(eventId, {
-      name, fights, honorFileIds, isPublic
+      name, fights, honorStartFileId, honorEndFileId, isPublic
     });
     res.json(updated);
   } catch (error) {
@@ -797,6 +799,7 @@ app.get('/api/public/kingdom/:slug', async (req, res) => {
 app.get('/api/public/kingdom/:slug/overview-files', async (req, res) => {
     const k = await findKingdomBySlug(req.params.slug);
     if (!k) return res.status(404).json({ error: 'Not found' });
+    // WICHTIG: Nutzt jetzt die gemeinsame 'overview_files' Tabelle für Fights und Analytics
     const rows = await all(`SELECT * FROM overview_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploadDate`, [k.id]);
     res.json(rows.map(r => ({...r, headers: JSON.parse(r.headers||'[]'), data: JSON.parse(r.data||'[]')})));
 });
@@ -842,6 +845,7 @@ app.get('/overview/files-data', authenticateToken, async (req, res) => {
 app.post('/overview/upload', authenticateToken, overviewUpload.single('file'), async (req, res) => {
     const { role, kingdomId, id: userId } = req.user;
     
+    // R5 darf immer hochladen
     if (!hasFileManagementAccess(req, 'overview') && role !== 'admin') {
          return res.status(403).json({ error: 'Keine Berechtigung zum Hochladen von Overview-Dateien.' });
     }
