@@ -1,8 +1,7 @@
-// server.js - VOLLSTÄNDIGE VERSION (Postgres)
+// server.js - VOLLSTÄNDIGE & FINALE VERSION (Postgres)
 // Enthält: Auth, User-Admin, Kingdom-Admin, Activity-Files, Modulares KvK, Unified Uploads
-// + FIX: Postgres Column Mapping (normalizeFileRow)
+// Fixes: Entfernung von 'uuid'/'dotenv' Dependencies zur Stabilität, Postgres Spalten-Normalisierung
 
-require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
@@ -11,7 +10,9 @@ const path = require('path');
 const XLSX = require('xlsx');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { v4: uuidv4 } = require('uuid');
+
+// Interne ID-Generierung (Ersetzt uuid Paket um Fehler zu vermeiden)
+const generateId = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
 // 💾 Import der DB-Funktionen (Postgres)
 // Wir nutzen db-pg.js für alle Datenbank-Operationen
@@ -37,7 +38,7 @@ app.use(
     origin: function (origin, callback) {
       if (!origin) return callback(null, true);
       if (allowedOrigins.indexOf(origin) === -1) {
-        // Im Dev-Mode erlauben wir oft alles. Für Production hier strenger sein.
+        // Im Zweifel erlauben (für Tests), in Produktion strenger sein
         return callback(null, true); 
       }
       return callback(null, true);
@@ -63,14 +64,14 @@ const uploadsActivityDir = path.join(uploadDir, 'activity');
   }
 });
 
-// --- HELPER: Normalize DB Rows (Postgres Fix) ---
+// --- HELPER: Normalize DB Rows (WICHTIG FÜR PUBLIC VIEW) ---
 // Postgres gibt Spaltennamen oft kleingeschrieben zurück. Das Frontend erwartet CamelCase.
 const normalizeFileRow = (row) => {
     if (!row) return null;
     return {
         id: row.id,
         name: row.name,
-        // Fallback für verschiedene Schreibweisen
+        // Fallback für verschiedene Schreibweisen aus der DB
         uploadDate: row.uploadDate || row.uploaddate || row.created_at || new Date().toISOString(),
         size: row.size,
         kingdomId: row.kingdom_id,
@@ -108,16 +109,6 @@ function parseExcel(filePath) {
   });
 }
 
-function findColumnIndex(headers, possibleNames) {
-  if (!Array.isArray(headers)) return undefined;
-  const normalizedHeaders = headers.map((h) => h ? h.toString().trim().toLowerCase() : '');
-  for (const name of possibleNames) {
-    const idx = normalizedHeaders.indexOf(name.toLowerCase());
-    if (idx !== -1) return idx;
-  }
-  return undefined;
-}
-
 // User-Gov-ID Prüfung Helper
 async function userGovIdExists(governorIdRaw) {
   if (!governorIdRaw) return false;
@@ -148,6 +139,7 @@ const activityStorage = multer.diskStorage({
   filename: (req, file, cb) => { cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname)); },
 });
 
+// Limits erhöht auf 50MB
 const overviewUpload = multer({ storage: overviewStorage, limits: { fileSize: 50 * 1024 * 1024 } });
 const honorUpload = multer({ storage: honorStorage, limits: { fileSize: 50 * 1024 * 1024 } });
 const activityUpload = multer({ storage: activityStorage, limits: { fileSize: 50 * 1024 * 1024 } });
@@ -261,7 +253,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const userId = 'user-' + Date.now();
+    const userId = generateId('user');
 
     await query(
       `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, kingdom_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
@@ -557,7 +549,7 @@ app.post('/api/admin/kingdoms', authenticateToken, requireAdmin, async (req, res
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
     try {
         const { displayName, slug, rokIdentifier } = req.body;
-        const id = 'kdm-' + Date.now();
+        const id = generateId('kdm');
         const nSlug = String(slug).trim().toLowerCase().replace(/[^a-z0-9\-]/g, '-');
         
         const existingBySlug = await findKingdomBySlug(nSlug);
@@ -666,8 +658,10 @@ app.get('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, re
 // 2. POST /api/admin/kvk/events - Neues Event erstellen (mit Fights Array)
 app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, res) => {
   try {
+    // fights statt startFileId/endFileId
     const { name, fights, honorStartFileId, honorEndFileId, isPublic, kingdomId: bodyKingdomId } = req.body;
     
+    // Kingdom Zuordnung: R5 nimmt sein eigenes, Admin kann wählen (sonst eigenes)
     const targetKingdomId = req.user.role === 'admin' && bodyKingdomId ? bodyKingdomId : req.user.kingdomId;
 
     if (!targetKingdomId) {
@@ -679,7 +673,7 @@ app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, r
     }
 
     const newEvent = {
-      id: 'kvk-' + Date.now(),
+      id: generateId('kvk'),
       name,
       kingdomId: targetKingdomId,
       fights: fights || [], 
@@ -697,7 +691,7 @@ app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, r
   }
 });
 
-// 3. PUT /api/admin/kvk/events/:id - Event bearbeiten (mit Fights Array)
+// 3. PUT /api/admin/kvk/events/:id - Event bearbeiten
 app.put('/api/admin/kvk/events/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { name, fights, honorStartFileId, honorEndFileId, isPublic } = req.body;
@@ -750,36 +744,37 @@ app.get('/api/public/kingdom/:slug', async (req, res) => {
     res.json(k);
 });
 
-// GET Public KvK Events
 app.get('/api/public/kingdom/:slug/kvk-events', async (req, res) => {
     try {
       const k = await findKingdomBySlug(req.params.slug);
       if (!k) return res.status(404).json({ error: 'Not found' });
 
+      // Hole alle Events für dieses Kingdom
       const events = await getKvkEvents(k.id);
-      res.json(events.filter(e => e.isPublic));
+      
+      // Nur Public Events zurückgeben
+      const publicEvents = events.filter(e => e.isPublic);
+      
+      res.json(publicEvents);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Fehler beim Laden der öffentlichen KvK Events' });
     }
 });
 
-// GET Public Overview Files (mit normalizeFileRow FIX)
+// Public Overview mit Normalize Fix
 app.get('/api/public/kingdom/:slug/overview-files', async (req, res) => {
     const k = await findKingdomBySlug(req.params.slug);
     if (!k) return res.status(404).json({ error: 'Not found' });
-    
-    // Quotes um "uploadDate" wichtig für Postgres
-    const rows = await all(`SELECT * FROM overview_files WHERE kingdom_id = $1 ORDER BY fileOrder, "uploadDate"`, [k.id]);
+    const rows = await all(`SELECT * FROM overview_files WHERE kingdom_id = $1 ORDER BY "uploadDate" ASC`, [k.id]);
     res.json(rows.map(normalizeFileRow));
 });
 
-// GET Public Honor Files (mit normalizeFileRow FIX)
+// Public Honor mit Normalize Fix
 app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
     const k = await findKingdomBySlug(req.params.slug);
     if (!k) return res.status(404).json({ error: 'Not found' });
-    
-    const rows = await all(`SELECT * FROM honor_files WHERE kingdom_id = $1 ORDER BY fileOrder, "uploadDate"`, [k.id]);
+    const rows = await all(`SELECT * FROM honor_files WHERE kingdom_id = $1 ORDER BY "uploadDate" ASC`, [k.id]);
     res.json(rows.map(normalizeFileRow));
 });
 
@@ -792,7 +787,9 @@ app.get('/overview/files-data', authenticateToken, async (req, res) => {
     const kId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
     if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
     
-    const rows = await all(`SELECT * FROM overview_files WHERE kingdom_id = $1 ORDER BY fileOrder, "uploadDate"`, [kId]);
+    // Sortierung nach Datum wichtig für Zeitleisten
+    const rows = await all(`SELECT * FROM overview_files WHERE kingdom_id = $1 ORDER BY "uploadDate" ASC`, [kId]);
+    // Normalisieren der DB-Zeilen für Frontend (CamelCase)
     res.json(rows.map(normalizeFileRow));
 });
 
@@ -815,7 +812,7 @@ app.post('/overview/upload', authenticateToken, overviewUpload.single('file'), a
 
     try {
         const { headers, data } = await parseExcel(req.file.path);
-        const id = 'ov-' + Date.now();
+        const id = generateId('ov');
         await query(
           `INSERT INTO overview_files (id, name, filename, path, size, "uploadDate", headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
           [id, req.file.originalname, req.file.filename, req.file.path, req.file.size, new Date().toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, userId]
@@ -862,7 +859,7 @@ app.get('/honor/files-data', authenticateToken, async (req, res) => {
     const { role, kingdomId } = req.user;
     const kId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
     if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
-    const rows = await all(`SELECT * FROM honor_files WHERE kingdom_id = $1 ORDER BY fileOrder, "uploadDate"`, [kId]);
+    const rows = await all(`SELECT * FROM honor_files WHERE kingdom_id = $1 ORDER BY "uploadDate" ASC`, [kId]);
     res.json(rows.map(normalizeFileRow));
 });
 
@@ -883,7 +880,7 @@ app.post('/honor/upload', authenticateToken, honorUpload.single('file'), async (
 
     try {
         const { headers, data } = await parseExcel(req.file.path);
-        const id = 'hon-' + Date.now();
+        const id = generateId('hon');
         await query(
           `INSERT INTO honor_files (id, name, filename, path, size, "uploadDate", headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
           [id, req.file.originalname, req.file.filename, req.file.path, req.file.size, new Date().toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, userId]
@@ -954,7 +951,7 @@ app.post('/activity/upload', authenticateToken, activityUpload.single('file'), a
 
     try {
         const { headers, data } = await parseExcel(req.file.path);
-        const id = 'act-' + Date.now();
+        const id = generateId('act');
         await query(
           `INSERT INTO activity_files (id, name, filename, path, size, "uploadDate", headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
           [id, req.file.originalname, req.file.filename, req.file.path, req.file.size, new Date().toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, userId]
