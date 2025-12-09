@@ -1,4 +1,4 @@
-// types.ts
+// types.ts - Vollständige Typendefinitionen
 
 export type TableData = any[][];
 export type TableHeaders = string[];
@@ -8,6 +8,7 @@ export type UploadedFile = {
   name: string;
   headers: TableHeaders;
   data: TableData;
+  uploadDate?: string; // Wichtig für die zeitliche Einordnung
 };
 
 export type PlayerInfo = {
@@ -50,7 +51,7 @@ export type PlayerStatChange = {
     newTroopsPower: number;
     diffTroopsPower: number;
     
-    // Für detaillierte Analyse (optional für Total View)
+    // Optional für detaillierte Analyse
     t4KillsDiff?: number;
     t5KillsDiff?: number;
 };
@@ -101,6 +102,8 @@ export type PlayerHonorHistory = {
   name: string;
   history: {
     fileName: string;
+    fileId: string;
+    date?: string;
     honorPoint: number;
   }[];
 };
@@ -140,7 +143,7 @@ export interface Kingdom {
   ownerEmail?: string | null;
 }
 
-// 🆕 NEU: Activity Typen
+// Activity Typen
 export type ActivityPlayerInfo = {
     id: string;
     name: string;
@@ -153,14 +156,14 @@ export type ActivityPlayerInfo = {
     techDonation: number;
 };
 
-// 🆕 NEU: Modulares KvK System
+// --- MODULARES KVK SYSTEM (UPDATED) ---
 
-// Definition eines einzelnen Kampfes innerhalb eines Events
+// Definition eines einzelnen Kampfes
 export interface KvkFight {
-  id: string;          // Eindeutige ID für den Kampf (z.B. UUID)
-  name: string;        // z.B. "Pass 4 Öffnung"
-  startFileId: string; // Snapshot VOR dem Kampf
-  endFileId: string;   // Snapshot NACH dem Kampf
+  id: string;          
+  name: string;        
+  startFileId: string; // ID aus dem Overview-Pool
+  endFileId: string;   // ID aus dem Overview-Pool
 }
 
 // Das Haupt-Event Objekt
@@ -168,8 +171,12 @@ export interface KvkEvent {
   id: string;
   name: string;
   kingdomId: string;
-  fights: KvkFight[];     // Array von Kämpfen statt einzelner Start/End Files
-  honorFileIds: string[]; // Liste von Honor-Files
+  fights: KvkFight[];
+  
+  // Honor Tracking Definition (Range statt Liste)
+  honorStartFileId?: string; // ID aus dem Honor-Pool
+  honorEndFileId?: string;   // ID aus dem Honor-Pool
+  
   isPublic: boolean;
   createdAt: string;
 }
@@ -179,6 +186,7 @@ export interface CreateKvkEventPayload {
   name: string;
   kingdomId?: string;
   fights: KvkFight[];
-  honorFileIds: string[];
+  honorStartFileId?: string;
+  honorEndFileId?: string;
   isPublic: boolean;
 }

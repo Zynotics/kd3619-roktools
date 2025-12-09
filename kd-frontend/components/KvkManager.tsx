@@ -13,6 +13,7 @@ const KvkManager: React.FC = () => {
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [overviewFiles, setOverviewFiles] = useState<UploadedFile[]>([]);
   const [honorFiles, setHonorFiles] = useState<UploadedFile[]>([]);
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -22,7 +23,12 @@ const KvkManager: React.FC = () => {
   // --- Form State ---
   const [name, setName] = useState('');
   const [isPublic, setIsPublic] = useState(false);
-  const [selectedHonorFileIds, setSelectedHonorFileIds] = useState<string[]>([]);
+  
+  // Honor Range Selection
+  const [honorStartId, setHonorStartId] = useState('');
+  const [honorEndId, setHonorEndId] = useState('');
+
+  // Fights List
   const [fights, setFights] = useState<KvkFight[]>([]); 
 
   // --- Temporary Fight Input State ---
@@ -54,42 +60,69 @@ const KvkManager: React.FC = () => {
 
     } catch (err: any) {
       console.error(err);
-      setError('Fehler beim Laden der Daten.');
+      setError('Failed to load data from server.');
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Reset Form ---
   const resetForm = () => {
     setEditingEventId(null);
     setName('');
     setIsPublic(false);
-    setSelectedHonorFileIds([]);
+    setHonorStartId('');
+    setHonorEndId('');
     setFights([]);
     setTempFightName('');
     setTempStartFileId('');
     setTempEndFileId('');
   };
 
-  // --- Edit Mode Trigger ---
   const handleEditClick = (ev: KvkEvent) => {
     setEditingEventId(ev.id);
     setName(ev.name);
     setIsPublic(ev.isPublic);
-    // Sicherstellen, dass Arrays existieren
-    setSelectedHonorFileIds(ev.honorFileIds || []);
+    setHonorStartId(ev.honorStartFileId || '');
+    setHonorEndId(ev.honorEndFileId || '');
     setFights(ev.fights || []);
     
-    // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // --- Fight Management ---
+  // --- Upload Helper ---
+  const handleDirectUpload = async (file: File, type: 'overview' | 'honor') => {
+      if (!file) return;
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const endpoint = type === 'overview' ? '/overview/upload' : '/honor/upload';
+      const label = type === 'overview' ? 'Overview' : 'Honor';
+
+      try {
+          setLoading(true);
+          const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` },
+              body: formData
+          });
+          
+          if (!res.ok) throw new Error('Upload failed');
+          
+          await loadData(); // Refresh lists
+          alert(`${label} file uploaded successfully!`);
+      } catch (e) {
+          alert(`Error uploading ${label} file.`);
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  // --- Fight Logic ---
   const handleAddFight = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tempFightName || !tempStartFileId || !tempEndFileId) {
-        alert("Bitte Name, Start-Datei und End-Datei für den Kampf auswählen.");
+        alert("Please provide a Name, Start Snapshot, and End Snapshot for this battle phase.");
         return;
     }
 
@@ -102,7 +135,7 @@ const KvkManager: React.FC = () => {
 
     setFights([...fights, newFight]);
     
-    // Reset Inputs, aber nicht die Listen
+    // Reset inputs for next entry
     setTempFightName('');
     setTempStartFileId('');
     setTempEndFileId('');
@@ -112,277 +145,344 @@ const KvkManager: React.FC = () => {
       setFights(fights.filter(f => f.id !== id));
   };
 
-  // --- Create or Update Event ---
+  // --- Submit Logic ---
   const handleSubmit = async () => {
     if (!name) {
-      alert('Bitte einen Event-Namen angeben.');
+      alert('Please enter an Event Name.');
       return;
     }
     
     const payload: CreateKvkEventPayload = {
         name,
         fights,
-        honorFileIds: selectedHonorFileIds,
+        honorStartFileId: honorStartId,
+        honorEndFileId: honorEndId,
         isPublic,
     };
 
     setLoading(true);
     try {
         if (editingEventId) {
-            // UPDATE
             await updateKvkEvent(editingEventId, payload);
-            alert('Event erfolgreich aktualisiert!');
+            alert('Event successfully updated!');
         } else {
-            // CREATE
             await createKvkEvent(payload);
-            alert('Event erfolgreich erstellt!');
+            alert('Event successfully created!');
         }
         resetForm();
         loadData();
     } catch (err: any) {
-        alert(err.message || 'Fehler beim Speichern');
+        alert(err.message || 'Error saving event');
     } finally {
         setLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Event wirklich löschen?')) return;
+    if (!window.confirm('Are you sure you want to delete this event?')) return;
     try {
       await deleteKvkEvent(id);
       loadData();
     } catch (err) {
-      alert('Fehler beim Löschen');
+      alert('Error deleting event');
     }
   };
 
-  const toggleHonorFile = (id: string) => {
-    setSelectedHonorFileIds(prev => 
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
+  // Helper to display file names safely
+  const getFileName = (id: string, list: UploadedFile[]) => {
+      const f = list.find(file => file.id === id);
+      return f ? f.name : 'Unknown File';
   };
 
-  const getFileName = (id: string) => {
-      const f = overviewFiles.find(file => file.id === id);
-      return f ? f.name : 'Unbekannte Datei';
-  };
-
-  if (!user) {
-    return <div className="p-4 text-red-500">Zugriff verweigert.</div>;
+  if (!user || (user.role !== 'admin' && user.role !== 'r5')) {
+    return <div className="p-8 text-center text-red-500 font-bold">Access Denied. Admins or R5 only.</div>;
   }
 
   return (
-    <div className="p-6 bg-gray-900 text-gray-100 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-yellow-500">⚔️ KvK Manager</h1>
-        {editingEventId && (
-            <button onClick={resetForm} className="text-gray-400 hover:text-white underline">
-                Bearbeitung abbrechen
-            </button>
-        )}
+    <div className="p-6 bg-gray-900 text-gray-100 min-h-screen font-sans">
+      
+      {/* HEADER & UPLOADS */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-8 gap-4 border-b border-gray-700 pb-6">
+        <div>
+            <h1 className="text-3xl font-bold text-yellow-500 tracking-wide">⚔️ KvK Event Manager</h1>
+            <p className="text-gray-400 text-sm mt-1">Configure battle phases and honor tracking ranges.</p>
+        </div>
+        
+        <div className="flex flex-wrap gap-3">
+             {/* Unified Upload Button: Overview */}
+             <div className="relative overflow-hidden group">
+                <button className="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded shadow-md font-medium flex items-center transition-colors">
+                    <span className="mr-2">⬆️</span> Upload Overview
+                </button>
+                <input 
+                    type="file" 
+                    accept=".xlsx,.xls,.csv"
+                    className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer" 
+                    onChange={(e) => e.target.files && handleDirectUpload(e.target.files[0], 'overview')}
+                />
+             </div>
+
+             {/* Unified Upload Button: Honor */}
+             <div className="relative overflow-hidden group">
+                <button className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded shadow-md font-medium flex items-center transition-colors">
+                    <span className="mr-2">⬆️</span> Upload Honor
+                </button>
+                <input 
+                    type="file" 
+                    accept=".xlsx,.xls,.csv"
+                    className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer" 
+                    onChange={(e) => e.target.files && handleDirectUpload(e.target.files[0], 'honor')}
+                />
+             </div>
+        </div>
       </div>
 
-      {error && <div className="mb-4 p-3 bg-red-800 text-white rounded">{error}</div>}
+      {error && <div className="mb-4 p-3 bg-red-900/50 border border-red-500 text-red-200 rounded">{error}</div>}
 
-      {/* --- FORM SECTION (Create & Edit) --- */}
-      <div className={`p-6 rounded-lg shadow-lg mb-8 border ${editingEventId ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-800 border-gray-700'}`}>
-        <h2 className="text-xl font-semibold mb-6 text-white border-b border-gray-600 pb-2 flex items-center">
-            {editingEventId ? (
-                <>✏️ Event bearbeiten: <span className="ml-2 text-blue-300">{name}</span></>
-            ) : (
-                <>✨ Neues Event erstellen</>
+      {/* --- EVENT EDITOR --- */}
+      <div className={`p-6 rounded-xl shadow-lg mb-10 border transition-colors duration-300 ${editingEventId ? 'bg-blue-900/20 border-blue-500' : 'bg-gray-800 border-gray-700'}`}>
+        <div className="flex justify-between items-center mb-6 border-b border-gray-600 pb-3">
+            <h2 className="text-xl font-bold text-white flex items-center">
+                {editingEventId ? (
+                    <>✏️ Edit Event: <span className="ml-2 text-blue-300 font-mono">{name}</span></>
+                ) : (
+                    <>✨ Create New Event</>
+                )}
+            </h2>
+            {editingEventId && (
+                <button onClick={resetForm} className="text-gray-400 hover:text-white underline text-sm">
+                    Cancel Editing
+                </button>
             )}
-        </h2>
+        </div>
         
-        <div className="space-y-6">
+        <div className="space-y-8">
           
-          {/* 1. Basic Info */}
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <label className="block text-sm text-gray-400 mb-1">Event Name</label>
+          {/* 1. MAIN SETTINGS */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="md:col-span-3">
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Event Name</label>
               <input 
                 type="text" 
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:ring-2 focus:ring-yellow-500 outline-none"
-                placeholder="z.B. KvK Season 3"
+                className="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white focus:ring-2 focus:ring-yellow-500 outline-none"
+                placeholder="e.g. KvK Season 3 - The Great War"
                 value={name}
                 onChange={e => setName(e.target.value)}
               />
             </div>
-            <div className="w-32 flex items-center justify-center pt-6">
-              <label className="flex items-center cursor-pointer select-none">
+            <div className="md:col-span-1 flex items-end pb-2">
+              <label className="flex items-center cursor-pointer select-none group">
                 <input 
                   type="checkbox" 
-                  className="mr-2 w-5 h-5 accent-yellow-500 cursor-pointer"
+                  className="mr-3 w-5 h-5 accent-green-500 cursor-pointer"
                   checked={isPublic}
                   onChange={e => setIsPublic(e.target.checked)}
                 />
-                <span className={isPublic ? "text-green-400 font-bold" : "text-gray-500"}>
-                  {isPublic ? 'Öffentlich' : 'Privat'}
-                </span>
+                <div className="flex flex-col">
+                    <span className={`font-bold ${isPublic ? "text-green-400" : "text-gray-500"}`}>
+                    {isPublic ? 'Public Visible' : 'Private Draft'}
+                    </span>
+                    <span className="text-[10px] text-gray-500">
+                        {isPublic ? 'Visible to everyone' : 'Only admins can see this'}
+                    </span>
+                </div>
               </label>
             </div>
           </div>
 
-          {/* 2. Fight Builder */}
-          <div className="bg-gray-900/50 p-4 rounded border border-gray-600">
-              <h3 className="text-lg font-medium text-yellow-200 mb-3">Kampf-Phasen</h3>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
               
-              {/* Existing Fights List */}
-              <div className="mb-4 space-y-2">
-                  {fights.length === 0 && <p className="text-gray-500 text-sm italic">Noch keine Phasen definiert.</p>}
-                  {fights.map((fight, idx) => (
-                      <div key={fight.id || idx} className="flex items-center bg-gray-800 p-2 rounded border border-gray-700">
-                          <span className="bg-yellow-900 text-yellow-200 text-xs px-2 py-1 rounded mr-3">{idx + 1}</span>
-                          <div className="flex-1">
-                              <div className="font-bold text-sm text-white">{fight.name}</div>
-                              <div className="text-xs text-gray-400 flex gap-4 mt-1">
-                                  <span>Start: <span className="text-gray-300">{getFileName(fight.startFileId)}</span></span>
-                                  <span>➜</span>
-                                  <span>Ende: <span className="text-gray-300">{getFileName(fight.endFileId)}</span></span>
-                              </div>
-                          </div>
-                          <button 
-                            onClick={() => handleRemoveFight(fight.id)}
-                            className="ml-4 text-red-400 hover:bg-red-900/30 p-2 rounded"
-                          >
-                              🗑️
-                          </button>
+              {/* 2. AREA A: FIGHTS */}
+              <div className="bg-gray-900/40 p-5 rounded-lg border border-gray-600/50">
+                  <div className="flex justify-between items-center mb-4">
+                      <div>
+                        <h3 className="text-lg font-bold text-yellow-500">⚔️ Battle Phases (Fights)</h3>
+                        <p className="text-xs text-gray-400">Define precise battle windows. Growth between fights is ignored.</p>
                       </div>
-                  ))}
-              </div>
+                      <span className="bg-gray-800 text-gray-300 text-xs px-2 py-1 rounded-full">{fights.length} Fights</span>
+                  </div>
+                  
+                  {/* Fights List */}
+                  <div className="space-y-2 mb-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                      {fights.length === 0 && <div className="text-gray-500 text-sm italic text-center py-4 border border-dashed border-gray-700 rounded">No fights defined yet.</div>}
+                      {fights.map((fight, idx) => (
+                          <div key={fight.id || idx} className="bg-gray-800 p-3 rounded border border-gray-700 flex items-center justify-between group hover:border-gray-500 transition-colors">
+                              <div className="overflow-hidden">
+                                  <div className="font-bold text-sm text-white flex items-center">
+                                      <span className="bg-yellow-900/50 text-yellow-200 text-[10px] px-1.5 py-0.5 rounded mr-2">#{idx + 1}</span>
+                                      {fight.name}
+                                  </div>
+                                  <div className="text-[11px] text-gray-400 mt-1 grid grid-cols-[auto_1fr] gap-x-2 items-center">
+                                      <span className="text-green-500/70">START:</span> 
+                                      <span className="truncate">{getFileName(fight.startFileId, overviewFiles)}</span>
+                                      <span className="text-red-500/70">END:</span>
+                                      <span className="truncate">{getFileName(fight.endFileId, overviewFiles)}</span>
+                                  </div>
+                              </div>
+                              <button 
+                                onClick={() => handleRemoveFight(fight.id)}
+                                className="ml-2 text-gray-500 hover:text-red-400 p-1 rounded transition-colors"
+                                title="Remove Fight"
+                              >
+                                  ✕
+                              </button>
+                          </div>
+                      ))}
+                  </div>
 
-              {/* Add New Fight Form */}
-              <div className="bg-gray-800 p-3 rounded border border-gray-600">
-                  <div className="text-xs text-gray-400 mb-2 uppercase font-bold">Neue Phase hinzufügen</div>
-                  <div className="grid grid-cols-1 md:grid-cols-7 gap-3 items-end">
-                      <div className="md:col-span-2">
+                  {/* Add Fight Inputs */}
+                  <div className="bg-gray-800 p-3 rounded border border-gray-600">
+                      <label className="text-[10px] text-gray-400 uppercase font-bold mb-2 block">Add New Phase</label>
+                      <div className="flex flex-col gap-2">
                           <input 
                               type="text" 
-                              placeholder="Name (z.B. Pass 4)" 
-                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white"
+                              placeholder="Fight Name (e.g. Ruins Fight 1)" 
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:border-yellow-500 outline-none"
                               value={tempFightName}
                               onChange={e => setTempFightName(e.target.value)}
                           />
-                      </div>
-                      <div className="md:col-span-2">
-                          <select 
-                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white"
-                              value={tempStartFileId}
-                              onChange={e => setTempStartFileId(e.target.value)}
-                          >
-                              <option value="">Start-Snapshot wählen...</option>
-                              {overviewFiles.map(f => (
-                                  <option key={f.id} value={f.id}>{f.name}</option>
-                              ))}
-                          </select>
-                      </div>
-                      <div className="md:col-span-2">
-                          <select 
-                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white"
-                              value={tempEndFileId}
-                              onChange={e => setTempEndFileId(e.target.value)}
-                          >
-                              <option value="">End-Snapshot wählen...</option>
-                              {overviewFiles.map(f => (
-                                  <option key={f.id} value={f.id}>{f.name}</option>
-                              ))}
-                          </select>
-                      </div>
-                      <div className="md:col-span-1">
+                          <div className="grid grid-cols-2 gap-2">
+                              <select 
+                                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-white focus:border-yellow-500 outline-none"
+                                  value={tempStartFileId}
+                                  onChange={e => setTempStartFileId(e.target.value)}
+                              >
+                                  <option value="">-- Start Snapshot --</option>
+                                  {overviewFiles.map(f => (
+                                      <option key={f.id} value={f.id}>{f.name}</option>
+                                  ))}
+                              </select>
+                              <select 
+                                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-white focus:border-yellow-500 outline-none"
+                                  value={tempEndFileId}
+                                  onChange={e => setTempEndFileId(e.target.value)}
+                              >
+                                  <option value="">-- End Snapshot --</option>
+                                  {overviewFiles.map(f => (
+                                      <option key={f.id} value={f.id}>{f.name}</option>
+                                  ))}
+                              </select>
+                          </div>
                           <button 
                             onClick={handleAddFight}
-                            className="w-full py-1 bg-green-700 hover:bg-green-600 text-white text-sm font-bold rounded transition"
+                            className="mt-1 w-full py-1.5 bg-gray-600 hover:bg-yellow-600 hover:text-black text-white text-xs font-bold uppercase rounded transition-colors"
                           >
-                              Hinzufügen
+                              + Add Fight
                           </button>
                       </div>
                   </div>
               </div>
+
+              {/* 3. AREA B: HONOR */}
+              <div className="bg-gray-900/40 p-5 rounded-lg border border-gray-600/50 flex flex-col">
+                <div>
+                    <h3 className="text-lg font-bold text-purple-400">🎖️ Honor Tracking</h3>
+                    <p className="text-xs text-gray-400 mb-4">Select the overall timeframe for honor points. All files uploaded between Start and End will be graphed.</p>
+                </div>
+                
+                <div className="flex-1 flex flex-col justify-center gap-6">
+                    <div>
+                        <label className="block text-xs text-purple-300 mb-1 font-bold uppercase">Start File (Beginning of KvK)</label>
+                        <select 
+                            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                            value={honorStartId}
+                            onChange={e => setHonorStartId(e.target.value)}
+                        >
+                            <option value="">-- Select Start --</option>
+                            {honorFiles.map(f => (
+                                <option key={f.id} value={f.id}>{f.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex justify-center text-purple-500 text-2xl">⬇️</div>
+
+                    <div>
+                        <label className="block text-xs text-purple-300 mb-1 font-bold uppercase">End File (Latest Scan)</label>
+                        <select 
+                            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                            value={honorEndId}
+                            onChange={e => setHonorEndId(e.target.value)}
+                        >
+                            <option value="">-- Select End --</option>
+                            {honorFiles.map(f => (
+                                <option key={f.id} value={f.id}>{f.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+              </div>
+
           </div>
 
-          {/* 3. Honor Files */}
-          <div className="p-4 bg-gray-900/50 rounded border border-gray-600">
-            <h3 className="text-lg font-medium text-purple-300 mb-2">Honor Tracking Dateien</h3>
-            <div className="max-h-32 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-              {honorFiles.length === 0 && <span className="text-gray-500 italic">Keine Honor-Dateien hochgeladen.</span>}
-              {honorFiles.map(f => (
-                <label key={f.id} className={`flex items-center space-x-2 p-1 rounded cursor-pointer ${selectedHonorFileIds.includes(f.id) ? 'bg-purple-900/40' : 'hover:bg-gray-800'}`}>
-                  <input 
-                    type="checkbox"
-                    checked={selectedHonorFileIds.includes(f.id)}
-                    onChange={() => toggleHonorFile(f.id)}
-                    className="accent-purple-500"
-                  />
-                  <span className="text-xs text-gray-300 truncate">{f.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Submit */}
+          {/* 4. MAIN ACTION BUTTON */}
           <button 
             onClick={handleSubmit}
             disabled={loading}
-            className={`w-full py-3 px-4 font-bold text-lg rounded shadow transition transform hover:scale-[1.01] ${
+            className={`w-full py-4 px-6 font-bold text-xl rounded shadow-lg transition-all transform hover:scale-[1.005] active:scale-[0.99] ${
                 editingEventId 
-                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500' 
-                : 'bg-gradient-to-r from-yellow-600 to-yellow-500 text-black hover:from-yellow-500'
+                ? 'bg-gradient-to-r from-blue-700 to-blue-500 text-white hover:from-blue-600 hover:to-blue-400' 
+                : 'bg-gradient-to-r from-yellow-600 to-yellow-500 text-black hover:from-yellow-500 hover:to-yellow-400'
             }`}
           >
-            {loading ? 'Verarbeite...' : (editingEventId ? '💾 Änderungen Speichern' : '🚀 Event Erstellen')}
+            {loading ? 'Processing...' : (editingEventId ? '💾 Save Changes' : '🚀 Create Event')}
           </button>
         </div>
       </div>
 
-      {/* --- EVENT LIST --- */}
+      {/* --- EVENT LIST TABLE --- */}
       <div className="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-        <h2 className="text-xl font-semibold mb-4 text-white">Existierende Events</h2>
+        <h2 className="text-xl font-semibold mb-4 text-white">Manage Existing Events</h2>
         {events.length === 0 ? (
-          <p className="text-gray-400">Keine Events vorhanden.</p>
+          <p className="text-gray-400 italic py-4">No events found. Create one above.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="text-gray-400 border-b border-gray-700 uppercase text-xs">
-                  <th className="p-3">Name</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3">Konfiguration</th>
-                  <th className="p-3 text-right">Aktionen</th>
+                  <th className="p-3">Event Name</th>
+                  <th className="p-3 text-center">Visibility</th>
+                  <th className="p-3">Config</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="text-sm divide-y divide-gray-700">
                 {events.map(ev => (
-                    <tr key={ev.id} className={`hover:bg-gray-750 transition-colors ${editingEventId === ev.id ? 'bg-blue-900/20' : ''}`}>
-                      <td className="p-3 font-bold text-white">{ev.name}</td>
-                      <td className="p-3">
+                    <tr key={ev.id} className={`hover:bg-gray-700/50 transition-colors ${editingEventId === ev.id ? 'bg-blue-900/20' : ''}`}>
+                      <td className="p-3 font-bold text-white text-lg">{ev.name}</td>
+                      <td className="p-3 text-center">
                         {ev.isPublic 
-                            ? <span className="px-2 py-0.5 rounded text-xs bg-green-900 text-green-200 border border-green-700">Public</span>
-                            : <span className="px-2 py-0.5 rounded text-xs bg-gray-700 text-gray-300">Private</span>
+                            ? <span className="inline-block px-2 py-0.5 rounded text-xs bg-green-900 text-green-200 border border-green-700 font-bold">Public</span>
+                            : <span className="inline-block px-2 py-0.5 rounded text-xs bg-gray-700 text-gray-300 border border-gray-600">Private</span>
                         }
                       </td>
                       <td className="p-3">
                         <div className="flex flex-col gap-1">
-                            <span className="text-yellow-200 text-xs">
-                                ⚔️ {ev.fights?.length || 0} Phasen
-                            </span>
-                            <span className="text-purple-300 text-xs">
-                                🎖️ {ev.honorFileIds?.length || 0} Dateien
-                            </span>
+                            <div className="flex items-center text-yellow-500 font-medium">
+                                <span className="w-20 text-xs text-gray-500 uppercase">Fights:</span>
+                                ⚔️ {ev.fights?.length || 0}
+                            </div>
+                            <div className="flex items-center text-purple-400 font-medium">
+                                <span className="w-20 text-xs text-gray-500 uppercase">Honor:</span>
+                                {ev.honorStartFileId && ev.honorEndFileId ? '✅ Configured' : '⚠️ Missing'}
+                            </div>
                         </div>
                       </td>
-                      <td className="p-3 text-right space-x-3">
-                        <button 
-                          onClick={() => handleEditClick(ev)}
-                          className="text-blue-400 hover:text-blue-200 text-xs font-bold uppercase"
-                        >
-                          Bearbeiten
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(ev.id)}
-                          className="text-red-400 hover:text-red-200 text-xs font-bold uppercase"
-                        >
-                          Löschen
-                        </button>
+                      <td className="p-3 text-right">
+                        <div className="flex justify-end gap-2">
+                            <button 
+                              onClick={() => handleEditClick(ev)}
+                              className="bg-blue-900/40 hover:bg-blue-800 text-blue-200 px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(ev.id)}
+                              className="bg-red-900/40 hover:bg-red-800 text-red-200 px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors"
+                            >
+                              Delete
+                            </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -392,9 +492,10 @@ const KvkManager: React.FC = () => {
         )}
       </div>
 
-      {/* --- FILE MANAGEMENT --- */}
+      {/* --- REORDER COMPONENT SECTION --- */}
       <div className="mt-12 pt-8 border-t border-gray-700">
-          <h2 className="text-2xl font-bold text-white mb-6">📂 Datei-Rohdaten Verwaltung</h2>
+          <h2 className="text-2xl font-bold text-white mb-6">📂 File Organization</h2>
+          <p className="text-gray-400 text-sm mb-4">Drag and drop files to change the default order in history charts.</p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <FileReorderList type="overview" files={overviewFiles} onUpdate={loadData} />
               <FileReorderList type="honor" files={honorFiles} onUpdate={loadData} />
