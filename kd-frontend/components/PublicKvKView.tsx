@@ -96,33 +96,28 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
           setStatsData(calculatedStats);
       }
 
-      // --- B. HONOR RANGE LOGIC ---
+      // --- B. HONOR RANGE LOGIC (FIXED: INDEX BASED) ---
       if (event.honorStartFileId && event.honorEndFileId) {
-          // Finde Start- und End-Datei in der geladenen Liste
-          const startFile = loadedHonor.find(f => f.id === event.honorStartFileId);
-          const endFile = loadedHonor.find(f => f.id === event.honorEndFileId);
+          // Wir suchen die Index-Positionen in der geladenen Liste.
+          // Die Liste kommt vom Server bereits sortiert nach fileOrder/uploadDate.
+          const startIndex = loadedHonor.findIndex(f => f.id === event.honorStartFileId);
+          const endIndex = loadedHonor.findIndex(f => f.id === event.honorEndFileId);
 
-          if (startFile && endFile && startFile.uploadDate && endFile.uploadDate) {
-              const startDate = new Date(startFile.uploadDate).getTime();
-              const endDate = new Date(endFile.uploadDate).getTime();
+          if (startIndex !== -1 && endIndex !== -1) {
+              // Sicherstellen, dass Start vor Ende ist, sonst tauschen
+              const first = Math.min(startIndex, endIndex);
+              const last = Math.max(startIndex, endIndex);
 
-              // Filtere ALLE Dateien, die zeitlich dazwischen liegen
-              // (Damit der Graph schöne Zwischenschritte hat)
-              const rangeFiles = loadedHonor.filter(f => {
-                  if (!f.uploadDate) return false;
-                  const t = new Date(f.uploadDate).getTime();
-                  // Toleranz von ein paar Sekunden für Ungenauigkeiten
-                  return t >= (startDate - 1000) && t <= (endDate + 1000);
-              });
-
-              // Sortiere chronologisch
-              rangeFiles.sort((a, b) => new Date(a.uploadDate!).getTime() - new Date(b.uploadDate!).getTime());
+              // Slice ist exklusive Ende, daher +1
+              const rangeFiles = loadedHonor.slice(first, last + 1);
 
               if (rangeFiles.length > 0) {
                   setActiveHonorFiles(rangeFiles);
                   const history = processHonorHistory(rangeFiles);
                   setHonorHistory(history);
               }
+          } else {
+             console.warn("Honor Start or End file not found in loaded list.");
           }
       }
 
@@ -222,7 +217,6 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       const parsedRows = parseHonorFile(file);
       
       let label = file.name.replace("HONOR_", ""); // Clean name
-      // Versuche Datum zu formatieren
       if (file.uploadDate) {
            const d = new Date(file.uploadDate);
            label = d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -233,7 +227,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
           map.set(row.governorId, { id: row.governorId, name: row.name, history: [] });
         }
         const entry = map.get(row.governorId)!;
-        entry.name = row.name; // Update name to latest
+        entry.name = row.name; 
         entry.history.push({ fileName: label, fileId: file.id, honorPoint: row.honorPoint });
       });
     });
@@ -248,7 +242,6 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         const startFile = files.find(f => f.id === fight.startFileId);
         const endFile = files.find(f => f.id === fight.endFileId);
         
-        // Wenn Dateien fehlen (z.B. gelöscht), überspringen
         if (!startFile || !endFile) return;
 
         const startData = getSnapshotData(startFile);
@@ -265,8 +258,6 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             const deltaT5 = Math.max(0, curr.t5 - prevT5);
             const deltaDead = Math.max(0, curr.dead - prevDead);
             
-            // Power Diff nur berechnen, wenn Spieler in beiden Files existiert
-            // Sonst sieht es so aus, als hätte ein neuer Spieler massiv Power gewonnen
             let deltaPower = 0;
             if (prev) {
                 deltaPower = curr.power - prevPower;
@@ -301,7 +292,6 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     return Array.from(grandTotals.values()).sort((a, b) => b.totalKillsDiff - a.totalKillsDiff);
   };
 
-  // Berechnung für die Honor Tabelle (Vergleich Start vs Ende)
   const comparisonHonorTableData = useMemo(() => {
       if (honorHistory.length === 0 || activeHonorFiles.length < 2) return [];
       
@@ -324,7 +314,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             diffHonor: diff
         };
       })
-      .filter(p => p.newHonor > 0 || p.diffHonor !== 0) // Nur aktive Spieler anzeigen
+      .filter(p => p.newHonor > 0 || p.diffHonor !== 0)
       .sort((a, b) => b.diffHonor - a.diffHonor); 
   }, [honorHistory, activeHonorFiles]);
 
@@ -345,7 +335,6 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   return (
     <div className="bg-gray-900 min-h-screen text-gray-100 font-sans pb-20">
       
-      {/* Header Bar */}
       <div className="bg-gradient-to-r from-blue-900 to-gray-900 p-6 shadow-lg border-b border-gray-700 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
@@ -374,7 +363,6 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
       <div className="max-w-7xl mx-auto p-4 md:p-6">
         
-        {/* Navigation Tabs */}
         <div className="flex justify-center mb-8">
           <div className="bg-gray-800 p-1 rounded-lg inline-flex shadow-md border border-gray-700">
             <button
@@ -406,7 +394,6 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         {!loading && !error && activeEvent && (
           <div className="animate-fade-in-up">
             
-            {/* --- VIEW A: STATS PROGRESS --- */}
             {viewMode === 'stats' && (
               <div className="bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-700">
                 <div className="p-4 bg-gray-800 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
