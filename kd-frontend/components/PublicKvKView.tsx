@@ -550,8 +550,8 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     return (
         <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
             <div className="bg-gray-800 p-8 rounded-lg shadow-lg text-center max-w-md border border-gray-700">
-                <h2 className="text-2xl font-bold text-yellow-500 mb-4">Keine sichtbaren Events</h2>
-                <p className="text-gray-400">Es gibt aktuell keine oeffentlichen KvK-Statistiken. Private Events sind nur fuer R4/R5 nach Login sichtbar.</p>
+                <h2 className="text-2xl font-bold text-yellow-500 mb-4">No visible events</h2>
+                <p className="text-gray-400">There are currently no public KvK statistics. Private events are only visible to R4/R5 after login.</p>
             </div>
         </div>
     );
