@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { KvkEvent, UploadedFile, CreateKvkEventPayload, KvkFight, DkpFormula, GoalsFormula } from '../types';
+import { KvkEvent, UploadedFile, CreateKvkEventPayload, KvkFight, DkpFormula, GoalsFormula, GoalsPowerBracket } from '../types';
 import { fetchKvkEvents, createKvkEvent, updateKvkEvent, deleteKvkEvent, API_BASE_URL } from '../api';
 import FileReorderList from './FileReorderList';
 
@@ -18,6 +18,7 @@ const createDefaultDkpFormula = (): DkpFormula => ({
 const createDefaultGoalsFormula = (): GoalsFormula => ({
   basePowerToDkpPercent: 0,
   basePowerToDeadTroopsPercent: 0,
+  powerBrackets: [],
 });
 
 const dkpCategories: { key: keyof DkpFormula; label: string; helper: string }[] = [
@@ -188,6 +189,44 @@ const KvkManager: React.FC = () => {
     }));
   };
 
+  const handlePowerBracketChange = (
+    index: number,
+    field: 'minPower' | 'maxPower' | 'dkpPercent' | 'deadPercent',
+    value: number | null
+  ) => {
+    setGoalsFormula(prev => {
+      const currentBrackets = prev.powerBrackets || [];
+      const nextBrackets = [...currentBrackets];
+      const existing = nextBrackets[index] || { minPower: 0, maxPower: null, dkpPercent: 0, deadPercent: 0 };
+      const updatedRange: GoalsPowerBracket = { ...existing, [field]: value } as GoalsPowerBracket;
+      nextBrackets[index] = updatedRange;
+
+      return { ...prev, powerBrackets: nextBrackets };
+    });
+  };
+
+  const handleAddPowerBracket = () => {
+    setGoalsFormula(prev => ({
+      ...prev,
+      powerBrackets: [
+        ...(prev.powerBrackets || []),
+        {
+          minPower: 0,
+          maxPower: null,
+          dkpPercent: prev.basePowerToDkpPercent || 0,
+          deadPercent: prev.basePowerToDeadTroopsPercent || 0,
+        }
+      ]
+    }));
+  };
+
+  const handleRemovePowerBracket = (index: number) => {
+    setGoalsFormula(prev => ({
+      ...prev,
+      powerBrackets: (prev.powerBrackets || []).filter((_, i) => i !== index)
+    }));
+  };
+
   // --- Submit Logic ---
   const handleSubmit = async () => {
     if (!name) {
@@ -238,6 +277,8 @@ const KvkManager: React.FC = () => {
       const f = list.find(file => file.id === id);
       return f ? f.name : 'Unknown File';
   };
+
+  const powerBrackets = goalsFormula.powerBrackets || [];
 
   if (!user || (user.role !== 'admin' && user.role !== 'r5')) {
     return <div className="p-8 text-center text-red-500 font-bold">Access Denied. Admins or R5 only.</div>;
@@ -541,9 +582,99 @@ const KvkManager: React.FC = () => {
                   />
                 </div>
 
+                <div className="bg-gray-800/60 border border-cyan-800/50 rounded p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Basepower Ranges</p>
+                      <p className="text-[11px] text-gray-400">Lege unterschiedliche Ziele je nach Power-Spanne fest (z.B. 0-50 Mio, 50-100 Mio).</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddPowerBracket}
+                      className="bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold px-3 py-1.5 rounded"
+                    >
+                      + Range
+                    </button>
+                  </div>
+
+                  {powerBrackets.length === 0 && (
+                    <div className="text-[12px] text-gray-400 bg-gray-900/60 border border-dashed border-gray-700 rounded p-3">
+                      Keine Ranges definiert – es werden die allgemeinen Prozentsätze oben genutzt.
+                    </div>
+                  )}
+
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
+                    {powerBrackets.map((range, idx) => (
+                      <div key={idx} className="bg-gray-900/70 border border-gray-700 rounded p-3 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-400 font-semibold uppercase">Range #{idx + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePowerBracket(idx)}
+                            className="text-red-300 hover:text-red-200 text-xs"
+                          >
+                            Entfernen
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[11px] text-gray-400 uppercase font-bold mb-1 block">Min Power</label>
+                            <input
+                              type="number"
+                              min="0"
+                              className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-cyan-400 outline-none"
+                              value={range.minPower}
+                              onChange={(e) => handlePowerBracketChange(idx, 'minPower', Number(e.target.value) || 0)}
+                              placeholder="z.B. 0"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] text-gray-400 uppercase font-bold mb-1 block">Max Power</label>
+                            <input
+                              type="number"
+                              min="0"
+                              className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-cyan-400 outline-none"
+                              value={range.maxPower ?? ''}
+                              onChange={(e) => handlePowerBracketChange(idx, 'maxPower', e.target.value === '' ? null : Number(e.target.value) || 0)}
+                              placeholder="z.B. 50.000.000 (leer = offen)"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[11px] text-gray-400 uppercase font-bold mb-1 block">DKP %</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-cyan-400 outline-none"
+                              value={range.dkpPercent}
+                              onChange={(e) => handlePowerBracketChange(idx, 'dkpPercent', Number(e.target.value) || 0)}
+                              placeholder="z.B. 120"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] text-gray-400 uppercase font-bold mb-1 block">Dead %</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-cyan-400 outline-none"
+                              value={range.deadPercent}
+                              onChange={(e) => handlePowerBracketChange(idx, 'deadPercent', Number(e.target.value) || 0)}
+                              placeholder="z.B. 10"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-gray-500">DKP/Dead Ziele werden für Spieler in dieser Power-Spanne angewendet. Leeres Max-Feld bedeutet "bis unendlich".</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="text-xs text-gray-500 bg-gray-800/70 border border-dashed border-gray-600 rounded p-3">
                   <p className="font-semibold text-white mb-1">Hinweis</p>
-                  <p>Die DKP-Formel bestimmt die Punkte-Bewertung für Kills/Deads. Die Goals-Formel definiert, welche Basisziele jeder Spieler erreichen muss (auf Basis seiner Basepower).</p>
+                  <p>Die DKP-Formel bestimmt die Punkte-Bewertung für Kills/Deads. Die Goals-Formel definiert, welche Basisziele jeder Spieler erreichen muss (auf Basis seiner Basepower). Basepower-Ranges überschreiben dabei die allgemeinen Prozentsätze.</p>
                 </div>
               </div>
             </div>
@@ -609,7 +740,9 @@ const KvkManager: React.FC = () => {
                             <div className="flex items-center text-cyan-300 font-medium">
                                 <span className="w-20 text-xs text-gray-500 uppercase">Goals:</span>
                                 {ev.goalsFormula
-                                  ? `${ev.goalsFormula.basePowerToDkpPercent || 0}% DKP / ${ev.goalsFormula.basePowerToDeadTroopsPercent || 0}% Dead`
+                                  ? ev.goalsFormula.powerBrackets?.length
+                                    ? `${ev.goalsFormula.powerBrackets.length} Ranges`
+                                    : `${ev.goalsFormula.basePowerToDkpPercent || 0}% DKP / ${ev.goalsFormula.basePowerToDeadTroopsPercent || 0}% Dead`
                                   : '⚠️ Missing'}
                             </div>
                         </div>

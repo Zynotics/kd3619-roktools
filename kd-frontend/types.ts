@@ -180,9 +180,17 @@ export interface DkpFormula {
   deadTroops: DkpFormulaEntry;
 }
 
+export interface GoalsPowerBracket {
+  minPower: number;
+  maxPower: number | null;
+  dkpPercent: number;
+  deadPercent: number;
+}
+
 export interface GoalsFormula {
   basePowerToDkpPercent: number;
   basePowerToDeadTroopsPercent: number;
+  powerBrackets?: GoalsPowerBracket[];
 }
 
 // Das Haupt-Event Objekt

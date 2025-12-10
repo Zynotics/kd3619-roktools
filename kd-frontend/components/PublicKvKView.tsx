@@ -251,10 +251,32 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       });
     });
     
-    return { 
+    return {
       history: Array.from(playerMap.values()),
       totalHistory: totalHistory
     };
+  };
+
+  const resolveGoalPercents = (basePower: number, goalsFormula?: KvkEvent['goalsFormula']) => {
+    const brackets = goalsFormula?.powerBrackets || [];
+    let dkpPercent = goalsFormula?.basePowerToDkpPercent || 0;
+    let deadPercent = goalsFormula?.basePowerToDeadTroopsPercent || 0;
+
+    if (brackets.length > 0) {
+      const sorted = [...brackets].sort((a, b) => (a.minPower || 0) - (b.minPower || 0));
+      const matchingRange = sorted.find(range => {
+        const min = range.minPower ?? 0;
+        const max = range.maxPower ?? Number.POSITIVE_INFINITY;
+        return basePower >= min && basePower < max;
+      });
+
+      if (matchingRange) {
+        dkpPercent = matchingRange.dkpPercent ?? dkpPercent;
+        deadPercent = matchingRange.deadPercent ?? deadPercent;
+      }
+    }
+
+    return { dkpPercent, deadPercent };
   };
 
   // --- MAIN LOGIC: Cumulative Fights (UPDATED) ---
@@ -336,12 +358,11 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         });
     });
 
-    const baseToDkpPercent = goalsFormula?.basePowerToDkpPercent || 0;
-    const dkpGoalFactor = baseToDkpPercent / 100;
-    const baseToDeadPercent = goalsFormula?.basePowerToDeadTroopsPercent || 0;
-    const deadGoalFactor = baseToDeadPercent / 100;
-
     grandTotals.forEach(player => {
+        const { dkpPercent, deadPercent } = resolveGoalPercents(player.basePower, goalsFormula);
+        const dkpGoalFactor = dkpPercent / 100;
+        const deadGoalFactor = deadPercent / 100;
+
         if (dkpGoalFactor > 0) {
             player.dkpGoal = player.basePower * dkpGoalFactor;
             if (player.dkpScore !== undefined) {
