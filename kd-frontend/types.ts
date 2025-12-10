@@ -201,6 +201,7 @@ export interface KvkEvent {
   fights: KvkFight[];
   dkpFormula?: DkpFormula | null;
   goalsFormula?: GoalsFormula | null;
+  eventStartFileId?: string; // ID from the overview pool for base power
 
   // Honor tracking definition (range instead of list)
   honorStartFileId?: string; // ID from the honor pool
@@ -217,6 +218,7 @@ export interface CreateKvkEventPayload {
   fights: KvkFight[];
   dkpFormula?: DkpFormula | null;
   goalsFormula?: GoalsFormula | null;
+  eventStartFileId?: string;
   honorStartFileId?: string;
   honorEndFileId?: string;
   isPublic: boolean;

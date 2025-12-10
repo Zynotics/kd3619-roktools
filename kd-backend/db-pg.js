@@ -123,6 +123,9 @@ async function initKvkTable() {
     // fights: JSON-Array der Kampfphasen
     await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS fights TEXT`);
 
+    // Start-Snapshot für die Basiswerte
+    await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS event_start_file_id TEXT`);
+
     // honor_start_file_id / honor_end_file_id: Statt alter Liste nun Start/Ende
     await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS honor_start_file_id TEXT`);
     await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS honor_end_file_id TEXT`);
@@ -155,6 +158,7 @@ async function createKvkEvent(event) {
       name,
       kingdom_id,
       fights,
+      event_start_file_id,
       honor_start_file_id,
       honor_end_file_id,
       dkp_formula,
@@ -176,6 +180,7 @@ async function createKvkEvent(event) {
     event.name,
     event.kingdomId,
     fightsStr,
+    event.eventStartFileId || null,
     event.honorStartFileId || null,
     event.honorEndFileId || null,
     dkpFormulaStr,
@@ -204,6 +209,7 @@ async function getKvkEvents(kingdomId) {
     goalsFormula: row.goals_formula ? JSON.parse(row.goals_formula) : null,
 
     // CamelCase Mapping
+    eventStartFileId: row.event_start_file_id,
     honorStartFileId: row.honor_start_file_id,
     honorEndFileId: row.honor_end_file_id,
 
@@ -226,6 +232,7 @@ async function getAllKvkEvents() {
     fights: JSON.parse(row.fights || '[]'),
     dkpFormula: row.dkp_formula ? JSON.parse(row.dkp_formula) : null,
     goalsFormula: row.goals_formula ? JSON.parse(row.goals_formula) : null,
+    eventStartFileId: row.event_start_file_id,
     honorStartFileId: row.honor_start_file_id,
     honorEndFileId: row.honor_end_file_id,
     isPublic: row.is_public,
@@ -247,6 +254,7 @@ async function getKvkEventById(id) {
     fights: JSON.parse(row.fights || '[]'),
     dkpFormula: row.dkp_formula ? JSON.parse(row.dkp_formula) : null,
     goalsFormula: row.goals_formula ? JSON.parse(row.goals_formula) : null,
+    eventStartFileId: row.event_start_file_id,
     honorStartFileId: row.honor_start_file_id,
     honorEndFileId: row.honor_end_file_id,
     isPublic: row.is_public,
@@ -262,12 +270,13 @@ async function updateKvkEvent(id, data) {
     UPDATE kvk_events
     SET name = $1,
         fights = $2,
-        honor_start_file_id = $3,
-        honor_end_file_id = $4,
-        dkp_formula = $5,
-        goals_formula = $6,
-        is_public = $7
-    WHERE id = $8
+        event_start_file_id = $3,
+        honor_start_file_id = $4,
+        honor_end_file_id = $5,
+        dkp_formula = $6,
+        goals_formula = $7,
+        is_public = $8
+    WHERE id = $9
     RETURNING *
   `;
 
@@ -278,6 +287,7 @@ async function updateKvkEvent(id, data) {
   const res = await query(sql, [
     data.name,
     fightsStr,
+    data.eventStartFileId || null,
     data.honorStartFileId || null,
     data.honorEndFileId || null,
     dkpFormulaStr,
