@@ -30,6 +30,22 @@ const dkpCategories: { key: keyof DkpFormula; label: string; helper?: string }[]
   { key: 'deadTroops', label: 'Dead Troops', helper: 'Fallen troops' },
 ];
 
+const truncateToTwoDecimals = (value: number) => Math.trunc(value * 100) / 100;
+
+const parseLocalizedDecimalInput = (value: string) => {
+  const normalized = value.replace(',', '.');
+  const parsed = Number(normalized);
+
+  if (Number.isNaN(parsed)) return 0;
+  return truncateToTwoDecimals(parsed);
+};
+
+const formatLocalizedDecimalValue = (value: number) => {
+  if (!Number.isFinite(value)) return '';
+
+  return truncateToTwoDecimals(value).toString().replace('.', ',');
+};
+
 const KvkManager: React.FC = () => {
   const { token, user } = useAuth();
   
@@ -588,12 +604,11 @@ const KvkManager: React.FC = () => {
                 <div>
                   <label className="block text-xs text-gray-400 uppercase font-bold mb-1">% Base Power → DKP Score</label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.1"
+                    type="text"
+                    inputMode="decimal"
                     className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-cyan-400 outline-none"
-                    value={goalsFormula.basePowerToDkpPercent}
-                    onChange={(e) => setGoalsFormula({ ...goalsFormula, basePowerToDkpPercent: Number(e.target.value) || 0 })}
+                    value={formatLocalizedDecimalValue(goalsFormula.basePowerToDkpPercent)}
+                    onChange={(e) => setGoalsFormula({ ...goalsFormula, basePowerToDkpPercent: parseLocalizedDecimalInput(e.target.value) })}
                     placeholder="e.g. 120 (120% of base power becomes DKP score)"
                   />
                 </div>
@@ -601,12 +616,11 @@ const KvkManager: React.FC = () => {
                 <div>
                   <label className="block text-xs text-gray-400 uppercase font-bold mb-1">% Base Power → Dead Troops Goal</label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.1"
+                    type="text"
+                    inputMode="decimal"
                     className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-cyan-400 outline-none"
-                    value={goalsFormula.basePowerToDeadTroopsPercent}
-                    onChange={(e) => setGoalsFormula({ ...goalsFormula, basePowerToDeadTroopsPercent: Number(e.target.value) || 0 })}
+                    value={formatLocalizedDecimalValue(goalsFormula.basePowerToDeadTroopsPercent)}
+                    onChange={(e) => setGoalsFormula({ ...goalsFormula, basePowerToDeadTroopsPercent: parseLocalizedDecimalInput(e.target.value) })}
                     placeholder="e.g. 10 (10% of base power must fall)"
                   />
                 </div>
@@ -673,24 +687,22 @@ const KvkManager: React.FC = () => {
                           <div>
                             <label className="text-[11px] text-gray-400 uppercase font-bold mb-1 block">DKP %</label>
                             <input
-                              type="number"
-                              min="0"
-                              step="0.1"
+                              type="text"
+                              inputMode="decimal"
                               className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-cyan-400 outline-none"
-                              value={range.dkpPercent}
-                              onChange={(e) => handlePowerBracketChange(idx, 'dkpPercent', Number(e.target.value) || 0)}
+                              value={formatLocalizedDecimalValue(range.dkpPercent)}
+                              onChange={(e) => handlePowerBracketChange(idx, 'dkpPercent', parseLocalizedDecimalInput(e.target.value))}
                               placeholder="e.g. 120"
                             />
                           </div>
                           <div>
                             <label className="text-[11px] text-gray-400 uppercase font-bold mb-1 block">Dead %</label>
                             <input
-                              type="number"
-                              min="0"
-                              step="0.1"
+                              type="text"
+                              inputMode="decimal"
                               className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-cyan-400 outline-none"
-                              value={range.deadPercent}
-                              onChange={(e) => handlePowerBracketChange(idx, 'deadPercent', Number(e.target.value) || 0)}
+                              value={formatLocalizedDecimalValue(range.deadPercent)}
+                              onChange={(e) => handlePowerBracketChange(idx, 'deadPercent', parseLocalizedDecimalInput(e.target.value))}
                               placeholder="e.g. 10"
                             />
                           </div>
