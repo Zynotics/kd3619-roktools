@@ -1,4 +1,4 @@
-// types.ts - Vollständige Typendefinitionen
+// types.ts - Full type definitions
 
 export type TableData = any[][];
 export type TableHeaders = string[];
@@ -8,7 +8,7 @@ export type UploadedFile = {
   name: string;
   headers: TableHeaders;
   data: TableData;
-  uploadDate?: string; // Wichtig für die zeitliche Einordnung
+  uploadDate?: string; // Important for chronological ordering
 };
 
 export type PlayerInfo = {
@@ -51,7 +51,7 @@ export type PlayerStatChange = {
     newTroopsPower: number;
     diffTroopsPower: number;
     
-    // Optional für detaillierte Analyse
+    // Optional for detailed analysis
     t4KillsDiff?: number;
     t5KillsDiff?: number;
 };
@@ -143,7 +143,7 @@ export interface Kingdom {
   ownerEmail?: string | null;
 }
 
-// Activity Typen
+// Activity types
 export type ActivityPlayerInfo = {
     id: string;
     name: string;
@@ -156,14 +156,14 @@ export type ActivityPlayerInfo = {
     techDonation: number;
 };
 
-// --- MODULARES KVK SYSTEM (UPDATED) ---
+// --- MODULAR KVK SYSTEM (UPDATED) ---
 
-// Definition eines einzelnen Kampfes
+// Definition of a single fight
 export interface KvkFight {
   id: string;
   name: string;
-  startFileId: string; // ID aus dem Overview-Pool
-  endFileId: string;   // ID aus dem Overview-Pool
+  startFileId: string; // ID from the overview pool
+  endFileId: string;   // ID from the overview pool
 }
 
 export interface DkpFormulaEntry {
@@ -193,7 +193,7 @@ export interface GoalsFormula {
   powerBrackets?: GoalsPowerBracket[];
 }
 
-// Das Haupt-Event Objekt
+// Primary event object
 export interface KvkEvent {
   id: string;
   name: string;
@@ -202,15 +202,15 @@ export interface KvkEvent {
   dkpFormula?: DkpFormula | null;
   goalsFormula?: GoalsFormula | null;
 
-  // Honor Tracking Definition (Range statt Liste)
-  honorStartFileId?: string; // ID aus dem Honor-Pool
-  honorEndFileId?: string;   // ID aus dem Honor-Pool
+  // Honor tracking definition (range instead of list)
+  honorStartFileId?: string; // ID from the honor pool
+  honorEndFileId?: string;   // ID from the honor pool
   
   isPublic: boolean;
   createdAt: string;
 }
 
-// Payload zum Erstellen/Update
+// Payload for create/update
 export interface CreateKvkEventPayload {
   name: string;
   kingdomId?: string;
