@@ -68,7 +68,7 @@ const AppContent: React.FC = () => {
   const isR4 = user?.role === 'r4';
   const isAdmin = isSuperAdmin || isR5; 
   // 🆕 Helper für KvK Manager Zugriff (freischaltbar über Rechte)
-  const canManageKvk = isSuperAdmin || !!user?.canAccessKvkManager;
+  const canManageKvk = isSuperAdmin || isR5 || isR4 || !!user?.canAccessKvkManager;
 
   const canViewActivity = user && (isSuperAdmin || isR5 || isR4);
 
