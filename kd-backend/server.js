@@ -732,7 +732,7 @@ app.get('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, re
 app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, res) => {
   try {
     // UPDATED: Jetzt mit honorStartFileId / honorEndFileId
-    const { name, fights, honorStartFileId, honorEndFileId, isPublic, kingdomId: bodyKingdomId } = req.body;
+    const { name, fights, honorStartFileId, honorEndFileId, dkpFormula, goalsFormula, isPublic, kingdomId: bodyKingdomId } = req.body;
     
     const targetKingdomId = req.user.role === 'admin' && bodyKingdomId ? bodyKingdomId : req.user.kingdomId;
 
@@ -750,8 +750,10 @@ app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, r
       kingdomId: targetKingdomId,
       fights: fights || [],
       // Range statt Liste
-      honorStartFileId, 
+      honorStartFileId,
       honorEndFileId,
+      dkpFormula: dkpFormula || null,
+      goalsFormula: goalsFormula || null,
       isPublic: !!isPublic,
       createdAt: new Date().toISOString()
     };
@@ -767,7 +769,7 @@ app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, r
 // 3. PUT /api/admin/kvk/events/:id - Event bearbeiten
 app.put('/api/admin/kvk/events/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { name, fights, honorStartFileId, honorEndFileId, isPublic } = req.body;
+    const { name, fights, honorStartFileId, honorEndFileId, dkpFormula, goalsFormula, isPublic } = req.body;
     const eventId = req.params.id;
 
     // Check ownership
@@ -779,7 +781,13 @@ app.put('/api/admin/kvk/events/:id', authenticateToken, requireAdmin, async (req
     }
 
     const updated = await updateKvkEvent(eventId, {
-      name, fights, honorStartFileId, honorEndFileId, isPublic
+      name,
+      fights,
+      honorStartFileId,
+      honorEndFileId,
+      dkpFormula: dkpFormula || null,
+      goalsFormula: goalsFormula || null,
+      isPublic
     });
     res.json(updated);
   } catch (error) {

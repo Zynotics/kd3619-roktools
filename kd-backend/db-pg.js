@@ -122,10 +122,14 @@ async function initKvkTable() {
     // 2. Migration: Spalten hinzufügen, falls sie noch nicht existieren
     // fights: JSON-Array der Kampfphasen
     await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS fights TEXT`);
-    
+
     // honor_start_file_id / honor_end_file_id: Statt alter Liste nun Start/Ende
     await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS honor_start_file_id TEXT`);
     await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS honor_end_file_id TEXT`);
+
+    // DKP Formel (JSON) und Goal-Formel (JSON)
+    await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS dkp_formula TEXT`);
+    await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS goals_formula TEXT`);
 
     // Alte Spalten (start_file_id, end_file_id) könnten hier theoretisch gelöscht werden,
     // aber wir lassen sie zur Sicherheit für Legacy-Zwecke drin oder ignorieren sie einfach.
@@ -147,30 +151,36 @@ if (process.env.DATABASE_URL) {
 async function createKvkEvent(event) {
   const sql = `
     INSERT INTO kvk_events (
-      id, 
-      name, 
-      kingdom_id, 
-      fights, 
-      honor_start_file_id, 
-      honor_end_file_id, 
-      is_public, 
+      id,
+      name,
+      kingdom_id,
+      fights,
+      honor_start_file_id,
+      honor_end_file_id,
+      dkp_formula,
+      goals_formula,
+      is_public,
       created_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     RETURNING *
   `;
-  
+
   // Arrays/Objekte als JSON-String speichern
   const fightsStr = JSON.stringify(event.fights || []);
+  const dkpFormulaStr = event.dkpFormula ? JSON.stringify(event.dkpFormula) : null;
+  const goalsFormulaStr = event.goalsFormula ? JSON.stringify(event.goalsFormula) : null;
 
   const res = await query(sql, [
-    event.id, 
-    event.name, 
+    event.id,
+    event.name,
     event.kingdomId,
     fightsStr,
     event.honorStartFileId || null,
     event.honorEndFileId || null,
-    !!event.isPublic, 
+    dkpFormulaStr,
+    goalsFormulaStr,
+    !!event.isPublic,
     event.createdAt || new Date()
   ]);
   return res.rows[0];
@@ -187,14 +197,16 @@ async function getKvkEvents(kingdomId) {
     id: row.id,
     name: row.name,
     kingdomId: row.kingdom_id,
-    
+
     // JSON parsen
     fights: JSON.parse(row.fights || '[]'),
-    
+    dkpFormula: row.dkp_formula ? JSON.parse(row.dkp_formula) : null,
+    goalsFormula: row.goals_formula ? JSON.parse(row.goals_formula) : null,
+
     // CamelCase Mapping
     honorStartFileId: row.honor_start_file_id,
     honorEndFileId: row.honor_end_file_id,
-    
+
     isPublic: row.is_public,
     createdAt: row.created_at
   }));
@@ -212,6 +224,8 @@ async function getKvkEventById(id) {
     name: row.name,
     kingdomId: row.kingdom_id,
     fights: JSON.parse(row.fights || '[]'),
+    dkpFormula: row.dkp_formula ? JSON.parse(row.dkp_formula) : null,
+    goalsFormula: row.goals_formula ? JSON.parse(row.goals_formula) : null,
     honorStartFileId: row.honor_start_file_id,
     honorEndFileId: row.honor_end_file_id,
     isPublic: row.is_public,
@@ -225,23 +239,29 @@ async function getKvkEventById(id) {
 async function updateKvkEvent(id, data) {
   const sql = `
     UPDATE kvk_events
-    SET name = $1, 
-        fights = $2, 
-        honor_start_file_id = $3, 
-        honor_end_file_id = $4, 
-        is_public = $5
-    WHERE id = $6
+    SET name = $1,
+        fights = $2,
+        honor_start_file_id = $3,
+        honor_end_file_id = $4,
+        dkp_formula = $5,
+        goals_formula = $6,
+        is_public = $7
+    WHERE id = $8
     RETURNING *
   `;
-  
+
   const fightsStr = JSON.stringify(data.fights || []);
+  const dkpFormulaStr = data.dkpFormula ? JSON.stringify(data.dkpFormula) : null;
+  const goalsFormulaStr = data.goalsFormula ? JSON.stringify(data.goalsFormula) : null;
 
   const res = await query(sql, [
-    data.name, 
+    data.name,
     fightsStr,
     data.honorStartFileId || null,
     data.honorEndFileId || null,
-    !!data.isPublic, 
+    dkpFormulaStr,
+    goalsFormulaStr,
+    !!data.isPublic,
     id
   ]);
   return res.rows[0];

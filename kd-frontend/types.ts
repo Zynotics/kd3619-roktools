@@ -160,10 +160,29 @@ export type ActivityPlayerInfo = {
 
 // Definition eines einzelnen Kampfes
 export interface KvkFight {
-  id: string;          
-  name: string;        
+  id: string;
+  name: string;
   startFileId: string; // ID aus dem Overview-Pool
   endFileId: string;   // ID aus dem Overview-Pool
+}
+
+export interface DkpFormulaEntry {
+  enabled: boolean;
+  points: number;
+}
+
+export interface DkpFormula {
+  t1: DkpFormulaEntry;
+  t2: DkpFormulaEntry;
+  t3: DkpFormulaEntry;
+  t4: DkpFormulaEntry;
+  t5: DkpFormulaEntry;
+  deadTroops: DkpFormulaEntry;
+}
+
+export interface GoalsFormula {
+  basePowerToDkpPercent: number;
+  basePowerToDeadTroopsPercent: number;
 }
 
 // Das Haupt-Event Objekt
@@ -172,7 +191,9 @@ export interface KvkEvent {
   name: string;
   kingdomId: string;
   fights: KvkFight[];
-  
+  dkpFormula?: DkpFormula | null;
+  goalsFormula?: GoalsFormula | null;
+
   // Honor Tracking Definition (Range statt Liste)
   honorStartFileId?: string; // ID aus dem Honor-Pool
   honorEndFileId?: string;   // ID aus dem Honor-Pool
@@ -186,6 +207,8 @@ export interface CreateKvkEventPayload {
   name: string;
   kingdomId?: string;
   fights: KvkFight[];
+  dkpFormula?: DkpFormula | null;
+  goalsFormula?: GoalsFormula | null;
   honorStartFileId?: string;
   honorEndFileId?: string;
   isPublic: boolean;

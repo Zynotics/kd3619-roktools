@@ -1,10 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { KvkEvent, UploadedFile, CreateKvkEventPayload, KvkFight } from '../types';
+import { KvkEvent, UploadedFile, CreateKvkEventPayload, KvkFight, DkpFormula, GoalsFormula } from '../types';
 import { fetchKvkEvents, createKvkEvent, updateKvkEvent, deleteKvkEvent, API_BASE_URL } from '../api';
 import FileReorderList from './FileReorderList';
 
 const generateTempId = () => Math.random().toString(36).substring(2, 11);
+
+const createDefaultDkpFormula = (): DkpFormula => ({
+  t1: { enabled: false, points: 0 },
+  t2: { enabled: false, points: 0 },
+  t3: { enabled: false, points: 0 },
+  t4: { enabled: false, points: 0 },
+  t5: { enabled: false, points: 0 },
+  deadTroops: { enabled: false, points: 0 },
+});
+
+const createDefaultGoalsFormula = (): GoalsFormula => ({
+  basePowerToDkpPercent: 0,
+  basePowerToDeadTroopsPercent: 0,
+});
+
+const dkpCategories: { key: keyof DkpFormula; label: string; helper: string }[] = [
+  { key: 't1', label: 'T1 Kills', helper: 'Leichte PvE/Barb Kills' },
+  { key: 't2', label: 'T2 Kills', helper: 'Frühe Kills' },
+  { key: 't3', label: 'T3 Kills', helper: 'Mittlere Kills' },
+  { key: 't4', label: 'T4 Kills', helper: 'Hauptkampf (mittlere Truppen)' },
+  { key: 't5', label: 'T5 Kills', helper: 'Premium Kampfstatistik' },
+  { key: 'deadTroops', label: 'Dead Troops', helper: 'Gefallene Truppen' },
+];
 
 const KvkManager: React.FC = () => {
   const { token, user } = useAuth();
@@ -29,7 +52,9 @@ const KvkManager: React.FC = () => {
   const [honorEndId, setHonorEndId] = useState('');
 
   // Fights List
-  const [fights, setFights] = useState<KvkFight[]>([]); 
+  const [fights, setFights] = useState<KvkFight[]>([]);
+  const [dkpFormula, setDkpFormula] = useState<DkpFormula>(createDefaultDkpFormula());
+  const [goalsFormula, setGoalsFormula] = useState<GoalsFormula>(createDefaultGoalsFormula());
 
   // --- Temporary Fight Input State ---
   const [tempFightName, setTempFightName] = useState('');
@@ -73,6 +98,8 @@ const KvkManager: React.FC = () => {
     setHonorStartId('');
     setHonorEndId('');
     setFights([]);
+    setDkpFormula(createDefaultDkpFormula());
+    setGoalsFormula(createDefaultGoalsFormula());
     setTempFightName('');
     setTempStartFileId('');
     setTempEndFileId('');
@@ -85,7 +112,9 @@ const KvkManager: React.FC = () => {
     setHonorStartId(ev.honorStartFileId || '');
     setHonorEndId(ev.honorEndFileId || '');
     setFights(ev.fights || []);
-    
+    setDkpFormula(ev.dkpFormula || createDefaultDkpFormula());
+    setGoalsFormula(ev.goalsFormula || createDefaultGoalsFormula());
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -145,16 +174,32 @@ const KvkManager: React.FC = () => {
       setFights(fights.filter(f => f.id !== id));
   };
 
+  const handleToggleDkp = (key: keyof DkpFormula, enabled: boolean) => {
+    setDkpFormula(prev => ({
+      ...prev,
+      [key]: { ...prev[key], enabled }
+    }));
+  };
+
+  const handleDkpPointsChange = (key: keyof DkpFormula, points: number) => {
+    setDkpFormula(prev => ({
+      ...prev,
+      [key]: { ...prev[key], points }
+    }));
+  };
+
   // --- Submit Logic ---
   const handleSubmit = async () => {
     if (!name) {
       alert('Please enter an Event Name.');
       return;
     }
-    
+
     const payload: CreateKvkEventPayload = {
         name,
         fights,
+        dkpFormula,
+        goalsFormula,
         honorStartFileId: honorStartId,
         honorEndFileId: honorEndId,
         isPublic,
@@ -415,8 +460,97 @@ const KvkManager: React.FC = () => {
 
           </div>
 
+          {/* 3b. FORMELN: DKP & GOALS */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+            <div className="bg-gray-900/40 p-5 rounded-lg border border-gray-600/50">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-amber-300">🧮 DKP Formel</h3>
+                  <p className="text-xs text-gray-400">Wähle, welche Kills/Deads für den DKP Score zählen und wie viele Punkte sie geben.</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {dkpCategories.map(cat => {
+                  const entry = dkpFormula[cat.key];
+                  return (
+                    <div key={cat.key} className="flex items-center justify-between bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2">
+                      <label className="flex items-start gap-3 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="mt-1 w-4 h-4 accent-yellow-500"
+                          checked={entry.enabled}
+                          onChange={(e) => handleToggleDkp(cat.key, e.target.checked)}
+                        />
+                        <div>
+                          <div className="font-semibold text-white text-sm">{cat.label}</div>
+                          <div className="text-[11px] text-gray-400">{cat.helper}</div>
+                        </div>
+                      </label>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-yellow-500 outline-none disabled:opacity-50"
+                          value={entry.points}
+                          onChange={(e) => handleDkpPointsChange(cat.key, Number(e.target.value) || 0)}
+                          disabled={!entry.enabled}
+                        />
+                        <span className="text-xs text-gray-400">Punkte</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="bg-gray-900/40 p-5 rounded-lg border border-gray-600/50">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-cyan-300">🎯 Goals Formel</h3>
+                  <p className="text-xs text-gray-400">R5 Vorgaben: Welcher Prozentsatz der Basepower ergibt den DKP-Score und wie viel Prozent müssen als Dead Troops erreicht werden.</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs text-gray-400 uppercase font-bold mb-1">% Basepower → DKP Score</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-cyan-400 outline-none"
+                    value={goalsFormula.basePowerToDkpPercent}
+                    onChange={(e) => setGoalsFormula({ ...goalsFormula, basePowerToDkpPercent: Number(e.target.value) || 0 })}
+                    placeholder="z.B. 120 (entspricht 120% der Basepower als DKP Score)"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-400 uppercase font-bold mb-1">% Basepower → Dead Troops Ziel</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-cyan-400 outline-none"
+                    value={goalsFormula.basePowerToDeadTroopsPercent}
+                    onChange={(e) => setGoalsFormula({ ...goalsFormula, basePowerToDeadTroopsPercent: Number(e.target.value) || 0 })}
+                    placeholder="z.B. 10 (10% der Basepower müssen fallen)"
+                  />
+                </div>
+
+                <div className="text-xs text-gray-500 bg-gray-800/70 border border-dashed border-gray-600 rounded p-3">
+                  <p className="font-semibold text-white mb-1">Hinweis</p>
+                  <p>Die DKP-Formel bestimmt die Punkte-Bewertung für Kills/Deads. Die Goals-Formel definiert, welche Basisziele jeder Spieler erreichen muss (auf Basis seiner Basepower).</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* 4. MAIN ACTION BUTTON */}
-          <button 
+          <button
             onClick={handleSubmit}
             disabled={loading}
             className={`w-full py-4 px-6 font-bold text-xl rounded shadow-lg transition-all transform hover:scale-[1.005] active:scale-[0.99] ${
@@ -465,6 +599,18 @@ const KvkManager: React.FC = () => {
                             <div className="flex items-center text-purple-400 font-medium">
                                 <span className="w-20 text-xs text-gray-500 uppercase">Honor:</span>
                                 {ev.honorStartFileId && ev.honorEndFileId ? '✅ Configured' : '⚠️ Missing'}
+                            </div>
+                            <div className="flex items-center text-amber-300 font-medium">
+                                <span className="w-20 text-xs text-gray-500 uppercase">DKP:</span>
+                                {ev.dkpFormula
+                                  ? `${Object.values(ev.dkpFormula).filter((entry) => entry?.enabled).length} aktiv`
+                                  : '⚠️ Missing'}
+                            </div>
+                            <div className="flex items-center text-cyan-300 font-medium">
+                                <span className="w-20 text-xs text-gray-500 uppercase">Goals:</span>
+                                {ev.goalsFormula
+                                  ? `${ev.goalsFormula.basePowerToDkpPercent || 0}% DKP / ${ev.goalsFormula.basePowerToDeadTroopsPercent || 0}% Dead`
+                                  : '⚠️ Missing'}
                             </div>
                         </div>
                       </td>
