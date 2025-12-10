@@ -64,6 +64,7 @@ const KvkManager: React.FC = () => {
   // --- Form State ---
   const [name, setName] = useState('');
   const [isPublic, setIsPublic] = useState(false);
+  const [eventStartId, setEventStartId] = useState('');
   
   // Honor Range Selection
   const [honorStartId, setHonorStartId] = useState('');
@@ -113,6 +114,7 @@ const KvkManager: React.FC = () => {
     setEditingEventId(null);
     setName('');
     setIsPublic(false);
+    setEventStartId('');
     setHonorStartId('');
     setHonorEndId('');
     setFights([]);
@@ -133,6 +135,7 @@ const KvkManager: React.FC = () => {
     setEditingEventId(ev.id);
     setName(ev.name);
     setIsPublic(ev.isPublic);
+    setEventStartId(ev.eventStartFileId || '');
     setHonorStartId(ev.honorStartFileId || '');
     setHonorEndId(ev.honorEndFileId || '');
     setFights(ev.fights || []);
@@ -263,6 +266,7 @@ const KvkManager: React.FC = () => {
         fights,
         dkpFormula,
         goalsFormula,
+        eventStartFileId: eventStartId,
         honorStartFileId: honorStartId,
         honorEndFileId: honorEndId,
         isPublic,
@@ -386,9 +390,37 @@ const KvkManager: React.FC = () => {
               )}
             </div>
         </div>
-        
+
         <div className="space-y-8">
-          
+
+          {/* 0. EVENT START SNAPSHOT */}
+          <div className="bg-gray-900/40 p-5 rounded-lg border border-gray-600/50">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-cyan-300">🕛 Event Start Snapshot</h3>
+                <p className="text-xs text-gray-400">Wähle den Tag-0-Scan für Basiswerte (DKP-Ziele &amp; Power-Berechnungen).</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-3 items-center">
+              <select
+                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                value={eventStartId}
+                onChange={e => setEventStartId(e.target.value)}
+              >
+                <option value="">-- Event Start Snapshot auswählen --</option>
+                {overviewFiles.map(f => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+
+              <div className="text-xs text-gray-500 bg-gray-800/70 border border-dashed border-gray-600 rounded p-3">
+                <p className="font-semibold text-white mb-1">Hinweis</p>
+                <p>Dieser Snapshot setzt die Basis-Power (Tag 0) für DKP-Ziele &amp; Dead-Ziele. Späterer Zuwachs wird darauf angerechnet.</p>
+              </div>
+            </div>
+          </div>
+
           {/* 1. MAIN SETTINGS */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="md:col-span-3">

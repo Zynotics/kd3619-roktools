@@ -68,6 +68,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const [honorHistory, setHonorHistory] = useState<PlayerHonorHistory[]>([]);
   const [activeHonorFiles, setActiveHonorFiles] = useState<UploadedFile[]>([]);
   const [totalHonorHistory, setTotalHonorHistory] = useState<TotalHonorHistory>([]);
+  const [eventStartSelection, setEventStartSelection] = useState<string>('');
   const [honorStartSelection, setHonorStartSelection] = useState<string>('');
   const [honorEndSelection, setHonorEndSelection] = useState<string>('');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
@@ -93,6 +94,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     const evt = events.find(e => e.id === selectedEventId);
     if (evt) {
       setSelectedFightId('all');
+      setEventStartSelection(evt.eventStartFileId || '');
       setHonorStartSelection(evt.honorStartFileId || '');
       setHonorEndSelection(evt.honorEndFileId || '');
     }
@@ -140,9 +142,11 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       setOverviewFiles(loadedOverview);
       setAllHonorFiles(loadedHonor);
 
+      const defaultEventStart = event.eventStartFileId || loadedOverview[0]?.id || '';
       const defaultHonorStart = event.honorStartFileId || loadedHonor[0]?.id || '';
       const defaultHonorEnd = event.honorEndFileId || loadedHonor[loadedHonor.length - 1]?.id || '';
 
+      setEventStartSelection(defaultEventStart);
       setHonorStartSelection(defaultHonorStart);
       setHonorEndSelection(defaultHonorEnd);
 
@@ -195,8 +199,20 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
   const parseAnyNumber = (val: any): number => parseGermanNumber(val);
 
+  type SnapshotEntry = {
+    name: string;
+    alliance: string;
+    power: number;
+    t4: number;
+    t5: number;
+    dead: number;
+    killPoints: number;
+  };
+
+  type SnapshotDataMap = Map<string, SnapshotEntry>;
+
   // --- Helper: Parse Overview Data ---
-  const getSnapshotData = (file: UploadedFile) => {
+  const getSnapshotData = (file: UploadedFile): SnapshotDataMap => {
       const getIdx = (keys: string[]) => findColumnIndex(file.headers, keys);
       const idIdx = getIdx(['id', 'governor id', 'user id']);
       const nameIdx = getIdx(['name', 'display name', 'spieler']); 
@@ -317,7 +333,8 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     fights: { startFileId: string, endFileId: string }[],
     files: UploadedFile[],
     dkpFormula?: KvkEvent['dkpFormula'],
-    goalsFormula?: KvkEvent['goalsFormula']
+    goalsFormula?: KvkEvent['goalsFormula'],
+    baseSnapshotData?: SnapshotDataMap
   ): StatProgressRow[] => {
     const grandTotals = new Map<string, StatProgressRow>();
 
@@ -355,7 +372,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                     id: playerId,
                     name: curr.name,
                     alliance: curr.alliance,
-                    basePower: prev ? prev.power : curr.power, // Wenn kein Prev, nehmen wir Curr als Basis
+                    basePower: baseSnapshotData?.get(playerId)?.power ?? (prev ? prev.power : curr.power), // Wenn kein Prev, nehmen wir Curr als Basis
                     powerDiff: 0,
                     t4KillsDiff: 0,
                     t5KillsDiff: 0,
@@ -429,14 +446,18 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
           return;
       }
 
+      const baseStartFile = overviewFiles.find(f => f.id === eventStartSelection);
+      const baseSnapshotData = baseStartFile ? getSnapshotData(baseStartFile) : undefined;
+
       const calculatedStats = calculateCumulativeStats(
         fightsToUse,
         overviewFiles,
         activeEvent.dkpFormula,
-        activeEvent.goalsFormula
+        activeEvent.goalsFormula,
+        baseSnapshotData
       );
       setStatsData(calculatedStats);
-  }, [activeEvent, overviewFiles, selectedFightId]);
+  }, [activeEvent, overviewFiles, selectedFightId, eventStartSelection]);
 
   // Recalculate honor range when selection changes
   useEffect(() => {
