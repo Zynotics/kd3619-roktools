@@ -619,12 +619,25 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             
             {viewMode === 'stats' && (
               <div className="bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-700">
-                <div className="p-4 bg-gray-800 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
-                  <div>
-                      <h2 className="text-lg font-semibold text-blue-200">Total War Ranking</h2>
+                <div className="p-4 bg-gray-800 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-semibold text-blue-200">Total War Ranking</h2>
+                        <span className="px-2 py-1 text-[11px] uppercase tracking-wide bg-blue-900 text-blue-200 rounded border border-blue-700">DKP Focus</span>
+                      </div>
                       <p className="text-xs text-gray-400">
-                          Aggregated stats based on the selected battle phase.
+                          Aggregated stats based on the selected battle phase with a clear view on DKP progress.
                       </p>
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
+                          <span className="flex items-center gap-1">
+                              <span className="w-3 h-3 rounded-full bg-emerald-500/50 border border-emerald-400" />
+                              DKP goal reached
+                          </span>
+                          <span className="flex items-center gap-1">
+                              <span className="w-3 h-3 rounded-full bg-amber-400/40 border border-amber-300" />
+                              In progress
+                          </span>
+                      </div>
                   </div>
                   {activeEvent?.fights?.length ? (
                     <div className="flex flex-col items-start text-xs text-gray-300 gap-1">
@@ -735,7 +748,18 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                     </thead>
                     <tbody className="divide-y divide-gray-700 text-sm">
                       {sortedStats.map((row, idx) => (
-                        <tr key={row.id} className="hover:bg-gray-750 transition-colors">
+                        <tr
+                          key={row.id}
+                          className={`hover:bg-gray-750 transition-colors ${
+                            idx === 0
+                              ? 'bg-blue-900/20'
+                              : idx === 1
+                                ? 'bg-blue-900/10'
+                                : idx === 2
+                                  ? 'bg-blue-900/5'
+                                  : ''
+                          }`}
+                        >
                           <td className="p-3 text-gray-500 font-mono text-center">{idx + 1}</td>
                           <td className="p-3 text-gray-400 font-mono text-xs">{row.id}</td>
                           <td className="p-3 font-medium text-white truncate max-w-[150px]">{row.name}</td>
@@ -743,13 +767,21 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
                           <td className="p-3 text-right">
                               {row.dkpPercent !== undefined ? (
-                                  <div className="flex flex-col items-end">
-                                      <span className={`font-bold ${row.dkpPercent >= 100 ? 'text-green-400' : 'text-amber-300'}`}>
-                                          {row.dkpPercent.toFixed(1)}%
-                                      </span>
-                                      <span className="text-[11px] text-gray-500">
-                                          DKP: {formatNumber(row.dkpScore || 0)} / {formatNumber(row.dkpGoal || 0)}
-                                      </span>
+                                  <div className="flex flex-col items-end gap-1">
+                                      <div className="flex items-center gap-2">
+                                          <span className={`font-bold text-sm ${row.dkpPercent >= 100 ? 'text-green-400' : 'text-amber-200'}`}>
+                                              {row.dkpPercent.toFixed(1)}%
+                                          </span>
+                                          <span className="text-[11px] text-gray-400 bg-gray-900 px-2 py-0.5 rounded border border-gray-700 font-mono">
+                                              {formatNumber(row.dkpScore || 0)} / {formatNumber(row.dkpGoal || 0)}
+                                          </span>
+                                      </div>
+                                      <div className="w-36 h-2 bg-gray-900 rounded-full overflow-hidden border border-gray-700">
+                                          <div
+                                              className={`${row.dkpPercent >= 100 ? 'bg-green-400/80' : 'bg-amber-300/80'} h-full transition-all duration-500`}
+                                              style={{ width: `${Math.min(Math.max(row.dkpPercent, 0), 130)}%` }}
+                                          />
+                                      </div>
                                   </div>
                               ) : (
                                   <span className="text-gray-500 text-sm italic">N/A</span>
