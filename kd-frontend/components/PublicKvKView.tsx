@@ -43,6 +43,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
+  const [selectedFightId, setSelectedFightId] = useState<string>('all');
   
   // Rohdaten
   const [overviewFiles, setOverviewFiles] = useState<UploadedFile[]>([]);
@@ -51,21 +52,33 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   // Berechnete Daten
   const [statsData, setStatsData] = useState<StatProgressRow[]>([]);
   const [honorHistory, setHonorHistory] = useState<PlayerHonorHistory[]>([]);
-  const [activeHonorFiles, setActiveHonorFiles] = useState<UploadedFile[]>([]); 
-  const [totalHonorHistory, setTotalHonorHistory] = useState<TotalHonorHistory>([]); 
+  const [activeHonorFiles, setActiveHonorFiles] = useState<UploadedFile[]>([]);
+  const [totalHonorHistory, setTotalHonorHistory] = useState<TotalHonorHistory>([]);
+  const [honorStartSelection, setHonorStartSelection] = useState<string>('');
+  const [honorEndSelection, setHonorEndSelection] = useState<string>('');
   
   // UI State
   const [viewMode, setViewMode] = useState<'stats' | 'honor'>('stats');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
   // Suche & Filter
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<HonorPlayerInfo[] | 'not_found' | null>(null);
 
+  const activeEvent = useMemo(() => events.find(e => e.id === selectedEventId), [events, selectedEventId]);
+
   useEffect(() => { if (slug) loadEvents(); }, [slug]);
   useEffect(() => { if (slug && selectedEventId) loadFilesAndCalculate(); }, [slug, selectedEventId]);
+  useEffect(() => {
+    const evt = events.find(e => e.id === selectedEventId);
+    if (evt) {
+      setSelectedFightId('all');
+      setHonorStartSelection(evt.honorStartFileId || '');
+      setHonorEndSelection(evt.honorEndFileId || '');
+    }
+  }, [events, selectedEventId]);
 
   const loadEvents = async () => {
     try {
@@ -87,7 +100,9 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     setSearchResults(null);
     setSearchQuery('');
     setActiveHonorFiles([]);
-    setTotalHonorHistory([]); 
+    setTotalHonorHistory([]);
+    setHonorStartSelection('');
+    setHonorEndSelection('');
 
     try {
       const event = events.find(e => e.id === selectedEventId);
@@ -107,32 +122,11 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       setOverviewFiles(loadedOverview);
       setAllHonorFiles(loadedHonor);
 
-      // --- A. FIGHT STATS CALCULATION ---
-      if (event.fights && event.fights.length > 0) {
-          const calculatedStats = calculateCumulativeStats(event.fights, loadedOverview, event.dkpFormula, event.goalsFormula);
-          setStatsData(calculatedStats);
-      }
+      const defaultHonorStart = event.honorStartFileId || loadedHonor[0]?.id || '';
+      const defaultHonorEnd = event.honorEndFileId || loadedHonor[loadedHonor.length - 1]?.id || '';
 
-      // --- B. HONOR RANGE LOGIC ---
-      if (event.honorStartFileId && event.honorEndFileId) {
-          const startIndex = loadedHonor.findIndex(f => f.id === event.honorStartFileId);
-          const endIndex = loadedHonor.findIndex(f => f.id === event.honorEndFileId);
-
-          if (startIndex !== -1 && endIndex !== -1) {
-              const first = Math.min(startIndex, endIndex);
-              const last = Math.max(startIndex, endIndex);
-              const rangeFiles = loadedHonor.slice(first, last + 1);
-
-              if (rangeFiles.length > 0) {
-                  setActiveHonorFiles(rangeFiles);
-                  const { history, totalHistory } = processHonorData(rangeFiles);
-                  setHonorHistory(history);
-                  setTotalHonorHistory(totalHistory);
-              }
-          } else {
-             console.warn("Honor Start or End file not found in loaded list.");
-          }
-      }
+      setHonorStartSelection(defaultHonorStart);
+      setHonorEndSelection(defaultHonorEnd);
 
     } catch (err) {
       console.error(err);
@@ -365,6 +359,67 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     return Array.from(grandTotals.values()).sort((a, b) => b.t4t5KillsDiff - a.t4t5KillsDiff);
   };
 
+  // Recalculate fight stats when selection changes
+  useEffect(() => {
+      if (!activeEvent || !activeEvent.fights || activeEvent.fights.length === 0 || overviewFiles.length === 0) {
+          setStatsData([]);
+          return;
+      }
+
+      const fightsToUse = selectedFightId === 'all'
+        ? activeEvent.fights
+        : activeEvent.fights.filter(f => f.id === selectedFightId);
+
+      if (!fightsToUse || fightsToUse.length === 0) {
+          setStatsData([]);
+          return;
+      }
+
+      const calculatedStats = calculateCumulativeStats(
+        fightsToUse,
+        overviewFiles,
+        activeEvent.dkpFormula,
+        activeEvent.goalsFormula
+      );
+      setStatsData(calculatedStats);
+  }, [activeEvent, overviewFiles, selectedFightId]);
+
+  // Recalculate honor range when selection changes
+  useEffect(() => {
+      if (!activeEvent || allHonorFiles.length === 0 || !honorStartSelection || !honorEndSelection) {
+          setActiveHonorFiles([]);
+          setHonorHistory([]);
+          setTotalHonorHistory([]);
+          return;
+      }
+
+      const startIndex = allHonorFiles.findIndex(f => f.id === honorStartSelection);
+      const endIndex = allHonorFiles.findIndex(f => f.id === honorEndSelection);
+
+      if (startIndex === -1 || endIndex === -1) {
+          setActiveHonorFiles([]);
+          setHonorHistory([]);
+          setTotalHonorHistory([]);
+          return;
+      }
+
+      const first = Math.min(startIndex, endIndex);
+      const last = Math.max(startIndex, endIndex);
+      const rangeFiles = allHonorFiles.slice(first, last + 1);
+
+      if (rangeFiles.length === 0) {
+          setActiveHonorFiles([]);
+          setHonorHistory([]);
+          setTotalHonorHistory([]);
+          return;
+      }
+
+      setActiveHonorFiles(rangeFiles);
+      const { history, totalHistory } = processHonorData(rangeFiles);
+      setHonorHistory(history);
+      setTotalHonorHistory(totalHistory);
+  }, [activeEvent, allHonorFiles, honorStartSelection, honorEndSelection]);
+
   const comparisonHonorTableData = useMemo(() => {
       if (honorHistory.length === 0 || activeHonorFiles.length < 2) return [];
       
@@ -388,10 +443,8 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         };
       })
       .filter(p => p.newHonor > 0 || p.diffHonor !== 0)
-      .sort((a, b) => b.diffHonor - a.diffHonor); 
+      .sort((a, b) => b.diffHonor - a.diffHonor);
   }, [honorHistory, activeHonorFiles]);
-
-  const activeEvent = events.find(e => e.id === selectedEventId);
 
   // --- RENDER ---
   if (events.length === 0 && !loading) {
@@ -473,9 +526,24 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                   <div>
                       <h2 className="text-lg font-semibold text-blue-200">Total War Ranking</h2>
                       <p className="text-xs text-gray-400">
-                          Aggregated Stats from all battle phases.
+                          Aggregated stats based on the selected battle phase.
                       </p>
                   </div>
+                  {activeEvent?.fights?.length ? (
+                    <div className="flex flex-col items-start text-xs text-gray-300 gap-1">
+                      <span className="uppercase tracking-wide text-gray-400 text-[10px]">Fight Selection</span>
+                      <select
+                        className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={selectedFightId}
+                        onChange={e => setSelectedFightId(e.target.value)}
+                      >
+                        <option value="all">All Fights (Cumulative)</option>
+                        {activeEvent.fights.map(f => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
                   <div className="text-xs text-gray-500 italic">
                       Top {statsData.length} Players
                   </div>
@@ -632,8 +700,36 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                                     <>
                                         Progress from <span className="text-yellow-500 font-medium">{activeHonorFiles[0].name}</span> to <span className="text-yellow-500 font-medium">{activeHonorFiles[activeHonorFiles.length -1].name}</span>
                                     </>
-                                ) : "Select a range in Admin Manager to see progress."}
+                                ) : "Choose a start and end snapshot to see progress."}
                             </p>
+                        </div>
+                        <div className="flex flex-col md:flex-row gap-3 md:items-end w-full md:w-auto">
+                          <div className="flex flex-col text-xs text-gray-300">
+                            <span className="uppercase tracking-wide text-gray-400 text-[10px]">Start Snapshot</span>
+                            <select
+                              className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              value={honorStartSelection}
+                              onChange={e => setHonorStartSelection(e.target.value)}
+                            >
+                              <option value="">Select start file</option>
+                              {allHonorFiles.map(f => (
+                                <option key={f.id} value={f.id}>{f.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex flex-col text-xs text-gray-300">
+                            <span className="uppercase tracking-wide text-gray-400 text-[10px]">End Snapshot</span>
+                            <select
+                              className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              value={honorEndSelection}
+                              onChange={e => setHonorEndSelection(e.target.value)}
+                            >
+                              <option value="">Select end file</option>
+                              {allHonorFiles.map(f => (
+                                <option key={f.id} value={f.id}>{f.name}</option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                     </div>
 
