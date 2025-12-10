@@ -43,6 +43,7 @@ const KvkManager: React.FC = () => {
 
   // --- Editing State ---
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   // --- Form State ---
   const [name, setName] = useState('');
@@ -106,6 +107,12 @@ const KvkManager: React.FC = () => {
     setTempEndFileId('');
   };
 
+  const handleOpenCreateForm = () => {
+    resetForm();
+    setIsFormOpen(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleEditClick = (ev: KvkEvent) => {
     setEditingEventId(ev.id);
     setName(ev.name);
@@ -116,6 +123,7 @@ const KvkManager: React.FC = () => {
     setDkpFormula(ev.dkpFormula || createDefaultDkpFormula());
     setGoalsFormula(ev.goalsFormula || createDefaultGoalsFormula());
 
+    setIsFormOpen(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -279,6 +287,7 @@ const KvkManager: React.FC = () => {
   };
 
   const powerBrackets = goalsFormula.powerBrackets || [];
+  const isEditorVisible = isFormOpen || !!editingEventId;
 
   if (!user || (user.role !== 'admin' && user.role !== 'r5')) {
     return <div className="p-8 text-center text-red-500 font-bold">Access Denied. Admins or R5 only.</div>;
@@ -325,7 +334,17 @@ const KvkManager: React.FC = () => {
 
       {error && <div className="mb-4 p-3 bg-red-900/50 border border-red-500 text-red-200 rounded">{error}</div>}
 
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={handleOpenCreateForm}
+          className="bg-yellow-600 hover:bg-yellow-500 text-black font-bold px-4 py-2 rounded shadow transition-colors"
+        >
+          Create New Event
+        </button>
+      </div>
+
       {/* --- EVENT EDITOR --- */}
+      {isEditorVisible && (
       <div className={`p-6 rounded-xl shadow-lg mb-10 border transition-colors duration-300 ${editingEventId ? 'bg-blue-900/20 border-blue-500' : 'bg-gray-800 border-gray-700'}`}>
         <div className="flex justify-between items-center mb-6 border-b border-gray-600 pb-3">
             <h2 className="text-xl font-bold text-white flex items-center">
@@ -335,11 +354,21 @@ const KvkManager: React.FC = () => {
                     <>✨ Create New Event</>
                 )}
             </h2>
-            {editingEventId && (
-                <button onClick={resetForm} className="text-gray-400 hover:text-white underline text-sm">
-                    Cancel Editing
+            <div className="flex gap-3">
+              {!editingEventId && isEditorVisible && (
+                <button
+                  onClick={() => { resetForm(); setIsFormOpen(false); }}
+                  className="text-gray-400 hover:text-white underline text-sm"
+                >
+                  Close
                 </button>
-            )}
+              )}
+              {editingEventId && (
+                  <button onClick={() => { resetForm(); setIsFormOpen(false); }} className="text-gray-400 hover:text-white underline text-sm">
+                      Cancel Editing
+                  </button>
+              )}
+            </div>
         </div>
         
         <div className="space-y-8">
@@ -694,6 +723,7 @@ const KvkManager: React.FC = () => {
           </button>
         </div>
       </div>
+      )}
 
       {/* --- EVENT LIST TABLE --- */}
       <div className="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
