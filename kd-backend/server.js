@@ -13,9 +13,9 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 
 // 💾 Import der DB-Funktionen (inkl. KvK Manager)
-const { 
+const {
   query, get, all, assignR5, updateKingdomStatus, deleteKingdom,
-  createKvkEvent, getKvkEvents, getKvkEventById, updateKvkEvent, deleteKvkEvent
+  createKvkEvent, getKvkEvents, getAllKvkEvents, getKvkEventById, updateKvkEvent, deleteKvkEvent
 } = require('./db-pg');
 
 const app = express();
@@ -727,13 +727,15 @@ app.delete('/api/admin/kingdoms/:id', authenticateToken, requireAdmin, async (re
 // 1. GET /api/admin/kvk/events - Liste der Events (für Admin/R5)
 app.get('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const kingdomId = req.user.kingdomId || (req.user.role === 'admin' ? req.query.kingdomId : null);
-    
+    const isAdmin = req.user.role === 'admin';
+    const kingdomId = req.user.kingdomId || (isAdmin ? req.query.kingdomId : null);
+
     if (!kingdomId) {
-        if (req.user.role === 'admin' && !req.query.kingdomId) {
-             return res.json([]); 
-        }
-        return res.status(400).json({ error: 'Kingdom ID erforderlich' });
+      if (isAdmin) {
+        const events = await getAllKvkEvents();
+        return res.json(events);
+      }
+      return res.status(400).json({ error: 'Kingdom ID erforderlich' });
     }
 
     const events = await getKvkEvents(kingdomId);

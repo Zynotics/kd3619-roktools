@@ -192,7 +192,7 @@ async function createKvkEvent(event) {
 async function getKvkEvents(kingdomId) {
   const sql = `SELECT * FROM kvk_events WHERE kingdom_id = $1 ORDER BY created_at DESC`;
   const rows = await all(sql, [kingdomId]);
-  
+
   return rows.map(row => ({
     id: row.id,
     name: row.name,
@@ -207,6 +207,27 @@ async function getKvkEvents(kingdomId) {
     honorStartFileId: row.honor_start_file_id,
     honorEndFileId: row.honor_end_file_id,
 
+    isPublic: row.is_public,
+    createdAt: row.created_at
+  }));
+}
+
+/**
+ * Holt alle KvK Events aller Königreiche (für Super-Admins)
+ */
+async function getAllKvkEvents() {
+  const sql = `SELECT * FROM kvk_events ORDER BY created_at DESC`;
+  const rows = await all(sql);
+
+  return rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    kingdomId: row.kingdom_id,
+    fights: JSON.parse(row.fights || '[]'),
+    dkpFormula: row.dkp_formula ? JSON.parse(row.dkp_formula) : null,
+    goalsFormula: row.goals_formula ? JSON.parse(row.goals_formula) : null,
+    honorStartFileId: row.honor_start_file_id,
+    honorEndFileId: row.honor_end_file_id,
     isPublic: row.is_public,
     createdAt: row.created_at
   }));
@@ -284,6 +305,7 @@ module.exports = {
   // KvK Exports
   createKvkEvent,
   getKvkEvents,
+  getAllKvkEvents,
   getKvkEventById,
   updateKvkEvent,
   deleteKvkEvent
