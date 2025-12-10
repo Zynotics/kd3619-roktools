@@ -1,155 +1,130 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { PlayerHonorHistory } from '../types';
-import { formatNumber, abbreviateNumber } from '../utils';
-import { Card } from './Card';
-import Chart from 'chart.js/auto';
+import { formatNumber } from '../utils';
+import { TotalHonorHistory } from './PublicKvKView';
 
 interface HonorHistoryChartProps {
-    data: PlayerHonorHistory[];
-    selectedPlayerIds?: string[];
+  data: PlayerHonorHistory[];
+  totalData?: TotalHonorHistory;
+  selectedPlayerIds?: string[];
 }
 
-const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ data, selectedPlayerIds }) => {
-    const chartRef = useRef<HTMLCanvasElement>(null);
-    const chartInstanceRef = useRef<Chart | null>(null);
+const HonorHistoryChart: React.FC<HonorHistoryChartProps> = ({ data, totalData, selectedPlayerIds }) => {
+  // Wenn keine Spieler ausgewählt sind und keine Totaldaten da sind, zeige nichts oder Platzhalter
+  if ((!selectedPlayerIds || selectedPlayerIds.length === 0) && (!totalData || totalData.length === 0)) {
+    return <div className="text-center text-gray-500">No data to display.</div>;
+  }
 
-    const chartData = useMemo(() => {
-        if (!data || data.length === 0) return null;
+  // 1. Datenaufbereitung
+  // Wir müssen alle Daten (Spieler oder Total) in ein Array mergen, das Recharts versteht.
+  // Wir nehmen an, dass alle Serien die gleichen "fileName" Labels haben (diese dienen als X-Achse).
+  
+  // Basis sind die Total-Daten (da diese immer für alle Dateien existieren sollten)
+  // Wenn totalData fehlt, nehmen wir den ersten Spieler als "Zeitbasis".
+  const baseTimeline = totalData && totalData.length > 0 
+      ? totalData 
+      : (data[0]?.history || []);
 
-        // 1. Alle Zeitpunkte (Labels) sammeln (aus allen Datensätzen, um Lücken zu vermeiden)
-        const allLabelsSet = new Set<string>();
-        data.forEach(p => p.history.forEach(h => allLabelsSet.add(h.fileName)));
-        const labels = Array.from(allLabelsSet); 
-        // Hinweis: Wir gehen davon aus, dass die Reihenfolge durch die Sortierung im Parent (PublicKvKView) stimmt.
+  const chartData = baseTimeline.map((entry, idx) => {
+      const point: any = {
+          name: entry.fileName, // X-Achsen Label
+          total: totalData ? totalData[idx]?.totalHonor : 0
+      };
 
-        let datasets = [];
-        const hasSelection = selectedPlayerIds && selectedPlayerIds.length > 0;
+      // Füge ausgewählte Spieler hinzu
+      if (selectedPlayerIds) {
+          selectedPlayerIds.forEach(pid => {
+              const player = data.find(p => p.id === pid);
+              if (player) {
+                  // Finde den passenden History-Eintrag (wir matchen hier einfach über den Index, 
+                  // da die Dateien in der gleichen Reihenfolge verarbeitet wurden)
+                  // Sicherer wäre Matching über fileId, aber Index sollte passen, da alles aus der gleichen Liste kommt.
+                  const pEntry = player.history[idx];
+                  if (pEntry) {
+                      point[player.name] = pEntry.honorPoint;
+                  }
+              }
+          });
+      }
+      return point;
+  });
 
-        if (hasSelection) {
-            // --- MODUS A: Ausgewählte Spieler vergleichen ---
-            const playersToShow = data.filter(p => selectedPlayerIds!.includes(p.id));
+  // Farben für Spielerlinien
+  const colors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#6366f1"];
+
+  return (
+    <div className="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700">
+      <h3 className="text-lg font-semibold text-white mb-4">Honor Progression</h3>
+      <div className="h-[400px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <XAxis 
+                dataKey="name" 
+                stroke="#9ca3af" 
+                tick={{ fill: '#9ca3af' }}
+                tickMargin={10}
+            />
             
-            datasets = playersToShow.map((player, index) => {
-                const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'];
-                const color = colors[index % colors.length];
+            {/* Linke Y-Achse (für Spieler) */}
+            <YAxis 
+                yAxisId="left"
+                stroke="#9ca3af" 
+                tick={{ fill: '#9ca3af' }}
+                tickFormatter={(val) => formatNumber(val)}
+            />
 
-                // Datenpunkte mappen
-                const dataPoints = labels.map(label => {
-                    const entry = player.history.find(h => h.fileName === label);
-                    return entry ? entry.honorPoint : null; // null unterbricht die Linie oder wird interpoliert
-                });
+            {/* Rechte Y-Achse (für Total) - nur anzeigen wenn keine Spieler da sind oder optional */}
+            <YAxis 
+                yAxisId="right" 
+                orientation="right" 
+                stroke="#fbbf24" // Gelb für Total
+                tick={{ fill: '#fbbf24' }}
+                tickFormatter={(val) => formatNumber(val)}
+            />
 
-                return {
-                    label: player.name,
-                    data: dataPoints,
-                    borderColor: color,
-                    backgroundColor: color,
-                    tension: 0.2,
-                    pointRadius: 4,
-                    spanGaps: true
-                };
-            });
-        } else {
-            // --- MODUS B: Gesamtverlauf (Summe aller Spieler) ---
-            const totalData = labels.map(label => {
-                let sum = 0;
-                // Summiere Honor aller Spieler zu diesem Zeitpunkt
-                data.forEach(player => {
-                    const entry = player.history.find(h => h.fileName === label);
-                    if (entry) sum += entry.honorPoint;
-                });
-                return sum;
-            });
+            <Tooltip 
+                contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', color: '#f3f4f6' }}
+                formatter={(value: number) => formatNumber(value)}
+            />
+            <Legend wrapperStyle={{ paddingTop: '20px' }}/>
 
-            datasets.push({
-                label: 'Gesamt Honor (Königreich)',
-                data: totalData,
-                borderColor: '#fbbf24', // Amber/Gold
-                backgroundColor: 'rgba(251, 191, 36, 0.1)',
-                fill: true,
-                tension: 0.3,
-                pointRadius: 4
-            });
-        }
+            {/* Linie für Total Honor (immer anzeigen, oder nur wenn keine Spieler? Hier immer.) */}
+            {totalData && totalData.length > 0 && (
+                <Line 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="total" 
+                    name="Kingdom Total Honor" 
+                    stroke="#fbbf24" 
+                    strokeWidth={3}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                />
+            )}
 
-        return { labels, datasets };
-    }, [data, selectedPlayerIds]);
-
-    useEffect(() => {
-        if (!chartRef.current || !chartData) return;
-        
-        if (chartInstanceRef.current) {
-            chartInstanceRef.current.destroy();
-        }
-
-        const ctx = chartRef.current.getContext('2d');
-        if (!ctx) return;
-
-        // @ts-ignore
-        chartInstanceRef.current = new Chart(ctx, {
-            type: 'line',
-            data: chartData,
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                plugins: {
-                    legend: {
-                        labels: { color: '#9ca3af' },
-                        position: 'bottom'
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context: any) {
-                                let label = context.dataset.label || '';
-                                if (label) label += ': ';
-                                if (context.parsed.y !== null) label += formatNumber(context.parsed.y);
-                                return label;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 0 },
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
-                    },
-                    y: {
-                        ticks: { 
-                            color: '#9ca3af',
-                            callback: (value: any) => abbreviateNumber(value)
-                        },
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        beginAtZero: true
-                    }
-                }
-            }
-        });
-
-        return () => {
-            if (chartInstanceRef.current) {
-                chartInstanceRef.current.destroy();
-            }
-        };
-    }, [chartData]);
-
-    if (!data || data.length === 0) {
-        return <Card className="p-6 text-center text-gray-500 bg-gray-800">Keine Daten für den Chart verfügbar.</Card>;
-    }
-
-    return (
-        <Card className="p-6 bg-gray-800 border-gray-700 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">
-                {selectedPlayerIds && selectedPlayerIds.length > 0 ? 'Spieler Vergleich' : 'Verlauf Gesamtpunkte'}
-            </h3>
-            <div className="relative h-80 w-full">
-                <canvas ref={chartRef}></canvas>
-            </div>
-        </Card>
-    );
+            {/* Linien für ausgewählte Spieler */}
+            {selectedPlayerIds && selectedPlayerIds.map((pid, index) => {
+                const player = data.find(p => p.id === pid);
+                if (!player) return null;
+                return (
+                    <Line
+                        yAxisId="left"
+                        key={pid}
+                        type="monotone"
+                        dataKey={player.name}
+                        stroke={colors[index % colors.length]}
+                        strokeWidth={2}
+                        dot={{ r: 3 }}
+                    />
+                );
+            })}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
 };
 
 export default HonorHistoryChart;
