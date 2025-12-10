@@ -17,10 +17,13 @@ type StatProgressRow = {
   t5KillsDiff: number;
   t4t5KillsDiff: number; // Summe T4 + T5
   deadDiff: number;
+  killPointsDiff: number;
   fightsParticipated?: number;
   dkpScore?: number;
   dkpGoal?: number;
   dkpPercent?: number;
+  deadGoal?: number;
+  deadPercent?: number;
 };
 
 // Typ für die aggregierte Gesamtehre im Verlauf
@@ -175,6 +178,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       const t4Idx = getIdx(['t4 kills', 'tier 4 kills', 'kills t4']);
       const t5Idx = getIdx(['t5 kills', 'tier 5 kills', 'kills t5']);
       const deadIdx = getIdx(['dead', 'deaths', 'tote', 'dead troops']);
+      const killPointsIdx = getIdx(['total kill points', 'kill points', 'kp']);
 
       const map = new Map<string, {
           name: string;
@@ -183,6 +187,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
           t4: number;
           t5: number;
           dead: number;
+          killPoints: number;
       }>();
 
       if (idIdx === undefined) return map;
@@ -197,7 +202,8 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
               power: parseAnyNumber(row[powerIdx]),
               t4: parseAnyNumber(row[t4Idx]),
               t5: parseAnyNumber(row[t5Idx]),
-              dead: parseAnyNumber(row[deadIdx])
+              dead: parseAnyNumber(row[deadIdx]),
+              killPoints: parseAnyNumber(row[killPointsIdx])
           });
       });
       return map;
@@ -282,10 +288,12 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             const prevT4 = prev ? prev.t4 : 0;
             const prevT5 = prev ? prev.t5 : 0;
             const prevDead = prev ? prev.dead : 0;
+            const prevKillPoints = prev ? prev.killPoints : 0;
 
             const deltaT4 = Math.max(0, curr.t4 - prevT4);
             const deltaT5 = Math.max(0, curr.t5 - prevT5);
             const deltaDead = Math.max(0, curr.dead - prevDead);
+            const deltaKillPoints = Math.max(0, curr.killPoints - prevKillPoints);
             
             let deltaPower = 0;
             if (prev) {
@@ -304,6 +312,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                     t5KillsDiff: 0,
                     t4t5KillsDiff: 0,
                     deadDiff: 0,
+                    killPointsDiff: 0,
                     fightsParticipated: 0,
                     dkpScore: 0
                 });
@@ -319,6 +328,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             total.t5KillsDiff += deltaT5;
             total.t4t5KillsDiff += (deltaT4 + deltaT5);
             total.deadDiff += deltaDead;
+            total.killPointsDiff += deltaKillPoints;
 
             const dkpEntries = dkpFormula || null;
             if (dkpEntries) {
@@ -334,6 +344,8 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
     const baseToDkpPercent = goalsFormula?.basePowerToDkpPercent || 0;
     const dkpGoalFactor = baseToDkpPercent / 100;
+    const baseToDeadPercent = goalsFormula?.basePowerToDeadTroopsPercent || 0;
+    const deadGoalFactor = baseToDeadPercent / 100;
 
     grandTotals.forEach(player => {
         if (dkpGoalFactor > 0) {
@@ -341,6 +353,11 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             if (player.dkpScore !== undefined) {
                 player.dkpPercent = player.dkpGoal > 0 ? (player.dkpScore / player.dkpGoal) * 100 : undefined;
             }
+        }
+
+        if (deadGoalFactor > 0) {
+            player.deadGoal = player.basePower * deadGoalFactor;
+            player.deadPercent = player.deadGoal > 0 ? (player.deadDiff / player.deadGoal) * 100 : undefined;
         }
     });
 
@@ -473,10 +490,11 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                         <th className="p-3">Name</th>
                         <th className="p-3">Alliance</th>
 
-                        <th className="p-3 text-right text-amber-300">DKP Fortschritt</th>
+                        <th className="p-3 text-right text-amber-300">DKP Progress</th>
+                        <th className="p-3 text-right text-red-200">Dead Goal</th>
 
                         <th className="p-3 text-right text-yellow-500">Power Details</th>
-                        
+                        <th className="p-3 text-right text-orange-300">Kill Points Δ</th>
                         <th className="p-3 text-right text-red-300">T4 Kills Δ</th>
                         <th className="p-3 text-right text-red-400">T5 Kills Δ</th>
                         <th className="p-3 text-right text-red-500 font-bold bg-gray-800/50">T4+T5 Kills Δ</th>
@@ -506,6 +524,23 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                               )}
                           </td>
 
+                          <td className="p-3 text-right">
+                              {row.deadPercent !== undefined ? (
+                                  <div className="flex flex-col items-end">
+                                      <span className={`font-bold ${row.deadPercent >= 100 ? 'text-green-400' : 'text-red-200'}`}>
+                                          {row.deadPercent.toFixed(1)}%
+                                      </span>
+                                      <span className="text-[11px] text-gray-500">
+                                          Dead: {formatNumber(row.deadDiff)} / {formatNumber(row.deadGoal || 0)}
+                                      </span>
+                                  </div>
+                              ) : (
+                                  <div className="flex flex-col items-end text-xs text-gray-500 italic">
+                                      <span>No dead goal</span>
+                                  </div>
+                              )}
+                          </td>
+
                           {/* Power Column: Base + Diff */}
                           <td className="p-3 text-right">
                               <div className="flex flex-col items-end">
@@ -515,7 +550,9 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                                   <span className="text-xs text-gray-500">Base: {formatNumber(row.basePower)}</span>
                               </div>
                           </td>
-                          
+
+                          <td className="p-3 text-right font-mono text-orange-200">+{formatNumber(row.killPointsDiff)}</td>
+
                           <td className="p-3 text-right font-mono text-gray-300">+{formatNumber(row.t4KillsDiff)}</td>
                           <td className="p-3 text-right font-mono text-gray-300">+{formatNumber(row.t5KillsDiff)}</td>
                           
