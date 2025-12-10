@@ -41,6 +41,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   const [comparisonStats, setComparisonStats] = useState<ComparisonStats | null>(
     null
   );
+  const [showDownloadSection, setShowDownloadSection] = useState(false);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -243,9 +244,21 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       {error && <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">{error}</div>}
 
       {canManageFiles && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg"><FileUpload uploadUrl={uploadUrl} onUploadComplete={handleUploadComplete} /></div>
-          <div><FileList files={uploadedFiles} onDeleteFile={handleDeleteFile} onReorder={handleReorderFiles} /></div>
+        <div className="space-y-4">
+          <button
+            className="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded shadow-md font-medium flex items-center transition-colors"
+            onClick={() => setShowDownloadSection(prev => !prev)}
+          >
+            <span className="mr-2">⬇️</span>
+            {showDownloadSection ? 'Hide Downloads' : 'Show Downloads'}
+          </button>
+
+          {showDownloadSection && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+              <div className="bg-gray-800 p-6 rounded-xl shadow-lg"><FileUpload uploadUrl={uploadUrl} onUploadComplete={handleUploadComplete} /></div>
+              <div><FileList files={uploadedFiles} onDeleteFile={handleDeleteFile} onReorder={handleReorderFiles} /></div>
+            </div>
+          )}
         </div>
       )}
 
