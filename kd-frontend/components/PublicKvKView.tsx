@@ -498,7 +498,6 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                         <th className="p-3 text-right text-red-300">T4 Kills Δ</th>
                         <th className="p-3 text-right text-red-400">T5 Kills Δ</th>
                         <th className="p-3 text-right text-red-500 font-bold bg-gray-800/50">T4+T5 Kills Δ</th>
-                        <th className="p-3 text-right text-gray-400">Dead Δ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700 text-sm">
@@ -559,12 +558,10 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                           <td className="p-3 text-right font-mono font-bold text-yellow-400 bg-yellow-900/10 border-l border-r border-gray-700">
                               +{formatNumber(row.t4t5KillsDiff)}
                           </td>
-                          
-                          <td className="p-3 text-right font-mono text-gray-400">+{formatNumber(row.deadDiff)}</td>
                         </tr>
                       ))}
                       {statsData.length === 0 && (
-                        <tr><td colSpan={10} className="p-12 text-center text-gray-500 italic">
+                        <tr><td colSpan={11} className="p-12 text-center text-gray-500 italic">
                             No data available yet.
                         </td></tr>
                       )}
