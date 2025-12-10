@@ -19,6 +19,14 @@ type StatProgressRow = {
   fightsParticipated?: number;
 };
 
+// Typ für die aggregierte Gesamtehre im Verlauf (neu hinzugefügt)
+type TotalHonorPointData = {
+  fileName: string;
+  fileId: string;
+  totalHonor: number;
+};
+type TotalHonorHistory = TotalHonorPointData[];
+
 interface PublicKvKViewProps {
   kingdomSlug: string;
 }
@@ -37,6 +45,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const [statsData, setStatsData] = useState<StatProgressRow[]>([]);
   const [honorHistory, setHonorHistory] = useState<PlayerHonorHistory[]>([]);
   const [activeHonorFiles, setActiveHonorFiles] = useState<UploadedFile[]>([]); 
+  const [totalHonorHistory, setTotalHonorHistory] = useState<TotalHonorHistory>([]); // New state
   
   // UI State
   const [viewMode, setViewMode] = useState<'stats' | 'honor'>('stats');
@@ -71,6 +80,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     setSearchResults(null);
     setSearchQuery('');
     setActiveHonorFiles([]);
+    setTotalHonorHistory([]); // Reset new state
 
     try {
       const event = events.find(e => e.id === selectedEventId);
@@ -113,8 +123,9 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
               if (rangeFiles.length > 0) {
                   setActiveHonorFiles(rangeFiles);
-                  const history = processHonorHistory(rangeFiles);
+                  const { history, totalHistory } = processHonorData(rangeFiles); // Modified call
                   setHonorHistory(history);
+                  setTotalHonorHistory(totalHistory); // Set new state
               }
           } else {
              console.warn("Honor Start or End file not found in loaded list.");
@@ -210,11 +221,17 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     }).filter(p => p.honorPoint > 0);
   };
 
-  const processHonorHistory = (files: UploadedFile[]): PlayerHonorHistory[] => {
-    const map = new Map<string, PlayerHonorHistory>();
+  // Renamed and modified existing function to calculate individual histories and the total history
+  const processHonorData = (files: UploadedFile[]): {
+      history: PlayerHonorHistory[];
+      totalHistory: TotalHonorHistory;
+  } => {
+    const playerMap = new Map<string, PlayerHonorHistory>();
+    const totalHistory: TotalHonorHistory = []; // To store the total honor for each file
 
     files.forEach(file => {
       const parsedRows = parseHonorFile(file);
+      let fileTotalHonor = 0; // Initialize total for this file
       
       let label = file.name.replace("HONOR_", ""); // Clean name
       if (file.uploadDate) {
@@ -223,15 +240,30 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       }
 
       parsedRows.forEach(row => {
-        if (!map.has(row.governorId)) {
-          map.set(row.governorId, { id: row.governorId, name: row.name, history: [] });
+        // Logic for individual player history (original logic)
+        if (!playerMap.has(row.governorId)) {
+          playerMap.set(row.governorId, { id: row.governorId, name: row.name, history: [] });
         }
-        const entry = map.get(row.governorId)!;
+        const entry = playerMap.get(row.governorId)!;
         entry.name = row.name; 
         entry.history.push({ fileName: label, fileId: file.id, honorPoint: row.honorPoint });
+        
+        // Logic for calculating total honor for the current file (new logic)
+        fileTotalHonor += row.honorPoint;
+      });
+      
+      // Add total honor for this file to the total history (new logic)
+      totalHistory.push({
+          fileName: label,
+          fileId: file.id,
+          totalHonor: fileTotalHonor
       });
     });
-    return Array.from(map.values());
+    
+    return { 
+      history: Array.from(playerMap.values()),
+      totalHistory: totalHistory
+    };
   };
 
   // --- MAIN LOGIC: Cumulative Fights ---
@@ -494,6 +526,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                         {honorHistory.length > 0 ? (
                              <HonorHistoryChart 
                                 data={honorHistory} 
+                                totalData={totalHonorHistory} // Pass the new total data
                                 selectedPlayerIds={selectedPlayerIds.length > 0 ? selectedPlayerIds : undefined} 
                              />
                         ) : (
