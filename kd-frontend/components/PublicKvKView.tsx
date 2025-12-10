@@ -6,15 +6,16 @@ import HonorOverviewTable from './HonorOverviewTable';
 import HonorHistoryChart from './HonorHistoryChart';
 import HonorPlayerSearch from './HonorPlayerSearch';
 
-// Typ für die aggregierten Stats
+// Typ für die aggregierten Stats (Erweitert)
 type StatProgressRow = {
   id: string;
   name: string;
   alliance: string;
-  powerDiff: number;
+  basePower: number;    // Startkraft (beim ersten Auftreten)
+  powerDiff: number;    // Summe aller Differenzen aus den Kämpfen
   t4KillsDiff: number;
   t5KillsDiff: number;
-  totalKillsDiff: number;
+  t4t5KillsDiff: number; // Summe T4 + T5
   deadDiff: number;
   fightsParticipated?: number;
 };
@@ -45,7 +46,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const [statsData, setStatsData] = useState<StatProgressRow[]>([]);
   const [honorHistory, setHonorHistory] = useState<PlayerHonorHistory[]>([]);
   const [activeHonorFiles, setActiveHonorFiles] = useState<UploadedFile[]>([]); 
-  const [totalHonorHistory, setTotalHonorHistory] = useState<TotalHonorHistory>([]); // Neuer State
+  const [totalHonorHistory, setTotalHonorHistory] = useState<TotalHonorHistory>([]); 
   
   // UI State
   const [viewMode, setViewMode] = useState<'stats' | 'honor'>('stats');
@@ -114,13 +115,10 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
           if (startIndex !== -1 && endIndex !== -1) {
               const first = Math.min(startIndex, endIndex);
               const last = Math.max(startIndex, endIndex);
-
-              // Slice ist exklusive Ende, daher +1
               const rangeFiles = loadedHonor.slice(first, last + 1);
 
               if (rangeFiles.length > 0) {
                   setActiveHonorFiles(rangeFiles);
-                  // Hier rufen wir die neue Funktion auf, die auch die Totals berechnet
                   const { history, totalHistory } = processHonorData(rangeFiles);
                   setHonorHistory(history);
                   setTotalHonorHistory(totalHistory);
@@ -219,7 +217,6 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     }).filter(p => p.honorPoint > 0);
   };
 
-  // Logik angepasst: Berechnet Einzel-History UND Gesamt-History
   const processHonorData = (files: UploadedFile[]): {
       history: PlayerHonorHistory[];
       totalHistory: TotalHonorHistory;
@@ -229,15 +226,11 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
     files.forEach(file => {
       const parsedRows = parseHonorFile(file);
-      let fileTotalHonor = 0; // Summe für diese Datei
+      let fileTotalHonor = 0; 
       
-      // FIX: Bevorzuge den Dateinamen als Label, um Verwirrung durch das Upload-Datum zu vermeiden
       let label = file.name.replace("HONOR_", "").replace(".xlsx", "").replace(".csv", "");
-      // Optional: Falls Sie doch das Datum wollen, einkommentieren, aber Vorsicht mit dem Upload-Zeitpunkt.
-      // if (file.uploadDate) { ... }
 
       parsedRows.forEach(row => {
-        // Einzelspieler
         if (!playerMap.has(row.governorId)) {
           playerMap.set(row.governorId, { id: row.governorId, name: row.name, history: [] });
         }
@@ -245,11 +238,9 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         entry.name = row.name; 
         entry.history.push({ fileName: label, fileId: file.id, honorPoint: row.honorPoint });
         
-        // Summe aufaddieren
         fileTotalHonor += row.honorPoint;
       });
       
-      // Eintrag für die Gesamt-Historie
       totalHistory.push({
           fileName: label,
           fileId: file.id,
@@ -263,7 +254,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     };
   };
 
-  // --- MAIN LOGIC: Cumulative Fights ---
+  // --- MAIN LOGIC: Cumulative Fights (UPDATED) ---
   const calculateCumulativeStats = (fights: { startFileId: string, endFileId: string }[], files: UploadedFile[]): StatProgressRow[] => {
     const grandTotals = new Map<string, StatProgressRow>();
 
@@ -276,6 +267,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         const startData = getSnapshotData(startFile);
         const endData = getSnapshotData(endFile);
 
+        // Wir iterieren über endData, da dies die aktiven Spieler am Ende der Phase repräsentiert
         endData.forEach((curr, playerId) => {
             const prev = startData.get(playerId);
             const prevPower = prev ? prev.power : 0;
@@ -293,14 +285,16 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             }
 
             if (!grandTotals.has(playerId)) {
+                // Initialize player
                 grandTotals.set(playerId, {
                     id: playerId,
                     name: curr.name,
                     alliance: curr.alliance,
+                    basePower: prev ? prev.power : curr.power, // Wenn kein Prev, nehmen wir Curr als Basis
                     powerDiff: 0,
                     t4KillsDiff: 0,
                     t5KillsDiff: 0,
-                    totalKillsDiff: 0,
+                    t4t5KillsDiff: 0,
                     deadDiff: 0,
                     fightsParticipated: 0
                 });
@@ -309,16 +303,20 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             const total = grandTotals.get(playerId)!;
             total.name = curr.name;
             total.alliance = curr.alliance;
+            
+            // Accumulate Differences
             total.powerDiff += deltaPower;
             total.t4KillsDiff += deltaT4;
             total.t5KillsDiff += deltaT5;
-            total.totalKillsDiff += (deltaT4 + deltaT5);
+            total.t4t5KillsDiff += (deltaT4 + deltaT5);
             total.deadDiff += deltaDead;
+            
             total.fightsParticipated = (total.fightsParticipated || 0) + 1;
         });
     });
 
-    return Array.from(grandTotals.values()).sort((a, b) => b.totalKillsDiff - a.totalKillsDiff);
+    // Sortierung nach T4 + T5 Kills (Total Kills Δ)
+    return Array.from(grandTotals.values()).sort((a, b) => b.t4t5KillsDiff - a.t4t5KillsDiff);
   };
 
   const comparisonHonorTableData = useMemo(() => {
@@ -429,7 +427,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                   <div>
                       <h2 className="text-lg font-semibold text-blue-200">Total War Ranking</h2>
                       <p className="text-xs text-gray-400">
-                          Sum of differences (<span className="font-mono">Δ</span>) from all defined battle phases.
+                          Aggregated Stats from all battle phases.
                       </p>
                   </div>
                   <div className="text-xs text-gray-500 italic">
@@ -441,41 +439,50 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
-                        <th className="p-3 sticky left-0 bg-gray-900 z-10 w-12 text-center">#</th>
-                        <th className="p-3 sticky left-12 bg-gray-900 z-10 min-w-[150px]">Name</th>
+                        <th className="p-3 text-center w-10">#</th>
+                        <th className="p-3">Gov ID</th>
+                        <th className="p-3">Name</th>
                         <th className="p-3">Alliance</th>
-                        <th className="p-3 text-right text-yellow-500 whitespace-nowrap">Power Δ</th>
-                        <th className="p-3 text-right text-red-400 whitespace-nowrap">T4 Δ</th>
-                        <th className="p-3 text-right text-red-500 whitespace-nowrap">T5 Δ</th>
-                        <th className="p-3 text-right text-red-300 font-bold whitespace-nowrap bg-gray-800/50">Total Kills Δ</th>
-                        <th className="p-3 text-right text-gray-400 whitespace-nowrap">Dead Δ</th>
+                        
+                        <th className="p-3 text-right text-yellow-500">Power Details</th>
+                        
+                        <th className="p-3 text-right text-red-300">T4 Kills Δ</th>
+                        <th className="p-3 text-right text-red-400">T5 Kills Δ</th>
+                        <th className="p-3 text-right text-red-500 font-bold bg-gray-800/50">T4+T5 Kills Δ</th>
+                        <th className="p-3 text-right text-gray-400">Dead Δ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700 text-sm">
                       {statsData.map((row, idx) => (
                         <tr key={row.id} className="hover:bg-gray-750 transition-colors">
-                          <td className="p-3 text-gray-500 font-mono text-center sticky left-0 bg-gray-800 md:bg-transparent">{idx + 1}</td>
-                          <td className="p-3 font-medium text-white sticky left-12 bg-gray-800 md:bg-transparent truncate max-w-[180px]">{row.name}</td>
+                          <td className="p-3 text-gray-500 font-mono text-center">{idx + 1}</td>
+                          <td className="p-3 text-gray-400 font-mono text-xs">{row.id}</td>
+                          <td className="p-3 font-medium text-white truncate max-w-[150px]">{row.name}</td>
                           <td className="p-3 text-gray-300">[{row.alliance}]</td>
                           
-                          <td className={`p-3 text-right font-mono ${row.powerDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {row.powerDiff > 0 ? '+' : ''}{formatNumber(row.powerDiff)}
+                          {/* Power Column: Base + Diff */}
+                          <td className="p-3 text-right">
+                              <div className="flex flex-col items-end">
+                                  <span className={`font-mono font-bold ${row.powerDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {row.powerDiff > 0 ? '+' : ''}{formatNumber(row.powerDiff)}
+                                  </span>
+                                  <span className="text-xs text-gray-500">Base: {formatNumber(row.basePower)}</span>
+                              </div>
                           </td>
                           
                           <td className="p-3 text-right font-mono text-gray-300">+{formatNumber(row.t4KillsDiff)}</td>
                           <td className="p-3 text-right font-mono text-gray-300">+{formatNumber(row.t5KillsDiff)}</td>
                           
                           <td className="p-3 text-right font-mono font-bold text-yellow-400 bg-yellow-900/10 border-l border-r border-gray-700">
-                              +{formatNumber(row.totalKillsDiff)}
+                              +{formatNumber(row.t4t5KillsDiff)}
                           </td>
                           
                           <td className="p-3 text-right font-mono text-gray-400">+{formatNumber(row.deadDiff)}</td>
                         </tr>
                       ))}
                       {statsData.length === 0 && (
-                        <tr><td colSpan={8} className="p-12 text-center text-gray-500 italic">
+                        <tr><td colSpan={9} className="p-12 text-center text-gray-500 italic">
                             No data available yet. 
-                            <br/><span className="text-xs">The Admin needs to define "Battle Phases" in the Manager first.</span>
                         </td></tr>
                       )}
                     </tbody>
@@ -523,7 +530,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                         {honorHistory.length > 0 ? (
                              <HonorHistoryChart 
                                 data={honorHistory} 
-                                totalData={totalHonorHistory} // Daten werden übergeben
+                                totalData={totalHonorHistory}
                                 selectedPlayerIds={selectedPlayerIds.length > 0 ? selectedPlayerIds : undefined} 
                              />
                         ) : (
