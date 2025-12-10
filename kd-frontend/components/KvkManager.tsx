@@ -21,13 +21,13 @@ const createDefaultGoalsFormula = (): GoalsFormula => ({
   powerBrackets: [],
 });
 
-const dkpCategories: { key: keyof DkpFormula; label: string; helper: string }[] = [
-  { key: 't1', label: 'T1 Kills', helper: 'Leichte PvE/Barb Kills' },
-  { key: 't2', label: 'T2 Kills', helper: 'Frühe Kills' },
-  { key: 't3', label: 'T3 Kills', helper: 'Mittlere Kills' },
-  { key: 't4', label: 'T4 Kills', helper: 'Hauptkampf (mittlere Truppen)' },
-  { key: 't5', label: 'T5 Kills', helper: 'Premium Kampfstatistik' },
-  { key: 'deadTroops', label: 'Dead Troops', helper: 'Gefallene Truppen' },
+const dkpCategories: { key: keyof DkpFormula; label: string; helper?: string }[] = [
+  { key: 't1', label: 'T1 Kills' },
+  { key: 't2', label: 'T2 Kills' },
+  { key: 't3', label: 'T3 Kills' },
+  { key: 't4', label: 'T4 Kills' },
+  { key: 't5', label: 'T5 Kills' },
+  { key: 'deadTroops', label: 'Dead Troops', helper: 'Fallen troops' },
 ];
 
 const KvkManager: React.FC = () => {
@@ -501,13 +501,13 @@ const KvkManager: React.FC = () => {
 
           </div>
 
-          {/* 3b. FORMELN: DKP & GOALS */}
+          {/* 3b. FORMULAS: DKP & GOALS */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
             <div className="bg-gray-900/40 p-5 rounded-lg border border-gray-600/50">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-amber-300">🧮 DKP Formel</h3>
-                  <p className="text-xs text-gray-400">Wähle, welche Kills/Deads für den DKP Score zählen und wie viele Punkte sie geben.</p>
+                  <h3 className="text-lg font-bold text-amber-300">🧮 DKP Formula</h3>
+                  <p className="text-xs text-gray-400">Choose which kills/deads count for the DKP score and how many points they give.</p>
                 </div>
               </div>
 
@@ -525,7 +525,7 @@ const KvkManager: React.FC = () => {
                         />
                         <div>
                           <div className="font-semibold text-white text-sm">{cat.label}</div>
-                          <div className="text-[11px] text-gray-400">{cat.helper}</div>
+                          {cat.helper && <div className="text-[11px] text-gray-400">{cat.helper}</div>}
                         </div>
                       </label>
 
@@ -539,7 +539,7 @@ const KvkManager: React.FC = () => {
                           onChange={(e) => handleDkpPointsChange(cat.key, Number(e.target.value) || 0)}
                           disabled={!entry.enabled}
                         />
-                        <span className="text-xs text-gray-400">Punkte</span>
+                        <span className="text-xs text-gray-400">Points</span>
                       </div>
                     </div>
                   );
@@ -550,14 +550,14 @@ const KvkManager: React.FC = () => {
             <div className="bg-gray-900/40 p-5 rounded-lg border border-gray-600/50">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-cyan-300">🎯 Goals Formel</h3>
-                  <p className="text-xs text-gray-400">R5 Vorgaben: Welcher Prozentsatz der Basepower ergibt den DKP-Score und wie viel Prozent müssen als Dead Troops erreicht werden.</p>
+                  <h3 className="text-lg font-bold text-cyan-300">🎯 Goals Formula</h3>
+                  <p className="text-xs text-gray-400">R5 guidance: What percent of base power becomes the DKP score and what percent must be achieved as dead troops.</p>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs text-gray-400 uppercase font-bold mb-1">% Basepower → DKP Score</label>
+                  <label className="block text-xs text-gray-400 uppercase font-bold mb-1">% Base Power → DKP Score</label>
                   <input
                     type="number"
                     min="0"
@@ -565,12 +565,12 @@ const KvkManager: React.FC = () => {
                     className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-cyan-400 outline-none"
                     value={goalsFormula.basePowerToDkpPercent}
                     onChange={(e) => setGoalsFormula({ ...goalsFormula, basePowerToDkpPercent: Number(e.target.value) || 0 })}
-                    placeholder="z.B. 120 (entspricht 120% der Basepower als DKP Score)"
+                    placeholder="e.g. 120 (120% of base power becomes DKP score)"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs text-gray-400 uppercase font-bold mb-1">% Basepower → Dead Troops Ziel</label>
+                  <label className="block text-xs text-gray-400 uppercase font-bold mb-1">% Base Power → Dead Troops Goal</label>
                   <input
                     type="number"
                     min="0"
@@ -578,15 +578,15 @@ const KvkManager: React.FC = () => {
                     className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-cyan-400 outline-none"
                     value={goalsFormula.basePowerToDeadTroopsPercent}
                     onChange={(e) => setGoalsFormula({ ...goalsFormula, basePowerToDeadTroopsPercent: Number(e.target.value) || 0 })}
-                    placeholder="z.B. 10 (10% der Basepower müssen fallen)"
+                    placeholder="e.g. 10 (10% of base power must fall)"
                   />
                 </div>
 
                 <div className="bg-gray-800/60 border border-cyan-800/50 rounded p-3 space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-white">Basepower Ranges</p>
-                      <p className="text-[11px] text-gray-400">Lege unterschiedliche Ziele je nach Power-Spanne fest (z.B. 0-50 Mio, 50-100 Mio).</p>
+                      <p className="text-sm font-semibold text-white">Base Power Ranges</p>
+                      <p className="text-[11px] text-gray-400">Set different goals by power range (e.g. 0-50M, 50-100M).</p>
                     </div>
                     <button
                       type="button"
@@ -599,7 +599,7 @@ const KvkManager: React.FC = () => {
 
                   {powerBrackets.length === 0 && (
                     <div className="text-[12px] text-gray-400 bg-gray-900/60 border border-dashed border-gray-700 rounded p-3">
-                      Keine Ranges definiert – es werden die allgemeinen Prozentsätze oben genutzt.
+                      No ranges defined – general percentages above will be used.
                     </div>
                   )}
 
@@ -613,7 +613,7 @@ const KvkManager: React.FC = () => {
                             onClick={() => handleRemovePowerBracket(idx)}
                             className="text-red-300 hover:text-red-200 text-xs"
                           >
-                            Entfernen
+                            Remove
                           </button>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
@@ -625,7 +625,7 @@ const KvkManager: React.FC = () => {
                               className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-cyan-400 outline-none"
                               value={range.minPower}
                               onChange={(e) => handlePowerBracketChange(idx, 'minPower', Number(e.target.value) || 0)}
-                              placeholder="z.B. 0"
+                              placeholder="e.g. 0"
                             />
                           </div>
                           <div>
@@ -636,7 +636,7 @@ const KvkManager: React.FC = () => {
                               className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-cyan-400 outline-none"
                               value={range.maxPower ?? ''}
                               onChange={(e) => handlePowerBracketChange(idx, 'maxPower', e.target.value === '' ? null : Number(e.target.value) || 0)}
-                              placeholder="z.B. 50.000.000 (leer = offen)"
+                              placeholder="e.g. 50,000,000 (empty = open)"
                             />
                           </div>
                         </div>
@@ -650,7 +650,7 @@ const KvkManager: React.FC = () => {
                               className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-cyan-400 outline-none"
                               value={range.dkpPercent}
                               onChange={(e) => handlePowerBracketChange(idx, 'dkpPercent', Number(e.target.value) || 0)}
-                              placeholder="z.B. 120"
+                              placeholder="e.g. 120"
                             />
                           </div>
                           <div>
@@ -662,19 +662,19 @@ const KvkManager: React.FC = () => {
                               className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-cyan-400 outline-none"
                               value={range.deadPercent}
                               onChange={(e) => handlePowerBracketChange(idx, 'deadPercent', Number(e.target.value) || 0)}
-                              placeholder="z.B. 10"
+                              placeholder="e.g. 10"
                             />
                           </div>
                         </div>
-                        <p className="text-[11px] text-gray-500">DKP/Dead Ziele werden für Spieler in dieser Power-Spanne angewendet. Leeres Max-Feld bedeutet "bis unendlich".</p>
+                        <p className="text-[11px] text-gray-500">DKP/dead goals apply to players within this power range. Empty Max means "up to infinity".</p>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <div className="text-xs text-gray-500 bg-gray-800/70 border border-dashed border-gray-600 rounded p-3">
-                  <p className="font-semibold text-white mb-1">Hinweis</p>
-                  <p>Die DKP-Formel bestimmt die Punkte-Bewertung für Kills/Deads. Die Goals-Formel definiert, welche Basisziele jeder Spieler erreichen muss (auf Basis seiner Basepower). Basepower-Ranges überschreiben dabei die allgemeinen Prozentsätze.</p>
+                  <p className="font-semibold text-white mb-1">Notes</p>
+                  <p>The DKP formula sets how kills/deads score points. The Goals formula defines the baseline targets each player must hit (based on base power). Base power ranges override the general percentages.</p>
                 </div>
               </div>
             </div>
@@ -734,7 +734,7 @@ const KvkManager: React.FC = () => {
                             <div className="flex items-center text-amber-300 font-medium">
                                 <span className="w-20 text-xs text-gray-500 uppercase">DKP:</span>
                                 {ev.dkpFormula
-                                  ? `${Object.values(ev.dkpFormula).filter((entry) => entry?.enabled).length} aktiv`
+                                  ? `${Object.values(ev.dkpFormula).filter((entry) => entry?.enabled).length} active`
                                   : '⚠️ Missing'}
                             </div>
                             <div className="flex items-center text-cyan-300 font-medium">
