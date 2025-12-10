@@ -22,8 +22,11 @@ interface User {
   canAccessAnalytics?: boolean;
   canAccessOverview?: boolean;
   // 📝 Granulare Rechte
-  canManageOverviewFiles?: boolean; 
-  canManageHonorFiles?: boolean; 
+  canManageOverviewFiles?: boolean;
+  canManageHonorFiles?: boolean;
+  canManageActivityFiles?: boolean;
+  canManageAnalyticsFiles?: boolean;
+  canAccessKvkManager?: boolean;
 }
 
 type Kingdom = KingdomType;
@@ -127,12 +130,15 @@ const AdminUserManagement: React.FC = () => {
 
       if (response.ok) {
         const userData: User[] = await response.json();
-        
+
         // 📝 Hinzufügen von Default-Werten für die neuen Flags (falls Backend sie noch nicht liefert)
         const normalizedUsers = userData.map(u => ({
             ...u,
             canManageOverviewFiles: u.canManageOverviewFiles ?? false,
             canManageHonorFiles: u.canManageHonorFiles ?? false,
+            canManageActivityFiles: u.canManageActivityFiles ?? false,
+            canManageAnalyticsFiles: u.canManageAnalyticsFiles ?? false,
+            canAccessKvkManager: u.canAccessKvkManager ?? false,
         }));
         
         setUsers(normalizedUsers);
@@ -237,7 +243,12 @@ const AdminUserManagement: React.FC = () => {
   // 📝 NEU: Handler für die neuen granularen File Permissions
   const updateFileAccess = async (
     targetUser: User,
-    key: 'canManageOverviewFiles' | 'canManageHonorFiles',
+    key:
+      | 'canManageOverviewFiles'
+      | 'canManageHonorFiles'
+      | 'canManageActivityFiles'
+      | 'canManageAnalyticsFiles'
+      | 'canAccessKvkManager',
     value: boolean
   ) => {
     setUserError(null);
@@ -254,6 +265,9 @@ const AdminUserManagement: React.FC = () => {
             userId: targetUser.id,
             canManageOverviewFiles: key === 'canManageOverviewFiles' ? value : targetUser.canManageOverviewFiles,
             canManageHonorFiles: key === 'canManageHonorFiles' ? value : targetUser.canManageHonorFiles,
+            canManageActivityFiles: key === 'canManageActivityFiles' ? value : targetUser.canManageActivityFiles,
+            canManageAnalyticsFiles: key === 'canManageAnalyticsFiles' ? value : targetUser.canManageAnalyticsFiles,
+            canAccessKvkManager: key === 'canAccessKvkManager' ? value : targetUser.canAccessKvkManager,
         };
         
         // 📝 NEU: Verwende /api/admin/users/access-files Endpoint
@@ -757,8 +771,6 @@ const AdminUserManagement: React.FC = () => {
   // --- Hilfslogik für die Tabellenzellen ---
   const getCanManageFileRightsGranularly = (user: User) => isSuperAdmin && user.role !== 'admin';
   const getCanManageRights = (user: User) => isSuperAdmin || (currentUser?.role === 'r5' && user.kingdomId === currentUser?.kingdomId && user.role !== 'r5' && user.role !== 'admin');
-  const hasGlobalDashboardAccess = (user: User) => user.role === 'admin' || user.role === 'r5' || user.role === 'r4';
-
 
   return (
     <div className="space-y-6">
@@ -846,23 +858,23 @@ const AdminUserManagement: React.FC = () => {
                   <TableCell align="center" header>
                     Kingdom
                   </TableCell>
-                  <TableCell align="center" header>
-                    Honor Read
-                  </TableCell>
-                  <TableCell align="center" header>
-                    Analytics Read
-                  </TableCell>
-                  <TableCell align="center" header>
-                    Overview Read
-                  </TableCell>
                   {/* 📝 NEUE SPALTEN für SuperAdmin */}
                   {isSuperAdmin && (
                       <>
+                          <TableCell align="center" header>
+                              Activity Manage
+                          </TableCell>
+                          <TableCell align="center" header>
+                              Analytics Manage
+                          </TableCell>
                           <TableCell align="center" header>
                               Honor Manage
                           </TableCell>
                           <TableCell align="center" header>
                               Overview Manage
+                          </TableCell>
+                          <TableCell align="center" header>
+                              KVK Manager
                           </TableCell>
                       </>
                   )}
@@ -885,7 +897,6 @@ const AdminUserManagement: React.FC = () => {
                   
                   const canManageRights = getCanManageRights(user);
                   const canManageFileRightsGranularly = getCanManageFileRightsGranularly(user);
-                  const isGlobalDashboardAccess = hasGlobalDashboardAccess(user);
 
 
                   return (
@@ -947,78 +958,35 @@ const AdminUserManagement: React.FC = () => {
                       </TableCell>
 
 
-                      {/* Access: Honor Read */}
-                      <TableCell align="center">
-                        <button
-                          disabled={!canManageRights || isGlobalDashboardAccess}
-                          onClick={() =>
-                            updateAccess(user, {
-                              canAccessHonor: !user.canAccessHonor,
-                            })
-                          }
-                          className={`px-2 py-1 rounded text-xs font-semibold ${
-                            user.canAccessHonor || isGlobalDashboardAccess
-                              ? 'bg-green-600 text-white'
-                              : 'bg-gray-700 text-gray-300'
-                          } ${
-                            !canManageRights || isGlobalDashboardAccess
-                              ? 'opacity-50 cursor-not-allowed'
-                              : ''
-                          }`}
-                        >
-                          {user.canAccessHonor || isGlobalDashboardAccess ? 'Yes' : 'No'}
-                        </button>
-                      </TableCell>
-
-                      {/* Access: Analytics Read */}
-                      <TableCell align="center">
-                        <button
-                          disabled={!canManageRights || isGlobalDashboardAccess}
-                          onClick={() =>
-                            updateAccess(user, {
-                              canAccessAnalytics: !user.canAccessAnalytics,
-                            })
-                          }
-                          className={`px-2 py-1 rounded text-xs font-semibold ${
-                            user.canAccessAnalytics || isGlobalDashboardAccess
-                              ? 'bg-green-600 text-white'
-                              : 'bg-gray-700 text-gray-300'
-                          } ${
-                            !canManageRights || isGlobalDashboardAccess
-                              ? 'opacity-50 cursor-not-allowed'
-                              : ''
-                          }`}
-                        >
-                          {user.canAccessAnalytics || isGlobalDashboardAccess ? 'Yes' : 'No'}
-                        </button>
-                      </TableCell>
-
-                      {/* Access: Overview Read */}
-                      <TableCell align="center">
-                        <button
-                          disabled={!canManageRights || isGlobalDashboardAccess}
-                          onClick={() =>
-                            updateAccess(user, {
-                              canAccessOverview: !user.canAccessOverview,
-                            })
-                          }
-                          className={`px-2 py-1 rounded text-xs font-semibold ${
-                            user.canAccessOverview || isGlobalDashboardAccess
-                              ? 'bg-green-600 text-white'
-                              : 'bg-gray-700 text-gray-300'
-                          } ${
-                            !canManageRights || isGlobalDashboardAccess
-                              ? 'opacity-50 cursor-not-allowed'
-                              : ''
-                          }`}
-                        >
-                          {user.canAccessOverview || isGlobalDashboardAccess ? 'Yes' : 'No'}
-                        </button>
-                      </TableCell>
-                      
-                      {/* 📝 NEU: File Management Access (Nur Superadmin) */}
+                      {/* 📝 File Management & Special Access (Nur Superadmin) */}
                       {isSuperAdmin && (
                           <>
+                              <TableCell align="center">
+                                  <button
+                                      disabled={!canManageFileRightsGranularly}
+                                      onClick={() => updateFileAccess(user, 'canManageActivityFiles', !user.canManageActivityFiles)}
+                                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                                          user.canManageActivityFiles
+                                              ? 'bg-yellow-600 text-white'
+                                              : 'bg-gray-700 text-gray-300'
+                                      } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  >
+                                      {user.canManageActivityFiles ? 'Yes' : 'No'}
+                                  </button>
+                              </TableCell>
+                              <TableCell align="center">
+                                  <button
+                                      disabled={!canManageFileRightsGranularly}
+                                      onClick={() => updateFileAccess(user, 'canManageAnalyticsFiles', !user.canManageAnalyticsFiles)}
+                                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                                          user.canManageAnalyticsFiles
+                                              ? 'bg-yellow-600 text-white'
+                                              : 'bg-gray-700 text-gray-300'
+                                      } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  >
+                                      {user.canManageAnalyticsFiles ? 'Yes' : 'No'}
+                                  </button>
+                              </TableCell>
                               <TableCell align="center">
                                   <button
                                       disabled={!canManageFileRightsGranularly}
@@ -1043,6 +1011,19 @@ const AdminUserManagement: React.FC = () => {
                                       } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
                                   >
                                       {user.canManageOverviewFiles ? 'Yes' : 'No'}
+                                  </button>
+                              </TableCell>
+                              <TableCell align="center">
+                                  <button
+                                      disabled={!canManageFileRightsGranularly}
+                                      onClick={() => updateFileAccess(user, 'canAccessKvkManager', !user.canAccessKvkManager)}
+                                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                                          user.canAccessKvkManager
+                                              ? 'bg-purple-600 text-white'
+                                              : 'bg-gray-700 text-gray-300'
+                                      } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  >
+                                      {user.canAccessKvkManager ? 'Unlocked' : 'Locked'}
                                   </button>
                               </TableCell>
                           </>

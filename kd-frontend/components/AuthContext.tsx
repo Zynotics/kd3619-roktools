@@ -18,6 +18,8 @@ export interface User {
   canManageOverviewFiles?: boolean;
   canManageHonorFiles?: boolean;
   canManageActivityFiles?: boolean;
+  canManageAnalyticsFiles?: boolean;
+  canAccessKvkManager?: boolean;
 }
 
 interface AuthContextType {
