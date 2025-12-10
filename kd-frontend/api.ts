@@ -107,8 +107,13 @@ export async function deleteKvkEvent(id: string): Promise<void> {
  * Holt öffentliche KvK Events für ein Königreich
  * Endpoint: GET /api/public/kingdom/:slug/kvk-events
  */
-export async function fetchPublicKvkEvents(kingdomSlug: string): Promise<KvkEvent[]> {
-  const res = await fetch(`${API_BASE_URL}/api/public/kingdom/${kingdomSlug}/kvk-events`);
+export async function fetchPublicKvkEvents(kingdomSlug: string, token?: string): Promise<KvkEvent[]> {
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE_URL}/api/public/kingdom/${kingdomSlug}/kvk-events`, {
+    headers: Object.keys(headers).length ? headers : undefined,
+  });
   
   if (!res.ok) {
     throw new Error('Failed to fetch public KvK events');

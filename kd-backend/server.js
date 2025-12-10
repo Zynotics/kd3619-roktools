@@ -245,6 +245,22 @@ function authenticateToken(req, res, next) {
   });
 }
 
+// Optionaler Token-Resolver fÇ¬r Public-Routen
+async function getOptionalUser(req) {
+  const header = req.headers['authorization'];
+  const token = header && header.split(' ')[1];
+  if (!token) return null;
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const dbUser = await get('SELECT id, role, kingdom_id FROM users WHERE id = $1', [decoded.id]);
+    if (!dbUser) return null;
+    return { id: dbUser.id, role: dbUser.role, kingdomId: dbUser.kingdom_id || null };
+  } catch (e) {
+    return null;
+  }
+}
+
 function requireReadAccess(req, res, next) {
     if (!req.user) return res.status(401).json({ error: 'Nicht authentifiziert' });
     const role = req.user.role;
@@ -824,8 +840,22 @@ app.get('/api/public/kingdom/:slug/kvk-events', async (req, res) => {
     try {
       const k = await findKingdomBySlug(req.params.slug);
       if (!k) return res.status(404).json({ error: 'Not found' });
+      const viewer = await getOptionalUser(req);
       const events = await getKvkEvents(k.id);
-      res.json(events.filter(e => e.isPublic));
+
+      // Standard: Nur öffentliche Events
+      let visibleEvents = events.filter(e => e.isPublic);
+
+      // R4/R5 (gleiches Kingdom) oder Admin dürfen auch private sehen
+      if (viewer) {
+        const isPrivileged = viewer.role === 'admin' || viewer.role === 'r5' || viewer.role === 'r4';
+        const sameKingdom = viewer.role === 'admin' ? true : viewer.kingdomId === k.id;
+        if (isPrivileged && sameKingdom) {
+          visibleEvents = events;
+        }
+      }
+
+      res.json(visibleEvents);
     } catch (error) { res.status(500).json({ error: 'Error loading events' }); }
 });
 

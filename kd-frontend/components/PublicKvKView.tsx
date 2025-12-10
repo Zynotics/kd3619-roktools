@@ -5,6 +5,7 @@ import { findColumnIndex, formatNumber, parseGermanNumber } from '../utils';
 import HonorOverviewTable from './HonorOverviewTable'; 
 import HonorHistoryChart from './HonorHistoryChart';
 import HonorPlayerSearch from './HonorPlayerSearch';
+import { useAuth } from './AuthContext';
 
 // Typ für die aggregierten Stats (Erweitert)
 type StatProgressRow = {
@@ -52,6 +53,7 @@ interface PublicKvKViewProps {
 
 const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const slug = kingdomSlug;
+  const { token } = useAuth();
 
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -85,7 +87,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
   const activeEvent = useMemo(() => events.find(e => e.id === selectedEventId), [events, selectedEventId]);
 
-  useEffect(() => { if (slug) loadEvents(); }, [slug]);
+  useEffect(() => { if (slug) loadEvents(); }, [slug, token]);
   useEffect(() => { if (slug && selectedEventId) loadFilesAndCalculate(); }, [slug, selectedEventId]);
   useEffect(() => {
     const evt = events.find(e => e.id === selectedEventId);
@@ -98,7 +100,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
   const loadEvents = async () => {
     try {
-      const evs = await fetchPublicKvkEvents(slug!);
+      const evs = await fetchPublicKvkEvents(slug!, token || undefined);
       setEvents(evs);
       if (evs.length > 0) setSelectedEventId(evs[0].id);
     } catch (e) {
@@ -548,8 +550,8 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     return (
         <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
             <div className="bg-gray-800 p-8 rounded-lg shadow-lg text-center max-w-md border border-gray-700">
-                <h2 className="text-2xl font-bold text-yellow-500 mb-4">No Public Events</h2>
-                <p className="text-gray-400">There are currently no public KvK statistics available for this kingdom.</p>
+                <h2 className="text-2xl font-bold text-yellow-500 mb-4">Keine sichtbaren Events</h2>
+                <p className="text-gray-400">Es gibt aktuell keine oeffentlichen KvK-Statistiken. Private Events sind nur fuer R4/R5 nach Login sichtbar.</p>
             </div>
         </div>
     );
@@ -565,6 +567,20 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
               <span className="text-3xl md:text-4xl mr-3">⚔️</span> 
               {activeEvent ? activeEvent.name : 'KvK Tracker'}
             </h1>
+            {activeEvent && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className={`px-2 py-1 rounded text-xs font-semibold border ${
+                  activeEvent.isPublic
+                    ? 'bg-green-900/70 text-green-200 border-green-700'
+                    : 'bg-gray-800 text-gray-200 border-gray-600'
+                }`}>
+                  {activeEvent.isPublic ? 'Public' : 'Private'}
+                </span>
+                {!activeEvent.isPublic && (
+                  <span className="text-[11px] text-gray-400">Nur für R4/R5 sichtbar, bis es veröffentlicht wird.</span>
+                )}
+              </div>
+            )}
             {activeEvent?.fights && activeEvent.fights.length > 0 && (
                 <p className="text-xs text-blue-300 mt-1 ml-12">
                    {activeEvent.fights.length} Battle Phases Tracked

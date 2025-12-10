@@ -369,7 +369,7 @@ const KvkManager: React.FC = () => {
                     {isPublic ? 'Public Visible' : 'Private Draft'}
                     </span>
                     <span className="text-[10px] text-gray-500">
-                        {isPublic ? 'Visible to everyone' : 'Only admins can see this'}
+                        {isPublic ? 'Visible to everyone' : 'Visible for R4/R5 of this kingdom'}
                     </span>
                 </div>
               </label>
