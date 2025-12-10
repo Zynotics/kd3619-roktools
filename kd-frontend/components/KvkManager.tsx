@@ -27,7 +27,7 @@ const dkpCategories: { key: keyof DkpFormula; label: string; helper?: string }[]
   { key: 't3', label: 'T3 Kills' },
   { key: 't4', label: 'T4 Kills' },
   { key: 't5', label: 'T5 Kills' },
-  { key: 'deadTroops', label: 'Dead Troops', helper: 'Fallen troops' },
+  { key: 'deadTroops', label: 'Dead Troops' },
 ];
 
 const truncateToTwoDecimals = (value: number) => Math.trunc(value * 100) / 100;
