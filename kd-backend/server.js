@@ -227,7 +227,7 @@ function authenticateToken(req, res, next) {
   jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) return res.status(403).json({ error: 'Ungültiger Token' });
     
-    const dbUser = await get('SELECT role, kingdom_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files FROM users WHERE id = $1', [user.id]);
+    const dbUser = await get('SELECT role, kingdom_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager FROM users WHERE id = $1', [user.id]);
     if (!dbUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
     
     req.user = { 
@@ -239,7 +239,9 @@ function authenticateToken(req, res, next) {
       canAccessOverview: !!dbUser.can_access_overview,
       canManageOverviewFiles: !!dbUser.can_manage_overview_files,
       canManageHonorFiles: !!dbUser.can_manage_honor_files,
-      canManageActivityFiles: !!dbUser.can_manage_activity_files
+      canManageActivityFiles: !!dbUser.can_manage_activity_files,
+      canManageAnalyticsFiles: !!dbUser.can_manage_analytics_files,
+      canAccessKvkManager: !!dbUser.can_access_kvk_manager
     };
     next();
   });
@@ -282,13 +284,24 @@ async function requireAdmin(req, res, next) {
 }
 
 function hasFileManagementAccess(req, type) {
-    const { role, canManageOverviewFiles, canManageHonorFiles, canManageActivityFiles } = req.user;
+    const {
+      role,
+      canManageOverviewFiles,
+      canManageHonorFiles,
+      canManageActivityFiles,
+      canManageAnalyticsFiles,
+    } = req.user;
+
     if (role === 'admin') return true;
-    if (role === 'r5' || role === 'r4') {
-        if (type === 'overview') return canManageOverviewFiles || role === 'r5';
-        if (type === 'honor') return canManageHonorFiles || role === 'r5';
-        if (type === 'activity') return true;
+    if (role === 'r5') return true;
+
+    if (role === 'r4') {
+      if (type === 'overview') return !!canManageOverviewFiles;
+      if (type === 'honor') return !!canManageHonorFiles;
+      if (type === 'activity') return !!canManageActivityFiles;
+      if (type === 'analytics') return !!canManageAnalyticsFiles;
     }
+
     return false;
 }
 
@@ -342,8 +355,8 @@ app.post('/api/auth/register', async (req, res) => {
     const userId = 'user-' + Date.now();
 
     await query(
-      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview, kingdom_id, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [userId, email, username, passwordHash, false, 'user', normalizedGovId, false, false, false, assignedKingdomId, false, false, false]
+      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview, kingdom_id, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [userId, email, username, passwordHash, false, 'user', normalizedGovId, false, false, false, assignedKingdomId, false, false, false, false, false]
     );
 
     return res.json({
@@ -358,7 +371,9 @@ app.post('/api/auth/register', async (req, res) => {
           kingdomId: assignedKingdomId,
           canManageOverviewFiles: false,
           canManageHonorFiles: false,
-          canManageActivityFiles: false 
+          canManageActivityFiles: false,
+          canManageAnalyticsFiles: false,
+          canAccessKvkManager: false
       }
     });
   } catch (error) {
@@ -372,7 +387,7 @@ app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Benutzername und Passwort benötigt' });
 
-    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files FROM users WHERE username = $1', [username]);
+    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager FROM users WHERE username = $1', [username]);
     if (!user) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
 
     const validPassword = await bcrypt.compare(password, user.password_hash);
@@ -395,8 +410,10 @@ app.post('/api/auth/login', async (req, res) => {
             email: user.email,
             canManageOverviewFiles: !!user.can_manage_overview_files,
             canManageHonorFiles: !!user.can_manage_honor_files,
-            canManageActivityFiles: !!user.can_manage_activity_files
-        } 
+            canManageActivityFiles: !!user.can_manage_activity_files,
+            canManageAnalyticsFiles: !!user.can_manage_analytics_files,
+            canAccessKvkManager: !!user.can_access_kvk_manager
+        }
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -406,7 +423,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/validate', authenticateToken, async (req, res) => {
   try {
-    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files FROM users WHERE id = $1', [req.user.id]);
+    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager FROM users WHERE id = $1', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
 
     res.json({
@@ -422,7 +439,9 @@ app.get('/api/auth/validate', authenticateToken, async (req, res) => {
       kingdomId: user.kingdom_id || null,
       canManageOverviewFiles: !!user.can_manage_overview_files,
       canManageHonorFiles: !!user.can_manage_honor_files,
-      canManageActivityFiles: !!user.can_manage_activity_files
+      canManageActivityFiles: !!user.can_manage_activity_files,
+      canManageAnalyticsFiles: !!user.can_manage_analytics_files,
+      canAccessKvkManager: !!user.can_access_kvk_manager
     });
   } catch (err) {
     res.status(500).json({ error: 'Token-Validierung fehlgeschlagen' });
@@ -435,10 +454,10 @@ app.post('/api/admin/create-admin', async (req, res) => {
   try {
     const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
     await query(
-      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files) 
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager) 
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash`,
-      ['admin-001', 'admin@kd3619.com', 'Stadmin', adminPasswordHash, true, 'admin', null, true, true, true]
+      ['admin-001', 'admin@kd3619.com', 'Stadmin', adminPasswordHash, true, 'admin', null, true, true, true, true, true]
     );
     res.json({ message: 'Admin user created successfully' });
   } catch (error) {
@@ -458,7 +477,7 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
     }
     
     const users = await all(
-      `SELECT id, email, username, is_approved, role, created_at, kingdom_id, governor_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files FROM users ${whereClause} ORDER BY created_at DESC`, params
+      `SELECT id, email, username, is_approved, role, created_at, kingdom_id, governor_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager FROM users ${whereClause} ORDER BY created_at DESC`, params
     );
 
     res.json(users.map((user) => ({
@@ -475,7 +494,9 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
         canAccessOverview: !!user.can_access_overview,
         canManageOverviewFiles: !!user.can_manage_overview_files,
         canManageHonorFiles: !!user.can_manage_honor_files,
-        canManageActivityFiles: !!user.can_manage_activity_files
+        canManageActivityFiles: !!user.can_manage_activity_files,
+        canManageAnalyticsFiles: !!user.can_manage_analytics_files,
+        canAccessKvkManager: !!user.can_access_kvk_manager
     })));
   } catch (error) {
     res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
@@ -521,7 +542,7 @@ app.post('/api/admin/users/access-files', authenticateToken, requireAdmin, async
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
 
     try {
-      const { userId, canManageOverviewFiles, canManageHonorFiles, canManageActivityFiles } = req.body;
+      const { userId, canManageOverviewFiles, canManageHonorFiles, canManageActivityFiles, canManageAnalyticsFiles, canAccessKvkManager } = req.body;
       if (!userId) return res.status(400).json({ error: 'Benutzer ID wird benötigt' });
 
       const targetUser = await get('SELECT role FROM users WHERE id = $1', [userId]);
@@ -531,8 +552,8 @@ app.post('/api/admin/users/access-files', authenticateToken, requireAdmin, async
       }
       
       await query(
-        `UPDATE users SET can_manage_overview_files=$1, can_manage_honor_files=$2, can_manage_activity_files=$3 WHERE id=$4`, 
-        [!!canManageOverviewFiles, !!canManageHonorFiles, !!canManageActivityFiles, userId]
+        `UPDATE users SET can_manage_overview_files=$1, can_manage_honor_files=$2, can_manage_activity_files=$3, can_manage_analytics_files=$4, can_access_kvk_manager=$5 WHERE id=$6`,
+        [!!canManageOverviewFiles, !!canManageHonorFiles, !!canManageActivityFiles, !!canManageAnalyticsFiles, !!canAccessKvkManager, userId]
       );
       res.json({ success: true });
     } catch(e) { 
