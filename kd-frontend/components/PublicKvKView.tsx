@@ -26,6 +26,18 @@ type StatProgressRow = {
   deadPercent?: number;
 };
 
+type SortKey =
+  | 'id'
+  | 'name'
+  | 'alliance'
+  | 'dkpPercent'
+  | 'deadPercent'
+  | 'powerDiff'
+  | 'killPointsDiff'
+  | 't4KillsDiff'
+  | 't5KillsDiff'
+  | 't4t5KillsDiff';
+
 // Typ für die aggregierte Gesamtehre im Verlauf
 export type TotalHonorPointData = {
   fileName: string;
@@ -56,6 +68,10 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const [totalHonorHistory, setTotalHonorHistory] = useState<TotalHonorHistory>([]);
   const [honorStartSelection, setHonorStartSelection] = useState<string>('');
   const [honorEndSelection, setHonorEndSelection] = useState<string>('');
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
+    key: 't4t5KillsDiff',
+    direction: 'desc',
+  });
   
   // UI State
   const [viewMode, setViewMode] = useState<'stats' | 'honor'>('stats');
@@ -159,6 +175,21 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   };
 
   const handleClearSearch = () => { setSearchQuery(''); setSearchResults(null); };
+
+  const toggleSort = (key: SortKey) => {
+    setSortConfig(prev => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      const defaultDirection: 'asc' | 'desc' = ['id', 'name', 'alliance'].includes(key) ? 'asc' : 'desc';
+      return { key, direction: defaultDirection };
+    });
+  };
+
+  const renderSortIndicator = (key: SortKey) => {
+    if (sortConfig.key !== key) return null;
+    return <span className="text-[10px]">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>;
+  };
 
   const parseAnyNumber = (val: any): number => parseGermanNumber(val);
 
@@ -467,6 +498,51 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       .sort((a, b) => b.diffHonor - a.diffHonor);
   }, [honorHistory, activeHonorFiles]);
 
+  const sortedStats = useMemo(() => {
+    const getValue = (row: StatProgressRow): string | number => {
+      switch (sortConfig.key) {
+        case 'id':
+          return row.id;
+        case 'name':
+          return row.name;
+        case 'alliance':
+          return row.alliance;
+        case 'dkpPercent':
+          return row.dkpPercent ?? NaN;
+        case 'deadPercent':
+          return row.deadPercent ?? NaN;
+        case 'powerDiff':
+          return row.powerDiff;
+        case 'killPointsDiff':
+          return row.killPointsDiff;
+        case 't4KillsDiff':
+          return row.t4KillsDiff;
+        case 't5KillsDiff':
+          return row.t5KillsDiff;
+        case 't4t5KillsDiff':
+        default:
+          return row.t4t5KillsDiff;
+      }
+    };
+
+    const fallback = sortConfig.direction === 'asc' ? Infinity : -Infinity;
+
+    return [...statsData].sort((a, b) => {
+      const valA = getValue(a);
+      const valB = getValue(b);
+
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        const cmp = valA.localeCompare(valB, 'de', { sensitivity: 'base' });
+        return sortConfig.direction === 'asc' ? cmp : -cmp;
+      }
+
+      const numA = typeof valA === 'number' && !Number.isNaN(valA) ? valA : fallback;
+      const numB = typeof valB === 'number' && !Number.isNaN(valB) ? valB : fallback;
+
+      return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
+    });
+  }, [statsData, sortConfig]);
+
   // --- RENDER ---
   if (events.length === 0 && !loading) {
     return (
@@ -575,22 +651,90 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                     <thead>
                       <tr className="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
                         <th className="p-3 text-center w-10">#</th>
-                        <th className="p-3">Gov ID</th>
-                        <th className="p-3">Name</th>
-                        <th className="p-3">Alliance</th>
+                        <th className="p-3">
+                          <button type="button" className="flex items-center gap-1" onClick={() => toggleSort('id')}>
+                            Gov ID {renderSortIndicator('id')}
+                          </button>
+                        </th>
+                        <th className="p-3">
+                          <button type="button" className="flex items-center gap-1" onClick={() => toggleSort('name')}>
+                            Name {renderSortIndicator('name')}
+                          </button>
+                        </th>
+                        <th className="p-3">
+                          <button type="button" className="flex items-center gap-1" onClick={() => toggleSort('alliance')}>
+                            Alliance {renderSortIndicator('alliance')}
+                          </button>
+                        </th>
 
-                        <th className="p-3 text-right text-amber-300">DKP Progress</th>
-                        <th className="p-3 text-right text-red-200">Dead Goal</th>
+                        <th className="p-3 text-right text-amber-300">
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 justify-end w-full"
+                            onClick={() => toggleSort('dkpPercent')}
+                          >
+                            DKP Progress {renderSortIndicator('dkpPercent')}
+                          </button>
+                        </th>
+                        <th className="p-3 text-right text-red-200">
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 justify-end w-full"
+                            onClick={() => toggleSort('deadPercent')}
+                          >
+                            Dead Goal {renderSortIndicator('deadPercent')}
+                          </button>
+                        </th>
 
-                        <th className="p-3 text-right text-yellow-500">Power Details</th>
-                        <th className="p-3 text-right text-orange-300">Kill Points Δ</th>
-                        <th className="p-3 text-right text-red-300">T4 Kills Δ</th>
-                        <th className="p-3 text-right text-red-400">T5 Kills Δ</th>
-                        <th className="p-3 text-right text-red-500 font-bold bg-gray-800/50">T4+T5 Kills Δ</th>
+                        <th className="p-3 text-right text-yellow-500">
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 justify-end w-full"
+                            onClick={() => toggleSort('powerDiff')}
+                          >
+                            Power Details {renderSortIndicator('powerDiff')}
+                          </button>
+                        </th>
+                        <th className="p-3 text-right text-orange-300">
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 justify-end w-full"
+                            onClick={() => toggleSort('killPointsDiff')}
+                          >
+                            Kill Points Δ {renderSortIndicator('killPointsDiff')}
+                          </button>
+                        </th>
+                        <th className="p-3 text-right text-red-300">
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 justify-end w-full"
+                            onClick={() => toggleSort('t4KillsDiff')}
+                          >
+                            T4 Kills Δ {renderSortIndicator('t4KillsDiff')}
+                          </button>
+                        </th>
+                        <th className="p-3 text-right text-red-400">
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 justify-end w-full"
+                            onClick={() => toggleSort('t5KillsDiff')}
+                          >
+                            T5 Kills Δ {renderSortIndicator('t5KillsDiff')}
+                          </button>
+                        </th>
+                        <th className="p-3 text-right text-red-500 font-bold bg-gray-800/50">
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 justify-end w-full"
+                            onClick={() => toggleSort('t4t5KillsDiff')}
+                          >
+                            T4+T5 Kills Δ {renderSortIndicator('t4t5KillsDiff')}
+                          </button>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700 text-sm">
-                      {statsData.map((row, idx) => (
+                      {sortedStats.map((row, idx) => (
                         <tr key={row.id} className="hover:bg-gray-750 transition-colors">
                           <td className="p-3 text-gray-500 font-mono text-center">{idx + 1}</td>
                           <td className="p-3 text-gray-400 font-mono text-xs">{row.id}</td>
