@@ -18,6 +18,9 @@ type StatProgressRow = {
   t4t5KillsDiff: number; // Summe T4 + T5
   deadDiff: number;
   fightsParticipated?: number;
+  dkpScore?: number;
+  dkpGoal?: number;
+  dkpPercent?: number;
 };
 
 // Typ für die aggregierte Gesamtehre im Verlauf
@@ -103,7 +106,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
       // --- A. FIGHT STATS CALCULATION ---
       if (event.fights && event.fights.length > 0) {
-          const calculatedStats = calculateCumulativeStats(event.fights, loadedOverview);
+          const calculatedStats = calculateCumulativeStats(event.fights, loadedOverview, event.dkpFormula, event.goalsFormula);
           setStatsData(calculatedStats);
       }
 
@@ -255,7 +258,12 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   };
 
   // --- MAIN LOGIC: Cumulative Fights (UPDATED) ---
-  const calculateCumulativeStats = (fights: { startFileId: string, endFileId: string }[], files: UploadedFile[]): StatProgressRow[] => {
+  const calculateCumulativeStats = (
+    fights: { startFileId: string, endFileId: string }[],
+    files: UploadedFile[],
+    dkpFormula?: KvkEvent['dkpFormula'],
+    goalsFormula?: KvkEvent['goalsFormula']
+  ): StatProgressRow[] => {
     const grandTotals = new Map<string, StatProgressRow>();
 
     fights.forEach(fight => {
@@ -296,23 +304,44 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                     t5KillsDiff: 0,
                     t4t5KillsDiff: 0,
                     deadDiff: 0,
-                    fightsParticipated: 0
+                    fightsParticipated: 0,
+                    dkpScore: 0
                 });
             }
 
             const total = grandTotals.get(playerId)!;
             total.name = curr.name;
             total.alliance = curr.alliance;
-            
+
             // Accumulate Differences
             total.powerDiff += deltaPower;
             total.t4KillsDiff += deltaT4;
             total.t5KillsDiff += deltaT5;
             total.t4t5KillsDiff += (deltaT4 + deltaT5);
             total.deadDiff += deltaDead;
-            
+
+            const dkpEntries = dkpFormula || null;
+            if (dkpEntries) {
+                const t4Points = dkpEntries.t4?.enabled ? (dkpEntries.t4.points || 0) * deltaT4 : 0;
+                const t5Points = dkpEntries.t5?.enabled ? (dkpEntries.t5.points || 0) * deltaT5 : 0;
+                const deadPoints = dkpEntries.deadTroops?.enabled ? (dkpEntries.deadTroops.points || 0) * deltaDead : 0;
+                total.dkpScore = (total.dkpScore || 0) + t4Points + t5Points + deadPoints;
+            }
+
             total.fightsParticipated = (total.fightsParticipated || 0) + 1;
         });
+    });
+
+    const baseToDkpPercent = goalsFormula?.basePowerToDkpPercent || 0;
+    const dkpGoalFactor = baseToDkpPercent / 100;
+
+    grandTotals.forEach(player => {
+        if (dkpGoalFactor > 0) {
+            player.dkpGoal = player.basePower * dkpGoalFactor;
+            if (player.dkpScore !== undefined) {
+                player.dkpPercent = player.dkpGoal > 0 ? (player.dkpScore / player.dkpGoal) * 100 : undefined;
+            }
+        }
     });
 
     // Sortierung nach T4 + T5 Kills (Total Kills Δ)
@@ -443,7 +472,9 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                         <th className="p-3">Gov ID</th>
                         <th className="p-3">Name</th>
                         <th className="p-3">Alliance</th>
-                        
+
+                        <th className="p-3 text-right text-amber-300">DKP Fortschritt</th>
+
                         <th className="p-3 text-right text-yellow-500">Power Details</th>
                         
                         <th className="p-3 text-right text-red-300">T4 Kills Δ</th>
@@ -459,7 +490,22 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                           <td className="p-3 text-gray-400 font-mono text-xs">{row.id}</td>
                           <td className="p-3 font-medium text-white truncate max-w-[150px]">{row.name}</td>
                           <td className="p-3 text-gray-300">[{row.alliance}]</td>
-                          
+
+                          <td className="p-3 text-right">
+                              {row.dkpPercent !== undefined ? (
+                                  <div className="flex flex-col items-end">
+                                      <span className={`font-bold ${row.dkpPercent >= 100 ? 'text-green-400' : 'text-amber-300'}`}>
+                                          {row.dkpPercent.toFixed(1)}%
+                                      </span>
+                                      <span className="text-[11px] text-gray-500">
+                                          DKP: {formatNumber(row.dkpScore || 0)} / {formatNumber(row.dkpGoal || 0)}
+                                      </span>
+                                  </div>
+                              ) : (
+                                  <span className="text-gray-500 text-sm italic">N/A</span>
+                              )}
+                          </td>
+
                           {/* Power Column: Base + Diff */}
                           <td className="p-3 text-right">
                               <div className="flex flex-col items-end">
@@ -481,8 +527,8 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                         </tr>
                       ))}
                       {statsData.length === 0 && (
-                        <tr><td colSpan={9} className="p-12 text-center text-gray-500 italic">
-                            No data available yet. 
+                        <tr><td colSpan={10} className="p-12 text-center text-gray-500 italic">
+                            No data available yet.
                         </td></tr>
                       )}
                     </tbody>
