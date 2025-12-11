@@ -309,8 +309,18 @@ const KvkManager: React.FC = () => {
   const powerBrackets = goalsFormula.powerBrackets || [];
   const isEditorVisible = isFormOpen || !!editingEventId;
 
-  if (!user || (user.role !== 'admin' && user.role !== 'r5')) {
-    return <div className="p-8 text-center text-red-500 font-bold">Access Denied. Admins or R5 only.</div>;
+  const hasKvkAccess =
+    !!user &&
+    (user.role === 'admin' ||
+      user.role === 'r5' ||
+      (user.role === 'r4' && user.canAccessKvkManager));
+
+  if (!hasKvkAccess) {
+    return (
+      <div className="p-8 text-center text-red-500 font-bold">
+        Access Denied. Admins, R5, or authorized R4 only.
+      </div>
+    );
   }
 
   return (
