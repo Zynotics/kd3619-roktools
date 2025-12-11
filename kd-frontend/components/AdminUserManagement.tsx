@@ -240,6 +240,24 @@ const AdminUserManagement: React.FC = () => {
     }
   };
   
+  // 📝 NEU: Helper, ob aktueller Benutzer Datei-/KVK-Rechte ändern darf
+  const canManageFileAccess = (targetUser: User) => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'admin') {
+      return targetUser.role !== 'admin';
+    }
+
+    if (currentUser.role === 'r5') {
+      return (
+        targetUser.kingdomId === currentUser.kingdomId &&
+        targetUser.role !== 'admin' &&
+        targetUser.role !== 'r5'
+      );
+    }
+
+    return false;
+  };
+
   // 📝 NEU: Handler für die neuen granularen File Permissions
   const updateFileAccess = async (
     targetUser: User,
@@ -252,45 +270,57 @@ const AdminUserManagement: React.FC = () => {
     value: boolean
   ) => {
     setUserError(null);
-    const isSuperAdmin = currentUser?.role === 'admin';
-    if (!isSuperAdmin) {
-        setUserError('Only Superadmin can modify file management access.');
-        return;
+    if (!canManageFileAccess(targetUser)) {
+      setUserError('You do not have permission to modify file management access.');
+      return;
     }
 
     try {
-        const token = getTokenOrThrow();
-        
-        const body = {
-            userId: targetUser.id,
-            canManageOverviewFiles: key === 'canManageOverviewFiles' ? value : targetUser.canManageOverviewFiles,
-            canManageHonorFiles: key === 'canManageHonorFiles' ? value : targetUser.canManageHonorFiles,
-            canManageActivityFiles: key === 'canManageActivityFiles' ? value : targetUser.canManageActivityFiles,
-            canManageAnalyticsFiles: key === 'canManageAnalyticsFiles' ? value : targetUser.canManageAnalyticsFiles,
-            canAccessKvkManager: key === 'canAccessKvkManager' ? value : targetUser.canAccessKvkManager,
-        };
-        
-        // 📝 NEU: Verwende /api/admin/users/access-files Endpoint
-        const response = await fetch(`${BACKEND_URL}/api/admin/users/access-files`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(body),
-        });
+      const token = getTokenOrThrow();
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            const errorJson = JSON.parse(errorText || '{}');
-            setUserError(errorJson.error || 'Failed to update file management rights');
-            throw new Error(errorJson.error || 'Failed to update file management rights');
-        }
+      const body = {
+        userId: targetUser.id,
+        canManageOverviewFiles:
+          key === 'canManageOverviewFiles'
+            ? value
+            : targetUser.canManageOverviewFiles,
+        canManageHonorFiles:
+          key === 'canManageHonorFiles' ? value : targetUser.canManageHonorFiles,
+        canManageActivityFiles:
+          key === 'canManageActivityFiles'
+            ? value
+            : targetUser.canManageActivityFiles,
+        canManageAnalyticsFiles:
+          key === 'canManageAnalyticsFiles'
+            ? value
+            : targetUser.canManageAnalyticsFiles,
+        canAccessKvkManager:
+          key === 'canAccessKvkManager' ? value : targetUser.canAccessKvkManager,
+      };
 
-        setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, [key]: value } : u));
-        showSuccessMessage('User file management access updated successfully.');
-    } catch(err) {
-        console.error('Error updating file access:', err);
+      // 📝 NEU: Verwende /api/admin/users/access-files Endpoint
+      const response = await fetch(`${BACKEND_URL}/api/admin/users/access-files`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const errorJson = JSON.parse(errorText || '{}');
+        setUserError(errorJson.error || 'Failed to update file management rights');
+        throw new Error(errorJson.error || 'Failed to update file management rights');
+      }
+
+      setUsers((prev) =>
+        prev.map((u) => (u.id === targetUser.id ? { ...u, [key]: value } : u))
+      );
+      showSuccessMessage('User file management access updated successfully.');
+    } catch (err) {
+      console.error('Error updating file access:', err);
     }
   };
 
@@ -753,7 +783,7 @@ const AdminUserManagement: React.FC = () => {
 
   const canManageUsers = currentUser?.role === 'admin' || currentUser?.role === 'r5';
   const isSuperAdmin = currentUser?.role === 'admin';
-  const canManageKingdoms = isSuperAdmin; 
+  const canManageKingdoms = isSuperAdmin;
 
   // 🚩 NEU: Bestimme, welche Rollen der aktuelle Benutzer vergeben darf
   const allowedRoles = isSuperAdmin ? ['user', 'r4', 'r5'] : ['user', 'r4'];
@@ -769,8 +799,10 @@ const AdminUserManagement: React.FC = () => {
   const assignableUsersR4 = users.filter(u => u.role !== 'admin' && u.role !== 'r5' && u.role !== 'r4' && u.id !== currentUser?.id);
   
   // --- Hilfslogik für die Tabellenzellen ---
-  const getCanManageFileRightsGranularly = (user: User) => isSuperAdmin && user.role !== 'admin';
+  const getCanManageFileRightsGranularly = (user: User) => canManageFileAccess(user);
   const getCanManageRights = (user: User) => isSuperAdmin || (currentUser?.role === 'r5' && user.kingdomId === currentUser?.kingdomId && user.role !== 'r5' && user.role !== 'admin');
+
+  const showFilePermissionColumns = isSuperAdmin || currentUser?.role === 'r5';
 
   return (
     <div className="space-y-6">
@@ -858,8 +890,8 @@ const AdminUserManagement: React.FC = () => {
                   <TableCell align="center" header>
                     Kingdom
                   </TableCell>
-                  {/* 📝 NEUE SPALTEN für SuperAdmin */}
-                  {isSuperAdmin && (
+                  {/* 📝 NEUE SPALTEN für SuperAdmin und R5 */}
+                  {showFilePermissionColumns && (
                       <>
                           <TableCell align="center" header>
                               Activity Manage
@@ -958,8 +990,8 @@ const AdminUserManagement: React.FC = () => {
                       </TableCell>
 
 
-                      {/* 📝 File Management & Special Access (Nur Superadmin) */}
-                      {isSuperAdmin && (
+                      {/* 📝 File Management & Special Access */}
+                      {showFilePermissionColumns && (
                           <>
                               <TableCell align="center">
                                   <button
