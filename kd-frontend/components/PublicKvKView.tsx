@@ -95,10 +95,17 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
     if (evt) {
       setSelectedFightId('all');
       setEventStartSelection(evt.eventStartFileId || '');
-      setHonorStartSelection(evt.honorStartFileId || '');
-      setHonorEndSelection(evt.honorEndFileId || '');
+
+      const honorRange = getHonorFilesWithinEventRange(
+        allHonorFiles,
+        evt.honorStartFileId,
+        evt.honorEndFileId
+      );
+
+      setHonorStartSelection(honorRange[0]?.id || evt.honorStartFileId || '');
+      setHonorEndSelection(honorRange[honorRange.length - 1]?.id || evt.honorEndFileId || '');
     }
-  }, [events, selectedEventId]);
+  }, [events, selectedEventId, allHonorFiles]);
 
   const loadEvents = async () => {
     try {
@@ -143,8 +150,15 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       setAllHonorFiles(loadedHonor);
 
       const defaultEventStart = event.eventStartFileId || loadedOverview[0]?.id || '';
-      const defaultHonorStart = event.honorStartFileId || loadedHonor[0]?.id || '';
-      const defaultHonorEnd = event.honorEndFileId || loadedHonor[loadedHonor.length - 1]?.id || '';
+
+      const honorRange = getHonorFilesWithinEventRange(
+        loadedHonor,
+        event.honorStartFileId,
+        event.honorEndFileId
+      );
+
+      const defaultHonorStart = honorRange[0]?.id || '';
+      const defaultHonorEnd = honorRange[honorRange.length - 1]?.id || defaultHonorStart;
 
       setEventStartSelection(defaultEventStart);
       setHonorStartSelection(defaultHonorStart);
@@ -198,6 +212,33 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   };
 
   const parseAnyNumber = (val: any): number => parseGermanNumber(val);
+
+  const getHonorFilesWithinEventRange = (
+    files: UploadedFile[],
+    startId?: string,
+    endId?: string
+  ): UploadedFile[] => {
+    if (!files || files.length === 0) return [];
+
+    const startIndex = startId ? files.findIndex(f => f.id === startId) : -1;
+    const endIndex = endId ? files.findIndex(f => f.id === endId) : -1;
+
+    if (startIndex !== -1 && endIndex !== -1) {
+      const first = Math.min(startIndex, endIndex);
+      const last = Math.max(startIndex, endIndex);
+      return files.slice(first, last + 1);
+    }
+
+    if (startIndex !== -1) return files.slice(startIndex);
+    if (endIndex !== -1) return files.slice(0, endIndex + 1);
+
+    return files;
+  };
+
+  const allowedHonorFiles = useMemo(
+    () => getHonorFilesWithinEventRange(allHonorFiles, activeEvent?.honorStartFileId, activeEvent?.honorEndFileId),
+    [allHonorFiles, activeEvent]
+  );
 
   type SnapshotEntry = {
     name: string;
@@ -946,7 +987,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                               onChange={e => setHonorStartSelection(e.target.value)}
                             >
                               <option value="">Select start file</option>
-                              {allHonorFiles.map(f => (
+                              {allowedHonorFiles.map(f => (
                                 <option key={f.id} value={f.id}>{f.name}</option>
                               ))}
                             </select>
@@ -959,7 +1000,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                               onChange={e => setHonorEndSelection(e.target.value)}
                             >
                               <option value="">Select end file</option>
-                              {allHonorFiles.map(f => (
+                              {allowedHonorFiles.map(f => (
                                 <option key={f.id} value={f.id}>{f.name}</option>
                               ))}
                             </select>
