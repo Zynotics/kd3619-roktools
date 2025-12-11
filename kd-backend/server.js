@@ -283,6 +283,25 @@ async function requireAdmin(req, res, next) {
   next();
 }
 
+function requireKvkManager(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Nicht authentifiziert' });
+  const { role, kingdomId, canAccessKvkManager } = req.user;
+
+  if (role === 'admin') return next();
+
+  if (role === 'r5') {
+    if (!kingdomId) return res.status(403).json({ error: 'R5-Benutzer ist keinem Königreich zugewiesen.' });
+    return next();
+  }
+
+  if (role === 'r4' && canAccessKvkManager) {
+    if (!kingdomId) return res.status(403).json({ error: 'R4-Benutzer ist keinem Königreich zugewiesen.' });
+    return next();
+  }
+
+  return res.status(403).json({ error: 'Admin, R5 oder KvK Manager Rechte erforderlich' });
+}
+
 function hasFileManagementAccess(req, type) {
     const {
       role,
@@ -756,11 +775,11 @@ app.delete('/api/admin/kingdoms/:id', authenticateToken, requireAdmin, async (re
 
 // ==================== KVK MANAGER ENDPOINTS (MODULAR UPDATE) ====================
 
-// 1. GET /api/admin/kvk/events - Liste der Events (für Admin/R5)
-app.get('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, res) => {
+// 1. GET /api/admin/kvk/events - Liste der Events (für Admin/R5 und freigeschaltete R4)
+app.get('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (req, res) => {
   try {
     const isAdmin = req.user.role === 'admin';
-    const kingdomId = req.user.kingdomId || (isAdmin ? req.query.kingdomId : null);
+    const kingdomId = isAdmin ? (req.query.kingdomId || req.user.kingdomId) : req.user.kingdomId;
 
     if (!kingdomId) {
       if (isAdmin) {
@@ -779,7 +798,7 @@ app.get('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, re
 });
 
 // 2. POST /api/admin/kvk/events - Neues Event erstellen (mit Fights Array)
-app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, res) => {
+app.post('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (req, res) => {
   try {
     // UPDATED: Jetzt mit honorStartFileId / honorEndFileId
     const { name, fights, eventStartFileId, honorStartFileId, honorEndFileId, dkpFormula, goalsFormula, isPublic, kingdomId: bodyKingdomId } = req.body;
@@ -818,7 +837,7 @@ app.post('/api/admin/kvk/events', authenticateToken, requireAdmin, async (req, r
 });
 
 // 3. PUT /api/admin/kvk/events/:id - Event bearbeiten
-app.put('/api/admin/kvk/events/:id', authenticateToken, requireAdmin, async (req, res) => {
+app.put('/api/admin/kvk/events/:id', authenticateToken, requireKvkManager, async (req, res) => {
   try {
     const { name, fights, eventStartFileId, honorStartFileId, honorEndFileId, dkpFormula, goalsFormula, isPublic } = req.body;
     const eventId = req.params.id;
@@ -849,7 +868,7 @@ app.put('/api/admin/kvk/events/:id', authenticateToken, requireAdmin, async (req
 });
 
 // 4. DELETE /api/admin/kvk/events/:id - Event löschen
-app.delete('/api/admin/kvk/events/:id', authenticateToken, requireAdmin, async (req, res) => {
+app.delete('/api/admin/kvk/events/:id', authenticateToken, requireKvkManager, async (req, res) => {
   try {
     const eventId = req.params.id;
     const existing = await getKvkEventById(eventId);
