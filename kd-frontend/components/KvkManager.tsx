@@ -176,14 +176,14 @@ const KvkManager: React.FC = () => {
   };
 
   const renderUploadButton = (type: 'overview' | 'honor') => {
-    const label = type === 'overview' ? 'Overview' : 'Honor';
+    const label = type === 'overview' ? 'Analytics' : 'Honor';
     const colorClasses = type === 'overview'
       ? 'bg-blue-700 hover:bg-blue-600'
       : 'bg-purple-700 hover:bg-purple-600';
 
     return (
       <div className="relative overflow-hidden group">
-        <button className={`${colorClasses} text-white px-3 py-1.5 rounded shadow-md font-medium flex items-center transition-colors text-xs`}>
+        <button className={`${colorClasses} cursor-pointer text-white px-3 py-1.5 rounded shadow-md font-medium flex items-center transition-colors text-xs`}>
           <span className="mr-2">⬆️</span> Upload {label}
         </button>
         <input
