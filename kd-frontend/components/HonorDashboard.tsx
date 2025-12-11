@@ -14,7 +14,10 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
   const { user } = useAuth();
   const role = user?.role;
   
-  const canManageFiles = isAdmin || role === 'r4' || role === 'r5';
+  const canManageFiles =
+    isAdmin ||
+    role === 'r5' ||
+    (role === 'r4' && (user?.canManageAnalyticsFiles || user?.canManageHonorFiles));
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);

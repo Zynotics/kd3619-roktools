@@ -28,7 +28,10 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   const isPublicView = !!publicSlug && !user; 
   const userLoggedIn = !!user;
 
-  const canManageFiles = isAdmin || role === 'r4' || role === 'r5'; 
+  const canManageFiles =
+    isAdmin ||
+    role === 'r5' ||
+    (role === 'r4' && (user?.canManageAnalyticsFiles || user?.canManageOverviewFiles));
   
   const isMinimalView = (isPublicView || isBasicUser) && !isAdminOverride && !canManageFiles;
 

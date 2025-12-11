@@ -296,10 +296,12 @@ function hasFileManagementAccess(req, type) {
     if (role === 'r5') return true;
 
     if (role === 'r4') {
-      if (type === 'overview') return !!canManageOverviewFiles;
-      if (type === 'honor') return !!canManageHonorFiles;
       if (type === 'activity') return !!canManageActivityFiles;
-      if (type === 'analytics') return !!canManageAnalyticsFiles;
+
+      // R4 Permissions are reduced to a single Analytics flag for Overview/Honor/Analytics uploads
+      if (type === 'overview' || type === 'honor' || type === 'analytics') {
+        return !!canManageAnalyticsFiles || !!canManageOverviewFiles || !!canManageHonorFiles;
+      }
     }
 
     return false;
@@ -540,7 +542,7 @@ app.post('/api/admin/users/access', authenticateToken, requireAdmin, async (req,
 
 app.post('/api/admin/users/access-files', authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const { userId, canManageOverviewFiles, canManageHonorFiles, canManageActivityFiles, canManageAnalyticsFiles, canAccessKvkManager } = req.body;
+      const { userId, canManageActivityFiles, canManageAnalyticsFiles, canAccessKvkManager } = req.body;
       const currentUserKingdomId = getKingdomId(req);
 
       if (!userId) return res.status(400).json({ error: 'Benutzer ID wird benötigt' });
@@ -557,14 +559,17 @@ app.post('/api/admin/users/access-files', authenticateToken, requireAdmin, async
         }
       }
 
+      // Manage Analytics applies to both overview and honor uploads for R4 users
+      const analyticsFlag = !!canManageAnalyticsFiles;
+
       await query(
         `UPDATE users SET can_manage_overview_files=$1, can_manage_honor_files=$2, can_manage_activity_files=$3, can_manage_analytics_files=$4, can_access_kvk_manager=$5 WHERE id=$6`,
-        [!!canManageOverviewFiles, !!canManageHonorFiles, !!canManageActivityFiles, !!canManageAnalyticsFiles, !!canAccessKvkManager, userId]
+        [analyticsFlag, analyticsFlag, !!canManageActivityFiles, analyticsFlag, !!canAccessKvkManager, userId]
       );
       res.json({ success: true });
-    } catch(e) { 
+    } catch(e) {
         console.error('Error in /api/admin/users/access-files:', e);
-        res.status(500).json({error: 'Error'}); 
+        res.status(500).json({error: 'Error'});
     }
 });
 
