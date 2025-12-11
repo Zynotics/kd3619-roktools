@@ -261,12 +261,7 @@ const AdminUserManagement: React.FC = () => {
   // 📝 NEU: Handler für die neuen granularen File Permissions
   const updateFileAccess = async (
     targetUser: User,
-    key:
-      | 'canManageOverviewFiles'
-      | 'canManageHonorFiles'
-      | 'canManageActivityFiles'
-      | 'canManageAnalyticsFiles'
-      | 'canAccessKvkManager',
+    key: 'canManageActivityFiles' | 'canManageAnalyticsFiles' | 'canAccessKvkManager',
     value: boolean
   ) => {
     setUserError(null);
@@ -280,12 +275,6 @@ const AdminUserManagement: React.FC = () => {
 
       const body = {
         userId: targetUser.id,
-        canManageOverviewFiles:
-          key === 'canManageOverviewFiles'
-            ? value
-            : targetUser.canManageOverviewFiles,
-        canManageHonorFiles:
-          key === 'canManageHonorFiles' ? value : targetUser.canManageHonorFiles,
         canManageActivityFiles:
           key === 'canManageActivityFiles'
             ? value
@@ -316,7 +305,22 @@ const AdminUserManagement: React.FC = () => {
       }
 
       setUsers((prev) =>
-        prev.map((u) => (u.id === targetUser.id ? { ...u, [key]: value } : u))
+        prev.map((u) =>
+          u.id === targetUser.id
+            ? {
+                ...u,
+                [key]: value,
+                canManageHonorFiles:
+                  key === 'canManageAnalyticsFiles'
+                    ? value
+                    : u.canManageHonorFiles,
+                canManageOverviewFiles:
+                  key === 'canManageAnalyticsFiles'
+                    ? value
+                    : u.canManageOverviewFiles,
+              }
+            : u
+        )
       );
       showSuccessMessage('User file management access updated successfully.');
     } catch (err) {
@@ -892,23 +896,17 @@ const AdminUserManagement: React.FC = () => {
                   </TableCell>
                   {/* 📝 NEUE SPALTEN für SuperAdmin und R5 */}
                   {showFilePermissionColumns && (
-                      <>
-                          <TableCell align="center" header>
-                              Activity Manage
-                          </TableCell>
-                          <TableCell align="center" header>
-                              Analytics Manage
-                          </TableCell>
-                          <TableCell align="center" header>
-                              Honor Manage
-                          </TableCell>
-                          <TableCell align="center" header>
-                              Overview Manage
-                          </TableCell>
-                          <TableCell align="center" header>
-                              KVK Manager
-                          </TableCell>
-                      </>
+                    <>
+                      <TableCell align="center" header>
+                        Activity Manage
+                      </TableCell>
+                      <TableCell align="center" header>
+                        Analytics Manage
+                      </TableCell>
+                      <TableCell align="center" header>
+                        KVK Manager
+                      </TableCell>
+                    </>
                   )}
                   <TableCell align="center" header>
                     Approval
@@ -992,73 +990,47 @@ const AdminUserManagement: React.FC = () => {
 
                       {/* 📝 File Management & Special Access */}
                       {showFilePermissionColumns && (
-                          <>
-                              <TableCell align="center">
-                                  <button
-                                      disabled={!canManageFileRightsGranularly}
-                                      onClick={() => updateFileAccess(user, 'canManageActivityFiles', !user.canManageActivityFiles)}
-                                      className={`px-2 py-1 rounded text-xs font-semibold ${
-                                          user.canManageActivityFiles
-                                              ? 'bg-yellow-600 text-white'
-                                              : 'bg-gray-700 text-gray-300'
-                                      } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  >
-                                      {user.canManageActivityFiles ? 'Yes' : 'No'}
-                                  </button>
-                              </TableCell>
-                              <TableCell align="center">
-                                  <button
-                                      disabled={!canManageFileRightsGranularly}
-                                      onClick={() => updateFileAccess(user, 'canManageAnalyticsFiles', !user.canManageAnalyticsFiles)}
-                                      className={`px-2 py-1 rounded text-xs font-semibold ${
-                                          user.canManageAnalyticsFiles
-                                              ? 'bg-yellow-600 text-white'
-                                              : 'bg-gray-700 text-gray-300'
-                                      } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  >
-                                      {user.canManageAnalyticsFiles ? 'Yes' : 'No'}
-                                  </button>
-                              </TableCell>
-                              <TableCell align="center">
-                                  <button
-                                      disabled={!canManageFileRightsGranularly}
-                                      onClick={() => updateFileAccess(user, 'canManageHonorFiles', !user.canManageHonorFiles)}
-                                      className={`px-2 py-1 rounded text-xs font-semibold ${
-                                          user.canManageHonorFiles
-                                              ? 'bg-yellow-600 text-white'
-                                              : 'bg-gray-700 text-gray-300'
-                                      } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  >
-                                      {user.canManageHonorFiles ? 'Yes' : 'No'}
-                                  </button>
-                              </TableCell>
-                              <TableCell align="center">
-                                  <button
-                                      disabled={!canManageFileRightsGranularly}
-                                      onClick={() => updateFileAccess(user, 'canManageOverviewFiles', !user.canManageOverviewFiles)}
-                                      className={`px-2 py-1 rounded text-xs font-semibold ${
-                                          user.canManageOverviewFiles
-                                              ? 'bg-yellow-600 text-white'
-                                              : 'bg-gray-700 text-gray-300'
-                                      } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  >
-                                      {user.canManageOverviewFiles ? 'Yes' : 'No'}
-                                  </button>
-                              </TableCell>
-                              <TableCell align="center">
-                                  <button
-                                      disabled={!canManageFileRightsGranularly}
-                                      onClick={() => updateFileAccess(user, 'canAccessKvkManager', !user.canAccessKvkManager)}
-                                      className={`px-2 py-1 rounded text-xs font-semibold ${
-                                          user.canAccessKvkManager
-                                              ? 'bg-purple-600 text-white'
-                                              : 'bg-gray-700 text-gray-300'
-                                      } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  >
-                                      {user.canAccessKvkManager ? 'Unlocked' : 'Locked'}
-                                  </button>
-                              </TableCell>
-                          </>
+                        <>
+                          <TableCell align="center">
+                            <button
+                              disabled={!canManageFileRightsGranularly}
+                              onClick={() => updateFileAccess(user, 'canManageActivityFiles', !user.canManageActivityFiles)}
+                              className={`px-2 py-1 rounded text-xs font-semibold ${
+                                user.canManageActivityFiles
+                                  ? 'bg-yellow-600 text-white'
+                                  : 'bg-gray-700 text-gray-300'
+                              } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              {user.canManageActivityFiles ? 'Yes' : 'No'}
+                            </button>
+                          </TableCell>
+                          <TableCell align="center">
+                            <button
+                              disabled={!canManageFileRightsGranularly}
+                              onClick={() => updateFileAccess(user, 'canManageAnalyticsFiles', !user.canManageAnalyticsFiles)}
+                              className={`px-2 py-1 rounded text-xs font-semibold ${
+                                user.canManageAnalyticsFiles
+                                  ? 'bg-yellow-600 text-white'
+                                  : 'bg-gray-700 text-gray-300'
+                              } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              {user.canManageAnalyticsFiles ? 'Yes' : 'No'}
+                            </button>
+                          </TableCell>
+                          <TableCell align="center">
+                            <button
+                              disabled={!canManageFileRightsGranularly}
+                              onClick={() => updateFileAccess(user, 'canAccessKvkManager', !user.canAccessKvkManager)}
+                              className={`px-2 py-1 rounded text-xs font-semibold ${
+                                user.canAccessKvkManager
+                                  ? 'bg-purple-600 text-white'
+                                  : 'bg-gray-700 text-gray-300'
+                              } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              {user.canAccessKvkManager ? 'Unlocked' : 'Locked'}
+                            </button>
+                          </TableCell>
+                        </>
                       )}
 
                       {/* Approval */}

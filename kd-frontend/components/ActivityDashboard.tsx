@@ -30,11 +30,17 @@ function useOutsideAlerter(ref: React.RefObject<HTMLElement>, onOutside: () => v
 
 const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendUrl }) => {
   const { user } = useAuth();
+  const role = user?.role;
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string>('');
   const [activityData, setActivityData] = useState<ActivityPlayerInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showDownloadSection, setShowDownloadSection] = useState(false);
+
+  const canManageFiles =
+    isAdmin ||
+    role === 'r5' ||
+    (role === 'r4' && !!user?.canManageActivityFiles);
 
   // ⚖️ Score Gewichtung (mit LocalStorage Persistence)
   const [weights, setWeights] = useState(() => {
@@ -234,53 +240,55 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
 
   return (
     <div className="space-y-8">
-      {/* Header & Upload Bereich */}
-      <div className="space-y-4">
-        <button
-          className="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded shadow-md font-medium flex items-center transition-colors"
-          onClick={() => setShowDownloadSection(prev => !prev)}
-        >
-          <span className="mr-2">⬇️</span>
-          {showDownloadSection ? 'Hide Downloads' : 'Show Downloads'}
-        </button>
+      {/* Header & Upload Bereich (nur mit Berechtigung) */}
+      {canManageFiles && (
+        <div className="space-y-4">
+          <button
+            className="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded shadow-md font-medium flex items-center transition-colors"
+            onClick={() => setShowDownloadSection(prev => !prev)}
+          >
+            <span className="mr-2">⬇️</span>
+            {showDownloadSection ? 'Hide Downloads' : 'Show Downloads'}
+          </button>
 
-        {showDownloadSection && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-              <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
-                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                    </svg>
-                    Upload Weekly Activity
-                 </h3>
-                 <p className="text-sm text-gray-400 mb-4">Upload .xlsx or .csv files containing weekly activity data.</p>
-                 <FileUpload uploadUrl={`${backendUrl}/activity/upload`} onUploadComplete={fetchFiles} />
-              </div>
+          {showDownloadSection && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+                   <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                      Upload Weekly Activity
+                   </h3>
+                   <p className="text-sm text-gray-400 mb-4">Upload .xlsx or .csv files containing weekly activity data.</p>
+                   <FileUpload uploadUrl={`${backendUrl}/activity/upload`} onUploadComplete={fetchFiles} />
+                </div>
 
-              <div>
-                 <FileList
-                    title="Activity History"
-                    files={files}
-                    onDeleteFile={async (id) => {
-                        if(!window.confirm('Delete this file?')) return;
-                        const token = localStorage.getItem('authToken');
-                        await fetch(`${backendUrl}/activity/files/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` }});
-                        fetchFiles();
-                    }}
-                    onReorder={async (newFiles) => {
-                        setFiles(newFiles);
-                        const token = localStorage.getItem('authToken');
-                        await fetch(`${backendUrl}/activity/files/reorder`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                            body: JSON.stringify({ order: newFiles.map(f => f.id) })
-                        });
-                    }}
-                />
-              </div>
-          </div>
-        )}
-      </div>
+                <div>
+                   <FileList
+                      title="Activity History"
+                      files={files}
+                      onDeleteFile={async (id) => {
+                          if(!window.confirm('Delete this file?')) return;
+                          const token = localStorage.getItem('authToken');
+                          await fetch(`${backendUrl}/activity/files/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` }});
+                          fetchFiles();
+                      }}
+                      onReorder={async (newFiles) => {
+                          setFiles(newFiles);
+                          const token = localStorage.getItem('authToken');
+                          await fetch(`${backendUrl}/activity/files/reorder`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ order: newFiles.map(f => f.id) })
+                          });
+                      }}
+                  />
+                </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Daten-Anzeige */}
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 min-h-[500px]">
