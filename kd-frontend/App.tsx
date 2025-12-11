@@ -72,15 +72,18 @@ const AppContent: React.FC = () => {
 
   const canViewActivity = user && (isSuperAdmin || isR5 || isR4);
 
+  // User-Rolle soll dieselbe Ansicht wie der Public-Link sehen können
+  const isUserPublicView = !!publicSlug && user?.role === 'user';
   const isPublicView = !!publicSlug && !user && !isRegisterInvite;
   const isRegistrationInviteView = !!publicSlug && !user && isRegisterInvite;
   const isAdminOverrideView = isSuperAdmin && !!publicSlug; 
-  
-  const showDashboardInterface = user || isAdminOverrideView || isPublicView;
+  const effectivePublicView = isPublicView || isUserPublicView;
+
+  const showDashboardInterface = user || isAdminOverrideView || effectivePublicView;
 
   // 1. VIEW ROUTING & RESET
   useEffect(() => {
-    if (publicSlug && !user && !isRegisterInvite) {
+    if (publicSlug && (!user || user.role === 'user') && !isRegisterInvite) {
         // Reset geschützte Views wenn Public
         if (['admin', 'activity', 'kvk-manager'].includes(activeView)) setActiveView('overview');
     } 
@@ -306,7 +309,7 @@ const AppContent: React.FC = () => {
             <div className="max-w-7xl mx-auto">
                 {activeView === 'overview' && (
                     <PublicOrProtectedRoute
-                    isPublic={isPublicView}
+                    isPublic={effectivePublicView}
                     publicSlug={publicSlug}
                     accessType="overview"
                     isAdminOverride={isAdminOverrideView}
@@ -322,7 +325,7 @@ const AppContent: React.FC = () => {
 
                 {activeView === 'activity' && canViewActivity && (
                     <PublicOrProtectedRoute
-                    isPublic={isPublicView}
+                    isPublic={effectivePublicView}
                     publicSlug={publicSlug}
                     accessType="activity"
                     isAdminOverride={isAdminOverrideView}
@@ -337,7 +340,7 @@ const AppContent: React.FC = () => {
                 {/* 🆕 KVK PUBLIC VIEW: Für alle sichtbar */}
                 {activeView === 'kvk' && (
                     <PublicOrProtectedRoute
-                    isPublic={isPublicView}
+                    isPublic={effectivePublicView}
                     publicSlug={publicSlug}
                     accessType="honor" // Fallback access, falls user eingeloggt ist aber keine expliziten rechte hat
                     isAdminOverride={isAdminOverrideView}
@@ -361,7 +364,7 @@ const AppContent: React.FC = () => {
 
                 {activeView === 'analytics' && (
                     <PublicOrProtectedRoute
-                    isPublic={isPublicView}
+                    isPublic={effectivePublicView}
                     publicSlug={publicSlug}
                     accessType="analytics"
                     isAdminOverride={isAdminOverrideView}
