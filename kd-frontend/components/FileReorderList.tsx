@@ -101,10 +101,16 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
       }
   }
 
+  const titleMap: Record<FileReorderListProps['type'], string> = {
+    overview: 'Analytics Data',
+    honor: 'Honor Data',
+    activity: 'Activity Dateien',
+  };
+
   return (
     <div className="bg-gray-800 p-4 rounded-lg border border-gray-700 mt-4">
       <div className="flex justify-between items-center mb-3">
-          <h3 className="text-lg font-bold text-white capitalize">{type} Dateien</h3>
+          <h3 className="text-lg font-bold text-white capitalize">{titleMap[type] ?? `${type} Dateien`}</h3>
           <div className="flex items-center gap-2">
             {headerAction}
             <button
