@@ -539,18 +539,24 @@ app.post('/api/admin/users/access', authenticateToken, requireAdmin, async (req,
 });
 
 app.post('/api/admin/users/access-files', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
-
     try {
       const { userId, canManageOverviewFiles, canManageHonorFiles, canManageActivityFiles, canManageAnalyticsFiles, canAccessKvkManager } = req.body;
+      const currentUserKingdomId = getKingdomId(req);
+
       if (!userId) return res.status(400).json({ error: 'Benutzer ID wird benötigt' });
 
-      const targetUser = await get('SELECT role FROM users WHERE id = $1', [userId]);
+      const targetUser = await get('SELECT role, kingdom_id FROM users WHERE id = $1', [userId]);
       if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
       if (targetUser.role === 'admin' || userId === req.user.id) {
           return res.status(403).json({ error: 'Kein Zugriff, um diese Benutzerrechte zu ändern.' });
       }
-      
+
+      if (currentUserKingdomId) {
+        if (!targetUser.kingdom_id || targetUser.kingdom_id !== currentUserKingdomId) {
+          return res.status(403).json({ error: 'Zugriff verweigert' });
+        }
+      }
+
       await query(
         `UPDATE users SET can_manage_overview_files=$1, can_manage_honor_files=$2, can_manage_activity_files=$3, can_manage_analytics_files=$4, can_access_kvk_manager=$5 WHERE id=$6`,
         [!!canManageOverviewFiles, !!canManageHonorFiles, !!canManageActivityFiles, !!canManageAnalyticsFiles, !!canAccessKvkManager, userId]
