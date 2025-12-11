@@ -175,6 +175,27 @@ const KvkManager: React.FC = () => {
       }
   };
 
+  const renderUploadButton = (type: 'overview' | 'honor') => {
+    const label = type === 'overview' ? 'Overview' : 'Honor';
+    const colorClasses = type === 'overview'
+      ? 'bg-blue-700 hover:bg-blue-600'
+      : 'bg-purple-700 hover:bg-purple-600';
+
+    return (
+      <div className="relative overflow-hidden group">
+        <button className={`${colorClasses} text-white px-3 py-1.5 rounded shadow-md font-medium flex items-center transition-colors text-xs`}>
+          <span className="mr-2">⬆️</span> Upload {label}
+        </button>
+        <input
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+          onChange={(e) => e.target.files && handleDirectUpload(e.target.files[0], type)}
+        />
+      </div>
+    );
+  };
+
   // --- Fight Logic ---
   const handleAddFight = (e: React.FormEvent) => {
     e.preventDefault();
@@ -332,34 +353,6 @@ const KvkManager: React.FC = () => {
             <h1 className="text-3xl font-bold text-yellow-500 tracking-wide">⚔️ KvK Event Manager</h1>
             <p className="text-gray-400 text-sm mt-1">Configure battle phases and honor tracking ranges.</p>
         </div>
-        
-        <div className="flex flex-wrap gap-3">
-             {/* Unified Upload Button: Overview */}
-             <div className="relative overflow-hidden group">
-                <button className="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded shadow-md font-medium flex items-center transition-colors">
-                    <span className="mr-2">⬆️</span> Upload Overview
-                </button>
-                <input 
-                    type="file" 
-                    accept=".xlsx,.xls,.csv"
-                    className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer" 
-                    onChange={(e) => e.target.files && handleDirectUpload(e.target.files[0], 'overview')}
-                />
-             </div>
-
-             {/* Unified Upload Button: Honor */}
-             <div className="relative overflow-hidden group">
-                <button className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded shadow-md font-medium flex items-center transition-colors">
-                    <span className="mr-2">⬆️</span> Upload Honor
-                </button>
-                <input 
-                    type="file" 
-                    accept=".xlsx,.xls,.csv"
-                    className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer" 
-                    onChange={(e) => e.target.files && handleDirectUpload(e.target.files[0], 'honor')}
-                />
-             </div>
-        </div>
       </div>
 
       {error && <div className="mb-4 p-3 bg-red-900/50 border border-red-500 text-red-200 rounded">{error}</div>}
@@ -408,7 +401,7 @@ const KvkManager: React.FC = () => {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h3 className="text-lg font-bold text-cyan-300">🕛 Event Start Snapshot</h3>
-                <p className="text-xs text-gray-400">Wähle den Tag-0-Scan für Basiswerte (DKP-Ziele &amp; Power-Berechnungen).</p>
+                <p className="text-xs text-gray-400">Choose the day-0 scan to set the baseline for DKP goals and power calculations.</p>
               </div>
             </div>
 
@@ -425,8 +418,8 @@ const KvkManager: React.FC = () => {
               </select>
 
               <div className="text-xs text-gray-500 bg-gray-800/70 border border-dashed border-gray-600 rounded p-3">
-                <p className="font-semibold text-white mb-1">Hinweis</p>
-                <p>Dieser Snapshot setzt die Basis-Power (Tag 0) für DKP-Ziele &amp; Dead-Ziele. Späterer Zuwachs wird darauf angerechnet.</p>
+                <p className="font-semibold text-white mb-1">Note</p>
+                <p>This snapshot sets the base power (day 0) for DKP and dead-troop goals. Any later growth is calculated from here.</p>
               </div>
             </div>
           </div>
@@ -815,19 +808,57 @@ const KvkManager: React.FC = () => {
                                 <span className="w-20 text-xs text-gray-500 uppercase">Honor:</span>
                                 {ev.honorStartFileId && ev.honorEndFileId ? '✅ Configured' : '⚠️ Missing'}
                             </div>
-                            <div className="flex items-center text-amber-300 font-medium">
-                                <span className="w-20 text-xs text-gray-500 uppercase">DKP:</span>
-                                {ev.dkpFormula
-                                  ? `${Object.values(ev.dkpFormula).filter((entry) => entry?.enabled).length} active`
-                                  : '⚠️ Missing'}
+                            <div className="flex items-start text-amber-300 font-medium">
+                                <span className="w-20 text-xs text-gray-500 uppercase mt-0.5">DKP:</span>
+                                {ev.dkpFormula ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {dkpCategories.map(({ key, label }) => {
+                                      const entry = ev.dkpFormula?.[key];
+                                      if (!entry) return null;
+                                      const isActive = entry.enabled;
+                                      return (
+                                        <span
+                                          key={key}
+                                          className={`text-[11px] px-2 py-1 rounded border ${
+                                            isActive
+                                              ? 'bg-amber-500/10 border-amber-400 text-amber-100'
+                                              : 'bg-gray-700 text-gray-400 border-gray-600'
+                                          }`}
+                                        >
+                                          {label}: {isActive ? `${entry.points} pts` : 'off'}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <span className="text-red-400">⚠️ Missing</span>
+                                )}
                             </div>
-                            <div className="flex items-center text-cyan-300 font-medium">
-                                <span className="w-20 text-xs text-gray-500 uppercase">Goals:</span>
-                                {ev.goalsFormula
-                                  ? ev.goalsFormula.powerBrackets?.length
-                                    ? `${ev.goalsFormula.powerBrackets.length} Ranges`
-                                    : `${ev.goalsFormula.basePowerToDkpPercent || 0}% DKP / ${ev.goalsFormula.basePowerToDeadTroopsPercent || 0}% Dead`
-                                  : '⚠️ Missing'}
+                            <div className="flex items-start text-cyan-300 font-medium">
+                                <span className="w-20 text-xs text-gray-500 uppercase mt-0.5">Goals:</span>
+                                {ev.goalsFormula ? (
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-[11px] px-2 py-1 rounded border border-cyan-500/50 bg-cyan-500/5 text-white">
+                                      Base: {ev.goalsFormula.basePowerToDkpPercent || 0}% DKP / {ev.goalsFormula.basePowerToDeadTroopsPercent || 0}% Dead
+                                    </span>
+                                    {ev.goalsFormula.powerBrackets?.length ? (
+                                      <div className="flex flex-col gap-1">
+                                        {ev.goalsFormula.powerBrackets.map((bracket, idx) => (
+                                          <span
+                                            key={`${bracket.minPower}-${bracket.maxPower ?? 'inf'}-${idx}`}
+                                            className="text-[11px] px-2 py-1 rounded border border-cyan-500/30 bg-gray-800/70 text-cyan-100"
+                                          >
+                                            Range {idx + 1}: {bracket.minPower.toLocaleString()} - {bracket.maxPower ? bracket.maxPower.toLocaleString() : '∞'} → {bracket.dkpPercent}% DKP / {bracket.deadPercent}% Dead
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[11px] text-gray-300">No power brackets defined.</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-red-400">⚠️ Missing</span>
+                                )}
                             </div>
                         </div>
                       </td>
@@ -860,8 +891,18 @@ const KvkManager: React.FC = () => {
           <h2 className="text-2xl font-bold text-white mb-6">📂 File Organization</h2>
           <p className="text-gray-400 text-sm mb-4">Drag and drop files to change the default order in history charts.</p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <FileReorderList type="overview" files={overviewFiles} onUpdate={loadData} />
-              <FileReorderList type="honor" files={honorFiles} onUpdate={loadData} />
+              <FileReorderList
+                type="overview"
+                files={overviewFiles}
+                onUpdate={loadData}
+                headerAction={renderUploadButton('overview')}
+              />
+              <FileReorderList
+                type="honor"
+                files={honorFiles}
+                onUpdate={loadData}
+                headerAction={renderUploadButton('honor')}
+              />
           </div>
       </div>
     </div>

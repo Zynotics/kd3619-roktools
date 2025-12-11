@@ -6,9 +6,10 @@ interface FileReorderListProps {
   type: 'overview' | 'honor' | 'activity';
   files: UploadedFile[];
   onUpdate: () => void;
+  headerAction?: React.ReactNode;
 }
 
-const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate }) => {
+const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate, headerAction }) => {
   const [loading, setLoading] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -104,13 +105,16 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
     <div className="bg-gray-800 p-4 rounded-lg border border-gray-700 mt-4">
       <div className="flex justify-between items-center mb-3">
           <h3 className="text-lg font-bold text-white capitalize">{type} Dateien</h3>
-          <button
-            onClick={handleAutoSort}
-            disabled={loading || files.length < 2}
-            className="text-xs bg-blue-700 hover:bg-blue-600 text-white px-3 py-1 rounded transition disabled:opacity-50"
-          >
-            Sort by upload date
-          </button>
+          <div className="flex items-center gap-2">
+            {headerAction}
+            <button
+              onClick={handleAutoSort}
+              disabled={loading || files.length < 2}
+              className="text-xs bg-blue-700 hover:bg-blue-600 text-white px-3 py-1 rounded transition disabled:opacity-50"
+            >
+              Sort by upload date
+            </button>
+          </div>
       </div>
       
       <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
