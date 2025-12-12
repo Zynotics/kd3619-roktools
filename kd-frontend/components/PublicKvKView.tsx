@@ -639,7 +639,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                   {activeEvent.isPublic ? 'Public' : 'Private'}
                 </span>
                 {!activeEvent.isPublic && (
-                  <span className="text-[11px] text-gray-400">Nur für R4/R5 sichtbar, bis es veröffentlicht wird.</span>
+                  <span className="text-[11px] text-gray-400">Visible only to R4/R5 until it is published.</span>
                 )}
               </div>
             )}

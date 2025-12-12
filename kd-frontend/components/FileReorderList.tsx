@@ -24,7 +24,7 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
           await reorderFiles(type, orderIds);
           onUpdate();
       } catch (e) {
-          alert('Fehler beim Speichern der Reihenfolge');
+          alert('Error saving the order');
       } finally {
           setLoading(false);
       }
@@ -40,7 +40,7 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
   };
 
   const handleAutoSort = async () => {
-    if (!window.confirm('Liste wirklich automatisch nach Upload-Datum sortieren? (Älteste zuerst)')) return;
+    if (!window.confirm('Automatically sort the list by upload date? (Oldest first)')) return;
     const sorted = [...files].sort((a, b) => {
         const dA = a.uploadDate ? new Date(a.uploadDate).getTime() : 0;
         const dB = b.uploadDate ? new Date(b.uploadDate).getTime() : 0;
@@ -89,13 +89,13 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
   };
 
   const handleDelete = async (id: string) => {
-      if (!window.confirm('Datei wirklich löschen?')) return;
+      if (!window.confirm('Really delete this file?')) return;
       setLoading(true);
       try {
           await deleteFile(type, id);
           onUpdate();
       } catch (e) {
-          alert('Fehler beim Löschen');
+          alert('Error deleting file');
       } finally {
           setLoading(false);
       }
@@ -104,13 +104,13 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
   const titleMap: Record<FileReorderListProps['type'], string> = {
     overview: 'Analytics Data',
     honor: 'Honor Data',
-    activity: 'Activity Dateien',
+    activity: 'Activity Files',
   };
 
   return (
     <div className="bg-gray-800 p-4 rounded-lg border border-gray-700 mt-4">
       <div className="flex justify-between items-center mb-3">
-          <h3 className="text-lg font-bold text-white capitalize">{titleMap[type] ?? `${type} Dateien`}</h3>
+          <h3 className="text-lg font-bold text-white capitalize">{titleMap[type] ?? `${type} files`}</h3>
           <div className="flex items-center gap-2">
             {headerAction}
             <button
@@ -124,7 +124,7 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
       </div>
       
       <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-        {files.length === 0 && <p className="text-gray-500 text-sm">Keine Dateien.</p>}
+        {files.length === 0 && <p className="text-gray-500 text-sm">No files.</p>}
         {files.map((file, idx) => (
           <div 
             key={file.id} 
@@ -141,7 +141,7 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
                 {/* 🆕 Drag Handle Icon */}
                 <div 
                     className="cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-300 px-1 select-none"
-                    title="Ziehen zum Verschieben"
+                    title="Drag to move"
                 >
                     ⋮⋮
                 </div>
@@ -164,7 +164,7 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
                     <span 
                         onClick={() => { setEditIndex(idx); setEditValue(String(idx + 1)); }}
                         className="text-gray-500 font-mono text-xs w-6 cursor-pointer hover:text-blue-400 text-center select-none"
-                        title="Klicken zum Ändern der Position"
+                        title="Click to change position"
                     >
                         {idx + 1}.
                     </span>
@@ -184,7 +184,7 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
                     onClick={() => handleMove(idx, -1)}
                     disabled={idx === 0 || loading}
                     className="p-1 hover:bg-gray-600 rounded text-blue-400 disabled:opacity-30"
-                    title="Nach oben"
+                    title="Move up"
                 >
                     ▲
                 </button>
@@ -192,7 +192,7 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
                     onClick={() => handleMove(idx, 1)}
                     disabled={idx === files.length - 1 || loading}
                     className="p-1 hover:bg-gray-600 rounded text-blue-400 disabled:opacity-30"
-                    title="Nach unten"
+                    title="Move down"
                 >
                     ▼
                 </button>
@@ -200,7 +200,7 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
                     onClick={() => handleDelete(file.id)}
                     disabled={loading}
                     className="ml-2 p-1 hover:bg-red-900/30 rounded text-red-400 disabled:opacity-30"
-                    title="Löschen"
+                    title="Delete"
                 >
                     ✕
                 </button>

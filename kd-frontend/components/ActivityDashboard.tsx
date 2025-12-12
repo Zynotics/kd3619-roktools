@@ -248,7 +248,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
             onClick={() => setShowDownloadSection(prev => !prev)}
           >
             <span className="mr-2">⬇️</span>
-            {showDownloadSection ? 'Hide Downloads' : 'Show Downloads'}
+            {showDownloadSection ? 'Hide Uploads' : 'Show Uploads'}
           </button>
 
           {showDownloadSection && (
