@@ -411,7 +411,7 @@ const KvkManager: React.FC = () => {
                 value={eventStartId}
                 onChange={e => setEventStartId(e.target.value)}
               >
-                <option value="">-- Event Start Snapshot auswählen --</option>
+                <option value="">-- Select event start snapshot --</option>
                 {overviewFiles.map(f => (
                   <option key={f.id} value={f.id}>{f.name}</option>
                 ))}
