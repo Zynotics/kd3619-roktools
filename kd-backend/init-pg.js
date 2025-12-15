@@ -91,6 +91,23 @@ async function init() {
     );
   `);
 
+  // 📅 KvK Events (wird zusätzlich in db-pg abgesichert)
+  await query(`
+    CREATE TABLE IF NOT EXISTS kvk_events (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      kingdom_id TEXT NOT NULL,
+      is_public BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      fights TEXT,
+      event_start_file_id TEXT,
+      honor_start_file_id TEXT,
+      honor_end_file_id TEXT,
+      dkp_formula TEXT,
+      goals_formula TEXT
+    );
+  `);
+
   // KINGDOMS
   await query(`
     CREATE TABLE IF NOT EXISTS kingdoms (
@@ -112,6 +129,13 @@ async function init() {
       REFERENCES users(id);
   `);
 
+  // 🏰 Default-Kingdom anlegen (für alle bestehenden Daten)
+  await query(`
+    INSERT INTO kingdoms (id, display_name, slug, rok_identifier, status, plan)
+    VALUES ('kdm-default', 'Default Kingdom', 'default-kingdom', NULL, 'active', 'free')
+    ON CONFLICT (id) DO NOTHING;
+  `);
+
   // 🔧 Falls die Files-Tabellen schon existierten: Spalten sicherheitshalber nachziehen
   // (Dies gilt auch für die neue activity_files Tabelle, falls sie manuell erstellt wurde, schadet aber nicht)
   const tables = ['overview_files', 'honor_files', 'activity_files'];
@@ -123,11 +147,43 @@ async function init() {
       `);
   }
 
-  // 🏰 Default-Kingdom anlegen (für alle bestehenden Daten)
+  // ✨ Datenbank-Guardrails: kingdom_id Pflichtfeld + FK auf kingdoms
+  for (const table of tables) {
+      // Fehlende kingdom_id mit Default-Kingdom auffüllen
+      await query(`UPDATE ${table} SET kingdom_id = 'kdm-default' WHERE kingdom_id IS NULL;`);
+      await query(`ALTER TABLE ${table} ALTER COLUMN kingdom_id SET NOT NULL;`);
+      await query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints
+            WHERE constraint_name = '${table}_kingdom_fk'
+              AND table_name = '${table}'
+          ) THEN
+            ALTER TABLE ${table}
+              ADD CONSTRAINT ${table}_kingdom_fk FOREIGN KEY (kingdom_id)
+              REFERENCES kingdoms(id) ON DELETE CASCADE;
+          END IF;
+        END$$;
+      `);
+  }
+
+  // KvK Events: kingdom_id absichern
+  await query(`UPDATE kvk_events SET kingdom_id = 'kdm-default' WHERE kingdom_id IS NULL;`);
+  await query(`ALTER TABLE kvk_events ALTER COLUMN kingdom_id SET NOT NULL;`);
   await query(`
-    INSERT INTO kingdoms (id, display_name, slug, rok_identifier, status, plan)
-    VALUES ('kdm-default', 'Default Kingdom', 'default-kingdom', NULL, 'active', 'free')
-    ON CONFLICT (id) DO NOTHING;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'kvk_events_kingdom_fk'
+          AND table_name = 'kvk_events'
+      ) THEN
+        ALTER TABLE kvk_events
+          ADD CONSTRAINT kvk_events_kingdom_fk FOREIGN KEY (kingdom_id)
+          REFERENCES kingdoms(id) ON DELETE CASCADE;
+      END IF;
+    END$$;
   `);
 
   // 📎 Alle bestehenden Files dem Default-Kingdom zuordnen (falls noch kein kingdom_id)

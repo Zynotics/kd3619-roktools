@@ -137,6 +137,23 @@ async function initKvkTable() {
     // Alte Spalten (start_file_id, end_file_id) könnten hier theoretisch gelöscht werden,
     // aber wir lassen sie zur Sicherheit für Legacy-Zwecke drin oder ignorieren sie einfach.
 
+    // Guardrail: kingdom_id absichern (NOT NULL + FK)
+    await query(`ALTER TABLE kvk_events ALTER COLUMN kingdom_id SET NOT NULL`);
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name = 'kvk_events_kingdom_fk'
+            AND table_name = 'kvk_events'
+        ) THEN
+          ALTER TABLE kvk_events
+            ADD CONSTRAINT kvk_events_kingdom_fk FOREIGN KEY (kingdom_id)
+            REFERENCES kingdoms(id) ON DELETE CASCADE;
+        END IF;
+      END$$;
+    `);
+
     console.log("✅ Postgres: kvk_events Tabelle geprüft/aktualisiert.");
   } catch (e) {
     console.error("⚠️  Fehler beim Initialisieren der kvk_events Tabelle:", e.message);
