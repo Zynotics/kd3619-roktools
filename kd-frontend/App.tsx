@@ -8,15 +8,13 @@ import PowerAnalyticsDashboard from './components/PowerAnalyticsDashboard';
 import LoginPrompt from './components/LoginPrompt';
 import KvkManager from './components/KvkManager';     
 import PublicKvKView from './components/PublicKvKView'; 
-
+import SuperadminKingdomOverview from './components/SuperadminKingdomOverview';
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
     ? 'https://api.rise-of-stats.com'
     : 'http://localhost:4000';
-
-// 🆕 'kvk-manager' als eigener View-Typ hinzugefügt
-type ActiveView = 'overview' | 'kvk' | 'kvk-manager' | 'analytics' | 'admin' | 'activity';
-
+// ðŸ†• 'kvk-manager' als eigener View-Typ hinzugefÃ¼gt
+type ActiveView = 'overview' | 'kvk' | 'kvk-manager' | 'analytics' | 'admin' | 'activity' | 'kingdoms-overview';
 // Sidebar Navigation Item
 const NavItem: React.FC<{
   view: ActiveView;
@@ -30,7 +28,6 @@ const NavItem: React.FC<{
   const baseClasses = 'flex items-center w-full px-4 py-3 text-sm font-medium transition-colors duration-200 rounded-lg group';
   const activeClasses = 'bg-blue-600 text-white shadow-lg shadow-blue-900/50';
   const inactiveClasses = 'text-gray-400 hover:bg-gray-800 hover:text-white';
-
   if (isDisabled) {
     return (
       <div className={`${baseClasses} opacity-50 cursor-not-allowed`} title="Access Denied">
@@ -39,7 +36,6 @@ const NavItem: React.FC<{
       </div>
     );
   }
-
   return (
     <button
       onClick={() => setActiveView(view)}
@@ -52,53 +48,56 @@ const NavItem: React.FC<{
     </button>
   );
 };
-
-
 const AppContent: React.FC = () => {
   const { user, logout, isLoading } = useAuth();
   const [activeView, setActiveView] = useState<ActiveView>('overview');
   const [headerTitle, setHeaderTitle] = useState<string>('Rise of Stats');
-
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
   const isRegisterInvite = queryParams.get('register') === 'true';
-
   const isSuperAdmin = user?.role === 'admin';
   const isR5 = user?.role === 'r5';
   const isR4 = user?.role === 'r4';
   const isAdmin = isSuperAdmin || isR5; 
-  // 🆕 Helper für KvK Manager Zugriff (freischaltbar über Rechte)
-  const canManageKvk = isSuperAdmin || isR5 || isR4 || !!user?.canAccessKvkManager;
-
+  // ðŸ†• Helper fÃ¼r KvK Manager Zugriff (freischaltbar Ã¼ber Rechte)
+  const canManageKvk = !isSuperAdmin && (isR5 || isR4 || !!user?.canAccessKvkManager);
   const canViewActivity = user && (isSuperAdmin || isR5 || isR4);
-
-  // User-Rolle soll dieselbe Ansicht wie der Public-Link sehen können
+  // User-Rolle soll dieselbe Ansicht wie der Public-Link sehen kÃ¶nnen
   const isUserPublicView = !!publicSlug && user?.role === 'user';
   const isPublicView = !!publicSlug && !user && !isRegisterInvite;
   const isRegistrationInviteView = !!publicSlug && !user && isRegisterInvite;
   const isAdminOverrideView = isSuperAdmin && !!publicSlug;
   const effectivePublicView = isPublicView || isUserPublicView;
-
-  const hideStandardNavigation = isSuperAdmin && !publicSlug;
-
+  const isSuperAdminWithoutSlug = isSuperAdmin && !publicSlug;
+  const hideStandardNavigation = isSuperAdminWithoutSlug;
+  const showAdminNavigation = isAdmin || canManageKvk;
+  const showSuperadminKingdomOverview = isSuperAdminWithoutSlug;
   const showDashboardInterface = user || isAdminOverrideView || effectivePublicView;
-
   // 1. VIEW ROUTING & RESET
   useEffect(() => {
     if (publicSlug && (!user || user.role === 'user') && !isRegisterInvite) {
-        // Reset geschützte Views wenn Public
-        if (['admin', 'activity', 'kvk-manager'].includes(activeView)) setActiveView('overview');
+        // Reset gesch?tzte Views wenn Public
+        if (['admin', 'activity', 'kvk-manager', 'kingdoms-overview'].includes(activeView)) setActiveView('overview');
+        return;
     } 
-    else if (isSuperAdmin && !publicSlug && activeView !== 'admin' && activeView !== 'kvk-manager') {
-        // Superadmin ohne Slug landet nicht zwingend auf Admin, aber kann
-        if (activeView === 'overview') setActiveView('admin');
+    if (isRegistrationInviteView) {
+        if (activeView !== 'overview') {
+            setActiveView('overview');
+        }
+        return;
     }
-    else if (isRegistrationInviteView) {
+    if (isSuperAdminWithoutSlug) {
+        if (activeView !== 'kingdoms-overview' && activeView !== 'admin') {
+            setActiveView('kingdoms-overview');
+        }
+        if (activeView === 'kvk-manager') {
+            setActiveView('kingdoms-overview');
+        }
+    }
+    if (!isSuperAdminWithoutSlug && activeView === 'kingdoms-overview') {
         setActiveView('overview');
     }
-  }, [publicSlug, isSuperAdmin, activeView, user, isRegisterInvite, isRegistrationInviteView]);
-
-
+  }, [publicSlug, isSuperAdminWithoutSlug, activeView, user, isRegisterInvite, isRegistrationInviteView]);
   // 2. R5/R4 REDIRECT
   useEffect(() => {
     const redirectToSlug = async () => {
@@ -124,8 +123,6 @@ const AppContent: React.FC = () => {
     };
     if (!isLoading) redirectToSlug();
   }, [user, isLoading, publicSlug, isSuperAdmin]);
-
-
   // 3. DYNAMISCHER HEADER TITEL
   useEffect(() => {
     const fetchTitle = async () => {
@@ -154,8 +151,6 @@ const AppContent: React.FC = () => {
     };
     fetchTitle();
   }, [publicSlug, user, isSuperAdmin]);
-
-
   if (!showDashboardInterface && !isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-4">
@@ -199,7 +194,6 @@ const AppContent: React.FC = () => {
              {headerTitle.length > 15 ? headerTitle.substring(0,15)+'...' : headerTitle}
            </span>
         </div>
-
         <div className="flex-1 overflow-y-auto px-4 py-6 space-y-2">
             {!hideStandardNavigation && (
               <>
@@ -210,8 +204,7 @@ const AppContent: React.FC = () => {
                   label="Analytics"
                   icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>}
                 />
-
-                {/* 🔒 Activity */}
+                {/* Activity */}
                 {canViewActivity && (
                   <NavItem
                     view="activity"
@@ -221,8 +214,7 @@ const AppContent: React.FC = () => {
                     icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>}
                   />
                 )}
-
-                {/* 🆕 KVK Ansicht (Für ALLE) */}
+                {/* KvK Ansicht */}
                 <NavItem
                   view="kvk"
                   currentActiveView={activeView}
@@ -230,7 +222,6 @@ const AppContent: React.FC = () => {
                   label="KvK"
                   icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
                 />
-
                 <NavItem
                   view="analytics"
                   currentActiveView={activeView}
@@ -240,23 +231,30 @@ const AppContent: React.FC = () => {
                 />
               </>
             )}
-
             {/* ========== ADMINISTRATION BEREICH ========== */}
-            {canManageKvk && (
+            {showAdminNavigation && (
               <div className="pt-4 mt-4 border-t border-gray-800">
                 <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   Administration
                 </p>
-                
-                {/* 🆕 KvK Manager (Nur R4/R5/Admin) */}
-                <NavItem
-                  view="kvk-manager"
-                  currentActiveView={activeView}
-                  setActiveView={setActiveView}
-                  label="KvK Manager"
-                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>}
-                />
-
+                {showSuperadminKingdomOverview && (
+                  <NavItem
+                    view="kingdoms-overview"
+                    currentActiveView={activeView}
+                    setActiveView={setActiveView}
+                    label="Königreiche"
+                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.326 0 2.402-1.105 2.402-2.468S13.326 6.064 12 6.064s-2.402 1.105-2.402 2.468S10.674 11 12 11z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.732 19.5a6.27 6.27 0 0112.536 0M4.5 7.5h15M4.5 12h15" /></svg>}
+                  />
+                )}
+                {canManageKvk && (
+                  <NavItem
+                    view="kvk-manager"
+                    currentActiveView={activeView}
+                    setActiveView={setActiveView}
+                    label="KvK Manager"
+                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>}
+                  />
+                )}
                 {isAdmin && (
                   <NavItem
                     view="admin"
@@ -269,7 +267,6 @@ const AppContent: React.FC = () => {
               </div>
             )}
         </div>
-
         {/* Sidebar Footer (User Info) */}
         <div className="p-4 border-t border-gray-800 bg-gray-900/50">
             {user ? (
@@ -292,7 +289,6 @@ const AppContent: React.FC = () => {
             )}
         </div>
       </aside>
-
       {/* ================= MAIN CONTENT WRAPPER ================= */}
       <div className="lg:pl-64 flex flex-col min-h-screen">
         
@@ -309,10 +305,15 @@ const AppContent: React.FC = () => {
                 </button>
              )}
         </header>
-
         {/* Content Area */}
         <main className="flex-1 py-8 px-4 sm:px-6 lg:px-8 bg-black/20">
             <div className="max-w-7xl mx-auto">
+                {activeView === 'kingdoms-overview' && showSuperadminKingdomOverview && (
+                    <ProtectedRoute accessType='admin'>
+                      <SuperadminKingdomOverview />
+                    </ProtectedRoute>
+                )}
+
                 {activeView === 'overview' && (
                     <PublicOrProtectedRoute
                     isPublic={effectivePublicView}
@@ -328,7 +329,6 @@ const AppContent: React.FC = () => {
                     />
                     </PublicOrProtectedRoute>
                 )}
-
                 {activeView === 'activity' && canViewActivity && (
                     <PublicOrProtectedRoute
                     isPublic={effectivePublicView}
@@ -342,8 +342,7 @@ const AppContent: React.FC = () => {
                     />
                     </PublicOrProtectedRoute>
                 )}
-
-                {/* 🆕 KVK PUBLIC VIEW: Für alle sichtbar */}
+                {/* ðŸ†• KVK PUBLIC VIEW: FÃ¼r alle sichtbar */}
                 {activeView === 'kvk' && (
                     <PublicOrProtectedRoute
                     isPublic={effectivePublicView}
@@ -354,8 +353,7 @@ const AppContent: React.FC = () => {
                       <PublicKvKView kingdomSlug={publicSlug || ''} />
                     </PublicOrProtectedRoute>
                 )}
-
-                {/* 🆕 KVK MANAGER VIEW: Nur für Admins/R4/R5 */}
+                {/* ðŸ†• KVK MANAGER VIEW: Nur fÃ¼r Admins/R4/R5 */}
                 {activeView === 'kvk-manager' && canManageKvk && (
                    <PublicOrProtectedRoute
                    isPublic={false} // Immer privat
@@ -366,8 +364,6 @@ const AppContent: React.FC = () => {
                      <KvkManager />
                    </PublicOrProtectedRoute>
                 )}
-
-
                 {activeView === 'analytics' && (
                     <PublicOrProtectedRoute
                     isPublic={effectivePublicView}
@@ -383,7 +379,6 @@ const AppContent: React.FC = () => {
                     />
                     </PublicOrProtectedRoute>
                 )}
-
                 {activeView === 'admin' && user && isAdmin && (
                     <ProtectedRoute accessType='admin'>
                     <AdminUserManagement />
@@ -391,12 +386,10 @@ const AppContent: React.FC = () => {
                 )}
             </div>
         </main>
-
       </div>
     </div>
   );
 };
-
 interface PublicOrProtectedRouteProps {
   children: React.ReactNode;
   isPublic: boolean;
@@ -404,7 +397,6 @@ interface PublicOrProtectedRouteProps {
   accessType: 'overview' | 'honor' | 'analytics' | 'activity' | 'admin';
   isAdminOverride: boolean;
 }
-
 const PublicOrProtectedRoute: React.FC<PublicOrProtectedRouteProps> = ({
   children,
   isPublic,
@@ -424,7 +416,6 @@ const PublicOrProtectedRoute: React.FC<PublicOrProtectedRouteProps> = ({
   }
   return <ProtectedRoute accessType={accessType}>{children}</ProtectedRoute>;
 };
-
 const App: React.FC = () => {
   return (
     <AuthProvider>
@@ -432,5 +423,4 @@ const App: React.FC = () => {
     </AuthProvider>
   );
 };
-
 export default App;
