@@ -90,17 +90,18 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   const fetchFiles = useCallback(async () => {
     const shouldUsePublicEndpoint = !!publicSlug;
     if ((isPublicView || isAdminOverride) && !publicSlug) { setError('Slug missing'); setIsLoading(false); return; }
+    const adminSlugQuery = isAdminOverride && publicSlug ? `?slug=${publicSlug}` : '';
 
     try {
       setIsLoading(true); setError(null);
       let response: Response;
-      
+
       if (shouldUsePublicEndpoint) {
         response = await fetch(`${backendUrl}/api/public/kingdom/${publicSlug}/overview-files`);
       } else {
         const token = localStorage.getItem('authToken');
         if (!token) throw new Error('Authentication token not found.');
-        response = await fetch(`${backendUrl}/overview/files-data`, { headers: { Authorization: `Bearer ${token}` } });
+        response = await fetch(`${backendUrl}/overview/files-data${adminSlugQuery}`, { headers: { Authorization: `Bearer ${token}` } });
       }
 
       if (!response.ok) {

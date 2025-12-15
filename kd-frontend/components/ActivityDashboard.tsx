@@ -9,6 +9,8 @@ import type { UploadedFile, ActivityPlayerInfo } from '../types';
 interface ActivityDashboardProps {
   isAdmin: boolean;
   backendUrl: string;
+  publicSlug: string | null;
+  isAdminOverride: boolean;
 }
 
 interface ScoredPlayerInfo extends ActivityPlayerInfo {
@@ -28,7 +30,7 @@ function useOutsideAlerter(ref: React.RefObject<HTMLElement>, onOutside: () => v
     }, [ref, onOutside]);
 }
 
-const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendUrl }) => {
+const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendUrl, publicSlug, isAdminOverride }) => {
   const { user } = useAuth();
   const role = user?.role;
   const [files, setFiles] = useState<UploadedFile[]>([]);
@@ -41,6 +43,11 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
     isAdmin ||
     role === 'r5' ||
     (role === 'r4' && !!user?.canManageActivityFiles);
+
+  const adminSlugQuery = useMemo(
+    () => (isAdminOverride && publicSlug ? `?slug=${publicSlug}` : ''),
+    [isAdminOverride, publicSlug]
+  );
 
   // ⚖️ Score Gewichtung (mit LocalStorage Persistence)
   const [weights, setWeights] = useState(() => {
@@ -80,7 +87,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
     try {
       setIsLoading(true);
       const token = localStorage.getItem('authToken');
-      const res = await fetch(`${backendUrl}/activity/files-data`, {
+      const res = await fetch(`${backendUrl}/activity/files-data${adminSlugQuery}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -102,7 +109,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
     } finally { 
         setIsLoading(false); 
     }
-  }, [backendUrl, selectedFileId]);
+  }, [backendUrl, selectedFileId, adminSlugQuery]);
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
@@ -261,7 +268,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                       Upload Weekly Activity
                    </h3>
                    <p className="text-sm text-gray-400 mb-4">Upload .xlsx or .csv files containing weekly activity data.</p>
-                   <FileUpload uploadUrl={`${backendUrl}/activity/upload`} onUploadComplete={fetchFiles} />
+                   <FileUpload uploadUrl={`${backendUrl}/activity/upload${adminSlugQuery}`} onUploadComplete={fetchFiles} />
                 </div>
 
                 <div>

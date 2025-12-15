@@ -48,7 +48,10 @@ const formatLocalizedDecimalValue = (value: number) => {
 
 const KvkManager: React.FC = () => {
   const { token, user } = useAuth();
-  
+  const queryParams = new URLSearchParams(window.location.search);
+  const publicSlug = queryParams.get('slug');
+  const adminSlugQuery = user?.role === 'admin' && publicSlug ? `?slug=${publicSlug}` : '';
+
   // --- Data State ---
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [overviewFiles, setOverviewFiles] = useState<UploadedFile[]>([]);
@@ -92,12 +95,12 @@ const KvkManager: React.FC = () => {
       const eventsData = await fetchKvkEvents();
       setEvents(eventsData);
 
-      const ovRes = await fetch(`${API_BASE_URL}/overview/files-data`, {
+      const ovRes = await fetch(`${API_BASE_URL}/overview/files-data${adminSlugQuery}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (ovRes.ok) setOverviewFiles(await ovRes.json());
 
-      const honRes = await fetch(`${API_BASE_URL}/honor/files-data`, {
+      const honRes = await fetch(`${API_BASE_URL}/honor/files-data${adminSlugQuery}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (honRes.ok) setHonorFiles(await honRes.json());

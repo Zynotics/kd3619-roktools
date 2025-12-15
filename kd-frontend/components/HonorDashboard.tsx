@@ -35,6 +35,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
 
   const fetchFiles = useCallback(async () => {
     const shouldUsePublic = !!publicSlug;
+    const adminSlugQuery = isAdminOverride && publicSlug ? `?slug=${publicSlug}` : '';
 
     try {
       setIsLoading(true); setError(null);
@@ -44,7 +45,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       } else {
         const token = localStorage.getItem('authToken');
         if (!token) throw new Error('Authentication token not found.');
-        response = await fetch(`${backendUrl}/honor/files-data`, { headers: { Authorization: `Bearer ${token}` } });
+        response = await fetch(`${backendUrl}/honor/files-data${adminSlugQuery}`, { headers: { Authorization: `Bearer ${token}` } });
       }
 
       if (!response.ok) {
@@ -61,7 +62,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
     } catch (err: any) {
        setError(err.message);
     } finally { setIsLoading(false); }
-  }, [backendUrl, publicSlug]);
+  }, [backendUrl, publicSlug, isAdminOverride]);
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
