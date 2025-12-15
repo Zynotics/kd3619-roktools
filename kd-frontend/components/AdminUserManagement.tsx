@@ -91,6 +91,12 @@ const AdminUserManagement: React.FC = () => {
   // 📝 Hinzugefügt: Temporäre Erfolgsnachricht (ersetzt alerts)
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // 🆕 Superadmin Filter & Suche
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
+  const [kingdomFilter, setKingdomFilter] = useState<string>('all');
+  const [approvalFilter, setApprovalFilter] = useState<'all' | 'approved' | 'blocked'>('all');
+
 
   const { user: currentUser, refreshUser } = useAuth();
 
@@ -808,6 +814,32 @@ const AdminUserManagement: React.FC = () => {
 
   const showFilePermissionColumns = isSuperAdmin || currentUser?.role === 'r5';
 
+  const filteredUsers = users.filter((u) => {
+    const term = searchTerm.trim().toLowerCase();
+    const matchesSearch = !isSuperAdmin || !term
+      ? true
+      : [u.username, u.email, u.governorId || ''].some((field) => field?.toLowerCase().includes(term));
+
+    const matchesRole = roleFilter === 'all' ? true : u.role === roleFilter;
+
+    const matchesKingdom = (() => {
+      if (kingdomFilter === 'all') return true;
+      if (kingdomFilter === 'none') return !u.kingdomId;
+      return u.kingdomId === kingdomFilter;
+    })();
+
+    const matchesApproval =
+      approvalFilter === 'all'
+        ? true
+        : approvalFilter === 'approved'
+          ? u.isApproved
+          : !u.isApproved;
+
+    return matchesSearch && matchesRole && matchesKingdom && matchesApproval;
+  });
+
+  const displayedUsers = isSuperAdmin ? filteredUsers : users;
+
   return (
     <div className="space-y-6">
       {/* USER MANAGEMENT */}
@@ -855,6 +887,61 @@ const AdminUserManagement: React.FC = () => {
                     Copy Link
                 </button>
             </Card>
+        )}
+
+        {isSuperAdmin && (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+            <div className="flex flex-col">
+              <label className="text-xs text-gray-400 mb-1">Search (Username, Email, Governor ID)</label>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Start typing..."
+              />
+            </div>
+            <div className="flex flex-col">
+              <label className="text-xs text-gray-400 mb-1">Role</label>
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as UserRole | 'all')}
+                className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="all">All roles</option>
+                <option value="user">User</option>
+                <option value="r4">R4</option>
+                <option value="r5">R5</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div className="flex flex-col">
+              <label className="text-xs text-gray-400 mb-1">Kingdom</label>
+              <select
+                value={kingdomFilter}
+                onChange={(e) => setKingdomFilter(e.target.value)}
+                className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="all">All kingdoms</option>
+                <option value="none">Unassigned</option>
+                {kingdoms.map((k) => (
+                  <option key={k.id} value={k.id}>{k.displayName || k.slug}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col">
+              <label className="text-xs text-gray-400 mb-1">Approval</label>
+              <select
+                value={approvalFilter}
+                onChange={(e) => setApprovalFilter(e.target.value as 'all' | 'approved' | 'blocked')}
+                className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="all">All</option>
+                <option value="approved">Approved</option>
+                <option value="blocked">Pending/Blocked</option>
+              </select>
+            </div>
+          </div>
         )}
 
         {userError && (
@@ -917,7 +1004,7 @@ const AdminUserManagement: React.FC = () => {
                 </tr>
               </TableHeader>
               <tbody>
-                {users.map((user) => {
+                {displayedUsers.map((user) => {
                   const isSelf = user.id === currentUser?.id;
                   const isAdminUser = user.role === 'admin';
                   const userKingdom = kingdoms.find(k => k.id === user.kingdomId);
@@ -1083,7 +1170,7 @@ const AdminUserManagement: React.FC = () => {
               </tbody>
             </Table>
 
-            {users.length === 0 && !isLoadingUsers && (
+            {displayedUsers.length === 0 && !isLoadingUsers && (
               <div className="text-center text-gray-400 py-4">
                 No users found
               </div>
