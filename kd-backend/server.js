@@ -195,6 +195,28 @@ async function ensureFilesBelongToKingdom(fileIds = [], kingdomId) {
   }
 }
 
+// Ermittelt das Ziel-Königreich anhand des Slugs (Query-Param) oder des eingeloggten Users
+async function resolveKingdomIdFromRequest(req, { allowDefaultForAdmin = false } = {}) {
+  const { role, kingdomId } = req.user || {};
+  let targetKingdomId = kingdomId || null;
+
+  if (req.query && req.query.slug) {
+    const k = await findKingdomBySlug(req.query.slug);
+    if (!k) throw new Error('Ungültiger Kingdom-Slug');
+    targetKingdomId = k.id;
+  }
+
+  if (!targetKingdomId && allowDefaultForAdmin && role === 'admin') {
+    targetKingdomId = 'kdm-default';
+  }
+
+  if (!targetKingdomId) {
+    throw new Error('Kein Kingdom-Kontext gefunden');
+  }
+
+  return targetKingdomId;
+}
+
 // ==================== MULTER CONFIG ====================
 const overviewStorage = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, uploadsOverviewDir); },
@@ -970,20 +992,14 @@ app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
 
 // 1. OVERVIEW (Shared by Analytics & KvK Manager)
 app.get('/overview/files-data', authenticateToken, async (req, res) => {
-    const { role, kingdomId } = req.user;
-
-    let targetK = kingdomId;
-    if (role === 'admin' && req.query.slug) {
-        const k = await findKingdomBySlug(req.query.slug);
-        if (k) targetK = k.id;
+    try {
+        const kId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+        // Sortiere nach uploaddate (lowercase für PG)
+        const rows = await all(`SELECT * FROM overview_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploaddate ASC`, [kId]);
+        res.json(rows.map(normalizeFileRow));
+    } catch (error) {
+        res.status(400).json({ error: error.message });
     }
-
-    const kId = targetK || (role === 'admin' ? 'kdm-default' : null);
-    if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
-    
-    // Sortiere nach uploaddate (lowercase für PG)
-    const rows = await all(`SELECT * FROM overview_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploaddate ASC`, [kId]);
-    res.json(rows.map(normalizeFileRow));
 });
 
 app.post('/overview/upload', authenticateToken, overviewUpload.single('file'), async (req, res) => {
@@ -993,13 +1009,12 @@ app.post('/overview/upload', authenticateToken, overviewUpload.single('file'), a
          return res.status(403).json({ error: 'Keine Berechtigung zum Hochladen.' });
     }
     
-    let targetK = kingdomId;
-    if (role === 'admin' && req.query.slug) {
-        const k = await findKingdomBySlug(req.query.slug);
-        if (k) targetK = k.id;
+    let finalK;
+    try {
+        finalK = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+    } catch (error) {
+        return res.status(400).json({ error: error.message });
     }
-    const finalK = targetK || (role === 'admin' ? 'kdm-default' : null);
-    if (!finalK) return res.status(403).json({ error: 'Kein Ziel-Königreich' });
     if (!req.file) return res.status(400).json({ error: 'No file' });
 
     try {
@@ -1015,29 +1030,35 @@ app.post('/overview/upload', authenticateToken, overviewUpload.single('file'), a
 });
 
 app.delete('/overview/files/:id', authenticateToken, async (req, res) => {
-    const f = await get('SELECT kingdom_id, path FROM overview_files WHERE id=$1', [req.params.id]);
-    if (!f) return res.status(404).json({ error: 'Not found' });
-    
-    if (!hasFileManagementAccess(req, 'overview') && req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-    if (req.user.role !== 'admin' && f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
+    try {
+        let targetKingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+        const f = await get('SELECT kingdom_id, path FROM overview_files WHERE id=$1', [req.params.id]);
+        if (!f) return res.status(404).json({ error: 'Not found' });
 
-    if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
-    await query('DELETE FROM overview_files WHERE id=$1', [req.params.id]);
-    res.json({ success: true });
+        if (!hasFileManagementAccess(req, 'overview') && req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+        if (req.user.role === 'admin' && !req.query.slug) {
+            targetKingdomId = f.kingdom_id;
+        }
+        if (f.kingdom_id !== targetKingdomId && req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+        if (req.user.role === 'admin' && req.query.slug && f.kingdom_id !== targetKingdomId) return res.status(403).json({ error: 'Forbidden' });
+
+        if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
+        await query('DELETE FROM overview_files WHERE id=$1 AND kingdom_id = $2', [req.params.id, targetKingdomId]);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
 });
 
 app.post('/overview/files/reorder', authenticateToken, async (req, res) => {
     const { order } = req.body;
     if (!order || !Array.isArray(order) || order.length === 0) return res.status(400).json({ error: 'Invalid' });
     if (!hasFileManagementAccess(req, 'overview') && req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-    
-    if (order.length > 0 && req.user.role !== 'admin') {
-        const f = await get('SELECT kingdom_id FROM overview_files WHERE id=$1', [order[0]]);
-        if (!f || f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
-    }
 
     try {
-        for (let i = 0; i < order.length; i++) await query('UPDATE overview_files SET fileOrder = $1 WHERE id = $2', [i, order[i]]);
+        const targetKingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+        await ensureFilesBelongToKingdom(order, targetKingdomId);
+        for (let i = 0; i < order.length; i++) await query('UPDATE overview_files SET fileOrder = $1 WHERE id = $2 AND kingdom_id = $3', [i, order[i], targetKingdomId]);
         res.json({ success: true });
     } catch(e) {
         // Fallback: Postgres könnte lowercase 'fileorder' nutzen
@@ -1050,20 +1071,14 @@ app.post('/overview/files/reorder', authenticateToken, async (req, res) => {
 
 // 2. HONOR
 app.get('/honor/files-data', authenticateToken, async (req, res) => {
-    const { role, kingdomId } = req.user;
-
-    let targetK = kingdomId;
-    if (role === 'admin' && req.query.slug) {
-        const k = await findKingdomBySlug(req.query.slug);
-        if (k) targetK = k.id;
+    try {
+        const kId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+        // uploaddate (lowercase) sortieren, normalizeFileRow für CamelCase Output
+        const rows = await all(`SELECT * FROM honor_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploaddate ASC`, [kId]);
+        res.json(rows.map(normalizeFileRow));
+    } catch (error) {
+        res.status(400).json({ error: error.message });
     }
-
-    const kId = targetK || (role === 'admin' ? 'kdm-default' : null);
-    if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
-    
-    // uploaddate (lowercase) sortieren, normalizeFileRow für CamelCase Output
-    const rows = await all(`SELECT * FROM honor_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploaddate ASC`, [kId]);
-    res.json(rows.map(normalizeFileRow));
 });
 
 app.post('/honor/upload', authenticateToken, honorUpload.single('file'), async (req, res) => {
@@ -1071,12 +1086,12 @@ app.post('/honor/upload', authenticateToken, honorUpload.single('file'), async (
     
     if (!hasFileManagementAccess(req, 'honor') && role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     
-    let targetK = kingdomId;
-    if (role === 'admin' && req.query.slug) {
-        const k = await findKingdomBySlug(req.query.slug);
-        if (k) targetK = k.id;
+    let finalK;
+    try {
+        finalK = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+    } catch (error) {
+        return res.status(400).json({ error: error.message });
     }
-    const finalK = targetK || (role === 'admin' ? 'kdm-default' : null);
     if (!finalK || !req.file) return res.status(400).json({ error: 'Error' });
 
     try {
@@ -1091,14 +1106,23 @@ app.post('/honor/upload', authenticateToken, honorUpload.single('file'), async (
 });
 
 app.delete('/honor/files/:id', authenticateToken, async (req, res) => {
-    const f = await get('SELECT kingdom_id, path FROM honor_files WHERE id=$1', [req.params.id]);
-    if (!f) return res.status(404).json({ error: 'Not found' });
-    if (!hasFileManagementAccess(req, 'honor') && req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-    if (req.user.role !== 'admin' && f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
+    try {
+        let targetKingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+        const f = await get('SELECT kingdom_id, path FROM honor_files WHERE id=$1', [req.params.id]);
+        if (!f) return res.status(404).json({ error: 'Not found' });
+        if (!hasFileManagementAccess(req, 'honor') && req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+        if (req.user.role === 'admin' && !req.query.slug) {
+            targetKingdomId = f.kingdom_id;
+        }
+        if (f.kingdom_id !== targetKingdomId && req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+        if (req.user.role === 'admin' && req.query.slug && f.kingdom_id !== targetKingdomId) return res.status(403).json({ error: 'Forbidden' });
 
-    if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
-    await query('DELETE FROM honor_files WHERE id=$1', [req.params.id]);
-    res.json({ success: true });
+        if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
+        await query('DELETE FROM honor_files WHERE id=$1 AND kingdom_id = $2', [req.params.id, targetKingdomId]);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
 });
 
 app.post('/honor/files/reorder', authenticateToken, async (req, res) => {
@@ -1106,7 +1130,9 @@ app.post('/honor/files/reorder', authenticateToken, async (req, res) => {
     if (!hasFileManagementAccess(req, 'honor') && req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     
     try {
-        for (let i = 0; i < order.length; i++) await query('UPDATE honor_files SET fileOrder = $1 WHERE id = $2', [i, order[i]]);
+        const targetKingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+        await ensureFilesBelongToKingdom(order, targetKingdomId);
+        for (let i = 0; i < order.length; i++) await query('UPDATE honor_files SET fileOrder = $1 WHERE id = $2 AND kingdom_id = $3', [i, order[i], targetKingdomId]);
         res.json({ success: true });
     } catch(e) {
         try {
@@ -1120,32 +1146,25 @@ app.post('/honor/files/reorder', authenticateToken, async (req, res) => {
 app.get('/activity/files-data', authenticateToken, async (req, res) => {
     if (!['admin', 'r5', 'r4'].includes(req.user.role)) return res.status(403).json({ error: 'Kein Zugriff' });
 
-    const { role, kingdomId } = req.user;
-
-    let targetK = kingdomId;
-    if (role === 'admin' && req.query.slug) {
-        const k = await findKingdomBySlug(req.query.slug);
-        if (k) targetK = k.id;
+    try {
+        const kId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+        const rows = await all(`SELECT * FROM activity_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploaddate`, [kId]);
+        res.json(rows.map(normalizeFileRow));
+    } catch (error) {
+        res.status(400).json({ error: error.message });
     }
-
-    const kId = targetK || (role === 'admin' ? 'kdm-default' : null);
-
-    if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
-
-    const rows = await all(`SELECT * FROM activity_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploaddate`, [kId]);
-    res.json(rows.map(normalizeFileRow));
 });
 
 app.post('/activity/upload', authenticateToken, activityUpload.single('file'), async (req, res) => {
     const { role, kingdomId, id: userId } = req.user;
     if (!hasFileManagementAccess(req, 'activity')) return res.status(403).json({ error: 'Forbidden' });
-    
-    let targetK = kingdomId;
-    if (role === 'admin' && req.query.slug) {
-        const k = await findKingdomBySlug(req.query.slug);
-        if (k) targetK = k.id;
+
+    let finalK;
+    try {
+        finalK = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+    } catch (error) {
+        return res.status(400).json({ error: error.message });
     }
-    const finalK = targetK || (role === 'admin' ? 'kdm-default' : null);
     if (!finalK || !req.file) return res.status(400).json({ error: 'Error' });
 
     try {
@@ -1163,14 +1182,23 @@ app.post('/activity/upload', authenticateToken, activityUpload.single('file'), a
 });
 
 app.delete('/activity/files/:id', authenticateToken, async (req, res) => {
-    const f = await get('SELECT kingdom_id, path FROM activity_files WHERE id=$1', [req.params.id]);
-    if (!f) return res.status(404).json({ error: 'Not found' });
-    if (!hasFileManagementAccess(req, 'activity')) return res.status(403).json({ error: 'Forbidden' });
-    if (req.user.role !== 'admin' && f.kingdom_id !== req.user.kingdomId) return res.status(403).json({ error: 'Forbidden' });
+    try {
+        let targetKingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+        const f = await get('SELECT kingdom_id, path FROM activity_files WHERE id=$1', [req.params.id]);
+        if (!f) return res.status(404).json({ error: 'Not found' });
+        if (!hasFileManagementAccess(req, 'activity')) return res.status(403).json({ error: 'Forbidden' });
+        if (req.user.role === 'admin' && !req.query.slug) {
+            targetKingdomId = f.kingdom_id;
+        }
+        if (f.kingdom_id !== targetKingdomId && req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+        if (req.user.role === 'admin' && req.query.slug && f.kingdom_id !== targetKingdomId) return res.status(403).json({ error: 'Forbidden' });
 
-    if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
-    await query('DELETE FROM activity_files WHERE id=$1', [req.params.id]);
-    res.json({ success: true });
+        if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
+        await query('DELETE FROM activity_files WHERE id=$1 AND kingdom_id = $2', [req.params.id, targetKingdomId]);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
 });
 
 app.post('/activity/files/reorder', authenticateToken, async (req, res) => {
@@ -1178,7 +1206,9 @@ app.post('/activity/files/reorder', authenticateToken, async (req, res) => {
     if (!hasFileManagementAccess(req, 'activity')) return res.status(403).json({ error: 'Forbidden' });
     
     try {
-        for (let i = 0; i < order.length; i++) await query('UPDATE activity_files SET fileOrder = $1 WHERE id = $2', [i, order[i]]);
+        const targetKingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+        await ensureFilesBelongToKingdom(order, targetKingdomId);
+        for (let i = 0; i < order.length; i++) await query('UPDATE activity_files SET fileOrder = $1 WHERE id = $2 AND kingdom_id = $3', [i, order[i], targetKingdomId]);
         res.json({ success: true });
     } catch(e) {
         try {
