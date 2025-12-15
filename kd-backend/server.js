@@ -172,6 +172,29 @@ async function findKingdomBySlug(slug) {
   }
 }
 
+// Prüft, ob übergebene Datei-IDs zum angegebenen Königreich gehören
+async function ensureFilesBelongToKingdom(fileIds = [], kingdomId) {
+  if (!kingdomId) throw new Error('Kein Königreich angegeben');
+
+  for (const fileId of fileIds.filter(Boolean)) {
+    const table = fileId.startsWith('ov-')
+      ? 'overview_files'
+      : fileId.startsWith('hon-')
+        ? 'honor_files'
+        : fileId.startsWith('act-')
+          ? 'activity_files'
+          : null;
+
+    if (!table) throw new Error(`Unbekannter Dateityp für ${fileId}`);
+
+    const record = await get(`SELECT kingdom_id FROM ${table} WHERE id = $1`, [fileId]);
+    if (!record) throw new Error(`Datei ${fileId} wurde nicht gefunden.`);
+    if (record.kingdom_id !== kingdomId) {
+      throw new Error(`Datei ${fileId} gehört nicht zu diesem Königreich.`);
+    }
+  }
+}
+
 // ==================== MULTER CONFIG ====================
 const overviewStorage = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, uploadsOverviewDir); },
@@ -813,6 +836,12 @@ app.post('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (r
       return res.status(400).json({ error: 'Name ist erforderlich.' });
     }
 
+    try {
+      await ensureFilesBelongToKingdom([eventStartFileId, honorStartFileId, honorEndFileId], targetKingdomId);
+    } catch (validationError) {
+      return res.status(400).json({ error: validationError.message });
+    }
+
     const newEvent = {
       id: 'kvk-' + Date.now(),
       name,
@@ -845,9 +874,15 @@ app.put('/api/admin/kvk/events/:id', authenticateToken, requireKvkManager, async
     // Check ownership
     const existing = await getKvkEventById(eventId);
     if (!existing) return res.status(404).json({ error: 'Event nicht gefunden' });
-    
+
     if (req.user.role !== 'admin' && existing.kingdomId !== req.user.kingdomId) {
       return res.status(403).json({ error: 'Zugriff verweigert' });
+    }
+
+    try {
+      await ensureFilesBelongToKingdom([eventStartFileId, honorStartFileId, honorEndFileId], existing.kingdomId);
+    } catch (validationError) {
+      return res.status(400).json({ error: validationError.message });
     }
 
     const updated = await updateKvkEvent(eventId, {
