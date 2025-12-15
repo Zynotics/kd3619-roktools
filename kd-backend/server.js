@@ -936,7 +936,14 @@ app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
 // 1. OVERVIEW (Shared by Analytics & KvK Manager)
 app.get('/overview/files-data', authenticateToken, async (req, res) => {
     const { role, kingdomId } = req.user;
-    const kId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
+
+    let targetK = kingdomId;
+    if (role === 'admin' && req.query.slug) {
+        const k = await findKingdomBySlug(req.query.slug);
+        if (k) targetK = k.id;
+    }
+
+    const kId = targetK || (role === 'admin' ? 'kdm-default' : null);
     if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
     
     // Sortiere nach uploaddate (lowercase für PG)
@@ -1009,7 +1016,14 @@ app.post('/overview/files/reorder', authenticateToken, async (req, res) => {
 // 2. HONOR
 app.get('/honor/files-data', authenticateToken, async (req, res) => {
     const { role, kingdomId } = req.user;
-    const kId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
+
+    let targetK = kingdomId;
+    if (role === 'admin' && req.query.slug) {
+        const k = await findKingdomBySlug(req.query.slug);
+        if (k) targetK = k.id;
+    }
+
+    const kId = targetK || (role === 'admin' ? 'kdm-default' : null);
     if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
     
     // uploaddate (lowercase) sortieren, normalizeFileRow für CamelCase Output
@@ -1072,10 +1086,17 @@ app.get('/activity/files-data', authenticateToken, async (req, res) => {
     if (!['admin', 'r5', 'r4'].includes(req.user.role)) return res.status(403).json({ error: 'Kein Zugriff' });
 
     const { role, kingdomId } = req.user;
-    const kId = kingdomId || (role === 'admin' ? 'kdm-default' : null);
-    
+
+    let targetK = kingdomId;
+    if (role === 'admin' && req.query.slug) {
+        const k = await findKingdomBySlug(req.query.slug);
+        if (k) targetK = k.id;
+    }
+
+    const kId = targetK || (role === 'admin' ? 'kdm-default' : null);
+
     if (!kId) return res.status(403).json({ error: 'Kein Kingdom' });
-    
+
     const rows = await all(`SELECT * FROM activity_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploaddate`, [kId]);
     res.json(rows.map(normalizeFileRow));
 });

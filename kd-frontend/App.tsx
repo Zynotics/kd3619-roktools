@@ -342,6 +342,8 @@ const AppContent: React.FC = () => {
                     <ActivityDashboard
                         isAdmin={!!isAdmin}
                         backendUrl={BACKEND_URL}
+                        publicSlug={publicSlug}
+                        isAdminOverride={isAdminOverrideView}
                     />
                     </PublicOrProtectedRoute>
                 )}

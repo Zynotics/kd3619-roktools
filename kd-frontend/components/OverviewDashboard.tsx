@@ -60,6 +60,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   // ---------------------------------------------------
   const fetchFiles = useCallback(async () => {
     const shouldUsePublicEndpoint = !!publicSlug;
+    const adminSlugQuery = isAdminOverride && publicSlug ? `?slug=${publicSlug}` : '';
 
     try {
       setIsLoading(true);
@@ -71,8 +72,8 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       } else {
         const token = localStorage.getItem('authToken');
         if (!token) throw new Error('Authentication token not found.');
-        
-        response = await fetch(`${backendUrl}/overview/files-data`, {
+
+        response = await fetch(`${backendUrl}/overview/files-data${adminSlugQuery}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
       }
