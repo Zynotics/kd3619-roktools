@@ -58,9 +58,12 @@ const AppContent: React.FC = () => {
   const isSuperAdmin = user?.role === 'admin';
   const isR5 = user?.role === 'r5';
   const isR4 = user?.role === 'r4';
-  const isAdmin = isSuperAdmin || isR5; 
+  const isAdmin = isSuperAdmin || isR5;
+  const hasKingdomSlug = !!publicSlug;
   // ðŸ†• Helper fÃ¼r KvK Manager Zugriff (freischaltbar Ã¼ber Rechte)
-  const canManageKvk = !isSuperAdmin && (isR5 || isR4 || !!user?.canAccessKvkManager);
+  const canManageKvk =
+    (isSuperAdmin && hasKingdomSlug) ||
+    (!isSuperAdmin && (isR5 || isR4 || !!user?.canAccessKvkManager));
   const canViewActivity = user && (isSuperAdmin || isR5 || isR4);
   // User-Rolle soll dieselbe Ansicht wie der Public-Link sehen kÃ¶nnen
   const isUserPublicView = !!publicSlug && user?.role === 'user';
