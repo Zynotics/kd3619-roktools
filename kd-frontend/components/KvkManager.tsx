@@ -178,8 +178,8 @@ const KvkManager: React.FC = () => {
   const renderUploadButton = (type: 'overview' | 'honor') => {
     const label = type === 'overview' ? 'Analytics' : 'Honor';
     const colorClasses = type === 'overview'
-      ? 'bg-blue-700 hover:bg-blue-600'
-      : 'bg-purple-700 hover:bg-purple-600';
+      ? 'bg-blue-700 hover:bg-blue-600 group-hover:bg-blue-600'
+      : 'bg-purple-700 hover:bg-purple-600 group-hover:bg-purple-600';
 
     return (
       <div className="relative overflow-hidden group">
