@@ -52,33 +52,48 @@ const AppContent: React.FC = () => {
   const { user, logout, isLoading } = useAuth();
   const [activeView, setActiveView] = useState<ActiveView>('overview');
   const [headerTitle, setHeaderTitle] = useState<string>('Rise of Stats');
+  const [slugKingdomId, setSlugKingdomId] = useState<string | null>(null);
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
   const isRegisterInvite = queryParams.get('register') === 'true';
   const isSuperAdmin = user?.role === 'admin';
   const isR5 = user?.role === 'r5';
   const isR4 = user?.role === 'r4';
+  const isR4OrR5 = isR5 || isR4;
   const isAdmin = isSuperAdmin || isR5;
   const hasKingdomSlug = !!publicSlug;
   // ðŸ†• Helper fÃ¼r KvK Manager Zugriff (freischaltbar Ã¼ber Rechte)
+  const isSameKingdomAsSlug = user?.kingdomId && slugKingdomId ? user.kingdomId === slugKingdomId : false;
+  const shouldForcePublicForForeignKingdom =
+    !!publicSlug &&
+    isR4OrR5 &&
+    !isSuperAdmin &&
+    slugKingdomId !== null &&
+    !isSameKingdomAsSlug;
+
   const canManageKvk =
-    (isSuperAdmin && hasKingdomSlug) ||
-    (!isSuperAdmin && (isR5 || isR4 || !!user?.canAccessKvkManager));
+    !shouldForcePublicForForeignKingdom &&
+    ((isSuperAdmin && hasKingdomSlug) || (!isSuperAdmin && (isR5 || isR4 || !!user?.canAccessKvkManager)));
   const canViewActivity = user && (isSuperAdmin || isR5 || isR4);
   // User-Rolle soll dieselbe Ansicht wie der Public-Link sehen kÃ¶nnen
   const isUserPublicView = !!publicSlug && user?.role === 'user';
   const isPublicView = !!publicSlug && !user && !isRegisterInvite;
   const isRegistrationInviteView = !!publicSlug && !user && isRegisterInvite;
   const isAdminOverrideView = isSuperAdmin && !!publicSlug;
-  const effectivePublicView = isPublicView || isUserPublicView;
+  const effectivePublicView = isPublicView || isUserPublicView || shouldForcePublicForForeignKingdom;
   const isSuperAdminWithoutSlug = isSuperAdmin && !publicSlug;
   const hideStandardNavigation = isSuperAdminWithoutSlug;
-  const showAdminNavigation = isAdmin || canManageKvk;
+  const hasAdminAccess = isAdmin && !shouldForcePublicForForeignKingdom;
+  const showAdminNavigation = hasAdminAccess || canManageKvk;
   const showSuperadminKingdomOverview = isSuperAdminWithoutSlug;
   const showDashboardInterface = user || isAdminOverrideView || effectivePublicView;
   // 1. VIEW ROUTING & RESET
   useEffect(() => {
-    if (publicSlug && (!user || user.role === 'user') && !isRegisterInvite) {
+    if (
+      publicSlug &&
+      ((!user || user.role === 'user') || shouldForcePublicForForeignKingdom) &&
+      !isRegisterInvite
+    ) {
         // Reset gesch?tzte Views wenn Public
         if (['admin', 'activity', 'kvk-manager', 'kingdoms-overview'].includes(activeView)) setActiveView('overview');
         return;
@@ -100,7 +115,15 @@ const AppContent: React.FC = () => {
     if (!isSuperAdminWithoutSlug && activeView === 'kingdoms-overview') {
         setActiveView('overview');
     }
-  }, [publicSlug, isSuperAdminWithoutSlug, activeView, user, isRegisterInvite, isRegistrationInviteView]);
+  }, [
+    publicSlug,
+    isSuperAdminWithoutSlug,
+    activeView,
+    user,
+    isRegisterInvite,
+    isRegistrationInviteView,
+    shouldForcePublicForForeignKingdom,
+  ]);
   // 2. R5/R4 REDIRECT
   useEffect(() => {
     const redirectToSlug = async () => {
@@ -134,14 +157,19 @@ const AppContent: React.FC = () => {
           const res = await fetch(`${BACKEND_URL}/api/public/kingdom/${publicSlug}`);
           if (res.ok) {
             const data = await res.json();
-            const displayName = data.displayName && data.displayName.trim() ? data.displayName : publicSlug.toUpperCase();
+            const displayNameCandidate = data.displayName || data.display_name;
+            const displayName =
+              displayNameCandidate && displayNameCandidate.trim() ? displayNameCandidate : publicSlug.toUpperCase();
+            setSlugKingdomId(data.id || null);
             setHeaderTitle(displayName);
           } else {
             setHeaderTitle(`Kingdom ${publicSlug}`);
+            setSlugKingdomId(null);
           }
-        } catch (e) { setHeaderTitle(`Kingdom ${publicSlug}`); }
+        } catch (e) { setHeaderTitle(`Kingdom ${publicSlug}`); setSlugKingdomId(null); }
         return;
       }
+      setSlugKingdomId(null);
       if (user && user.kingdomId) {
         setHeaderTitle('Kingdom Analytics');
         return;
@@ -325,7 +353,7 @@ const AppContent: React.FC = () => {
                     isAdminOverride={isAdminOverrideView}
                     >
                     <OverviewDashboard
-                        isAdmin={!!isAdmin}
+                        isAdmin={!!hasAdminAccess}
                         backendUrl={BACKEND_URL}
                         publicSlug={publicSlug}
                         isAdminOverride={isAdminOverrideView}
@@ -339,8 +367,8 @@ const AppContent: React.FC = () => {
                     accessType="activity"
                     isAdminOverride={isAdminOverrideView}
                     >
-                    <ActivityDashboard
-                        isAdmin={!!isAdmin}
+                <ActivityDashboard
+                        isAdmin={!!hasAdminAccess}
                         backendUrl={BACKEND_URL}
                         publicSlug={publicSlug}
                         isAdminOverride={isAdminOverrideView}
@@ -376,15 +404,15 @@ const AppContent: React.FC = () => {
                     accessType="analytics"
                     isAdminOverride={isAdminOverrideView}
                     >
-                    <PowerAnalyticsDashboard
-                        isAdmin={!!isAdmin}
+                <PowerAnalyticsDashboard
+                        isAdmin={!!hasAdminAccess}
                         backendUrl={BACKEND_URL}
                         publicSlug={publicSlug}
                         isAdminOverride={isAdminOverrideView}
                     />
-                    </PublicOrProtectedRoute>
-                )}
-                {activeView === 'admin' && user && isAdmin && (
+                </PublicOrProtectedRoute>
+            )}
+                {activeView === 'admin' && user && hasAdminAccess && (
                     <ProtectedRoute accessType='admin'>
                     <AdminUserManagement />
                     </ProtectedRoute>
