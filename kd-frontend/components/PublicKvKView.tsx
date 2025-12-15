@@ -699,12 +699,11 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
               <div className="bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-700">
                 <div className="p-4 bg-gray-800 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                         <h2 className="text-lg font-semibold text-blue-200">Total War Ranking</h2>
-                        <span className="px-2 py-1 text-[11px] uppercase tracking-wide bg-blue-900 text-blue-200 rounded border border-blue-700">DKP Focus</span>
                       </div>
                       <p className="text-xs text-gray-400">
-                          Aggregated stats based on the selected battle phase with a clear view on DKP progress.
+                          Aggregated stats based on the selected battle phase.
                       </p>
                       <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
                           <span className="flex items-center gap-1">
