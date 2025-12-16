@@ -203,6 +203,12 @@ async function resolveKingdomIdFromRequest(req, { allowDefaultForAdmin = false }
   if (req.query && req.query.slug) {
     const k = await findKingdomBySlug(req.query.slug);
     if (!k) throw new Error('Ungültiger Kingdom-Slug');
+
+    // Nur Admins dürfen beliebige Slugs ansteuern. R4/R5 müssen im eigenen Kingdom bleiben.
+    if (role !== 'admin' && kingdomId && kingdomId !== k.id) {
+      throw new Error('Kein Zugriff auf dieses Königreich. Bitte die öffentliche Ansicht verwenden.');
+    }
+
     targetKingdomId = k.id;
   }
 
@@ -853,8 +859,17 @@ app.post('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (r
   try {
     // UPDATED: Jetzt mit honorStartFileId / honorEndFileId
     const { name, fights, eventStartFileId, honorStartFileId, honorEndFileId, dkpFormula, goalsFormula, isPublic, kingdomId: bodyKingdomId } = req.body;
-    
-    const targetKingdomId = req.user.role === 'admin' && bodyKingdomId ? bodyKingdomId : req.user.kingdomId;
+
+    let targetKingdomId = req.user.kingdomId;
+    if (req.user.role === 'admin') {
+      if (bodyKingdomId) {
+        targetKingdomId = bodyKingdomId;
+      } else if (req.query.slug) {
+        const slugKingdom = await findKingdomBySlug(req.query.slug);
+        if (!slugKingdom) return res.status(400).json({ error: 'Ungültiger Kingdom-Slug' });
+        targetKingdomId = slugKingdom.id;
+      }
+    }
 
     if (!targetKingdomId) {
       return res.status(400).json({ error: 'Kein Königreich zugewiesen.' });
