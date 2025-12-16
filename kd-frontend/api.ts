@@ -29,11 +29,13 @@ export { API_BASE_URL };
  * Holt alle KvK Events (für Admin/R5)
  * Endpoint: GET /api/admin/kvk/events
  */
-export async function fetchKvkEvents(kingdomId?: string): Promise<KvkEvent[]> {
-  let url = `${API_BASE_URL}/api/admin/kvk/events`;
-  if (kingdomId) {
-    url += `?kingdomId=${kingdomId}`;
-  }
+export async function fetchKvkEvents(filters?: { kingdomId?: string; slug?: string }): Promise<KvkEvent[]> {
+  const params = new URLSearchParams();
+  if (filters?.kingdomId) params.append('kingdomId', filters.kingdomId);
+  if (filters?.slug) params.append('slug', filters.slug);
+
+  const queryString = params.toString();
+  const url = `${API_BASE_URL}/api/admin/kvk/events${queryString ? `?${queryString}` : ''}`;
     
   const res = await fetch(url, {
     headers: getAuthHeaders(),

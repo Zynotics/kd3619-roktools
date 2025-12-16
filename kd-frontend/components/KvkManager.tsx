@@ -92,7 +92,7 @@ const KvkManager: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const eventsData = await fetchKvkEvents();
+      const eventsData = await fetchKvkEvents(publicSlug ? { slug: publicSlug } : undefined);
       setEvents(eventsData);
 
       const ovRes = await fetch(`${API_BASE_URL}/overview/files-data${adminSlugQuery}`, {

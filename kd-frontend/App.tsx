@@ -74,7 +74,8 @@ const AppContent: React.FC = () => {
   const canManageKvk =
     !shouldForcePublicForForeignKingdom &&
     ((isSuperAdmin && hasKingdomSlug) || (!isSuperAdmin && (isR5 || isR4 || !!user?.canAccessKvkManager)));
-  const canViewActivity = user && (isSuperAdmin || isR5 || isR4);
+  const canViewActivity =
+    user && (isSuperAdmin || (!shouldForcePublicForForeignKingdom && (isR5 || isR4)));
   // User-Rolle soll dieselbe Ansicht wie der Public-Link sehen kÃ¶nnen
   const isUserPublicView = !!publicSlug && user?.role === 'user';
   const isPublicView = !!publicSlug && !user && !isRegisterInvite;
