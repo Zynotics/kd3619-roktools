@@ -824,7 +824,13 @@ app.delete('/api/admin/kingdoms/:id', authenticateToken, requireAdmin, async (re
 app.get('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (req, res) => {
   try {
     const isAdmin = req.user.role === 'admin';
-    const kingdomId = isAdmin ? (req.query.kingdomId || req.user.kingdomId) : req.user.kingdomId;
+    let kingdomId = isAdmin ? (req.query.kingdomId || req.user.kingdomId) : req.user.kingdomId;
+
+    if (!kingdomId && isAdmin && req.query.slug) {
+      const kingdom = await findKingdomBySlug(req.query.slug);
+      if (!kingdom) return res.status(400).json({ error: 'Ungültiger Kingdom-Slug' });
+      kingdomId = kingdom.id;
+    }
 
     if (!kingdomId) {
       if (isAdmin) {
