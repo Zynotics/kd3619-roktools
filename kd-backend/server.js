@@ -697,7 +697,6 @@ app.post('/api/admin/users/role', authenticateToken, requireAdmin, async (req, r
 
       if (role === 'r5') {
           if (currentUserRole !== 'admin') return res.status(403).json({ error: 'R5 Rollen können nur vom Superadmin vergeben werden.' });
-          if (!accessCode) return res.status(400).json({ error: 'R5 Zugangscode wird benötigt.' });
 
           const targetK = requestedKingdomId || currentUserKingdomId || (await get('SELECT kingdom_id FROM users WHERE id = $1', [userId]))?.kingdom_id;
           if (!targetK) return res.status(400).json({ error: 'Königreich für R5 wird benötigt.' });
@@ -705,11 +704,18 @@ app.post('/api/admin/users/role', authenticateToken, requireAdmin, async (req, r
           const kingdom = await get('SELECT id FROM kingdoms WHERE id = $1', [targetK]);
           if (!kingdom) return res.status(404).json({ error: 'Königreich nicht gefunden' });
 
-          const activation = await activateR5Code(accessCode, userId, targetK);
+          if (accessCode) {
+              const activation = await activateR5Code(accessCode, userId, targetK);
+              await assignR5(userId, targetK);
+              await query('UPDATE users SET is_approved = TRUE WHERE id = $1', [userId]);
+              return res.json({ success: true, expiresAt: activation.expires_at });
+          }
+
+          // Ohne Code: Rolle vergeben, aber kein aktiver Zugang (User kann später selbst aktivieren)
           await assignR5(userId, targetK);
           await query('UPDATE users SET is_approved = TRUE WHERE id = $1', [userId]);
 
-          return res.json({ success: true, expiresAt: activation.expires_at });
+          return res.json({ success: true, expiresAt: null });
       }
 
       let sql = 'UPDATE users SET role = $1 WHERE id = $2';
