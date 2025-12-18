@@ -55,6 +55,7 @@ const AppContent: React.FC = () => {
   const [slugKingdomId, setSlugKingdomId] = useState<string | null>(null);
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
+  const forceLogin = queryParams.get('login') === 'true';
   const isRegisterInvite = queryParams.get('register') === 'true';
   const isSuperAdmin = user?.role === 'admin';
   const isR5 = user?.role === 'r5';
@@ -87,7 +88,14 @@ const AppContent: React.FC = () => {
   const hasAdminAccess = isAdmin && !shouldForcePublicForForeignKingdom;
   const showAdminNavigation = hasAdminAccess || canManageKvk;
   const showSuperadminKingdomOverview = isSuperAdminWithoutSlug;
-  const showDashboardInterface = user || isAdminOverrideView || effectivePublicView;
+  const showDashboardInterface =
+    (user || isAdminOverrideView || effectivePublicView) && !(forceLogin && !user);
+
+  const redirectToLogin = () => {
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set('login', 'true');
+    window.location.href = newUrl.toString();
+  };
   // 1. VIEW ROUTING & RESET
   useEffect(() => {
     if (
@@ -317,7 +325,17 @@ const AppContent: React.FC = () => {
                     </button>
                 </div>
             ) : (
-                 <div className='text-xs text-gray-500 text-center'>Not logged in</div>
+                <div className="text-center space-y-2">
+                  <div className="text-xs text-gray-500">Not logged in</div>
+                  {publicSlug && (
+                    <button
+                      onClick={redirectToLogin}
+                      className="w-full flex items-center justify-center px-4 py-2 border border-gray-700 rounded-md shadow-sm text-xs font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 focus:outline-none"
+                    >
+                      Login to access
+                    </button>
+                  )}
+                </div>
             )}
         </div>
       </aside>
@@ -334,6 +352,11 @@ const AppContent: React.FC = () => {
              {user && (
                 <button onClick={logout} className="text-gray-400 hover:text-white">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
+                </button>
+             )}
+             {!user && publicSlug && (
+                <button onClick={redirectToLogin} className="text-gray-400 hover:text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14M7 16v1a3 3 0 003 3h5a3 3 0 003-3V7a3 3 0 00-3-3h-5a3 3 0 00-3 3v1" /></svg>
                 </button>
              )}
         </header>
