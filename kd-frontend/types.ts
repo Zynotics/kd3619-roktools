@@ -223,3 +223,14 @@ export interface CreateKvkEventPayload {
   honorEndFileId?: string;
   isPublic: boolean;
 }
+
+export interface R5Code {
+  code: string;
+  durationDays: number;
+  createdAt?: string;
+  usedByUserId?: string | null;
+  kingdomId?: string | null;
+  activatedAt?: string | null;
+  expiresAt?: string | null;
+  isActive?: boolean;
+}

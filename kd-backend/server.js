@@ -839,6 +839,66 @@ app.post('/api/admin/r5-codes/activate', authenticateToken, requireAdmin, async 
     }
 });
 
+// Kunden-Endpunkt: Eigene Codes abrufen
+app.get('/api/r5-codes/my', authenticateToken, async (req, res) => {
+  try {
+    const codes = await all(
+      `SELECT code, duration_days, created_at, used_by_user_id, kingdom_id, activated_at, expires_at, is_active 
+       FROM r5_codes 
+       WHERE used_by_user_id = $1 
+       ORDER BY created_at DESC`,
+      [req.user.id]
+    );
+    return res.json(
+      codes.map((c) => ({
+        code: c.code,
+        durationDays: c.duration_days,
+        createdAt: c.created_at,
+        usedByUserId: c.used_by_user_id,
+        kingdomId: c.kingdom_id,
+        activatedAt: c.activated_at,
+        expiresAt: c.expires_at,
+        isActive: c.is_active,
+      }))
+    );
+  } catch (error) {
+    console.error('Error loading own R5 codes:', error);
+    return res.status(500).json({ error: 'Fehler beim Laden deiner R5 Codes' });
+  }
+});
+
+// Kunden-Endpunkt: Code selbst aktivieren (setzt R5-Rolle fÇ¬r das eigene KÇônigreich)
+app.post('/api/r5-codes/activate-self', authenticateToken, async (req, res) => {
+  try {
+    const { code, kingdomId } = req.body;
+    if (!code) {
+      return res.status(400).json({ error: 'Code wird benÇôtigt.' });
+    }
+
+    const dbUser = await get('SELECT kingdom_id FROM users WHERE id = $1', [req.user.id]);
+    const targetKingdomId = kingdomId || dbUser?.kingdom_id || req.user.kingdomId;
+
+    if (!targetKingdomId) {
+      return res.status(400).json({ error: 'Kein KÇônigreich hinterlegt. Bitte wende dich an den Superadmin.' });
+    }
+
+    const activation = await activateR5Code(code, req.user.id, targetKingdomId);
+    await assignR5(req.user.id, targetKingdomId);
+    await query('UPDATE users SET is_approved = TRUE WHERE id = $1', [req.user.id]);
+
+    return res.json({
+      success: true,
+      expiresAt: activation.expires_at,
+      activatedAt: activation.activated_at,
+      durationDays: activation.duration_days,
+      kingdomId: targetKingdomId,
+    });
+  } catch (error) {
+    console.error('Error self-activating R5 code:', error);
+    return res.status(400).json({ error: error.message || 'Aktivierung fehlgeschlagen' });
+  }
+});
+
 
 // ==================== KINGDOM ADMIN ENDPOINTS ====================
 

@@ -20,6 +20,8 @@ export interface User {
   canManageActivityFiles?: boolean;
   canManageAnalyticsFiles?: boolean;
   canAccessKvkManager?: boolean;
+  r5AccessValid?: boolean;
+  r5AccessExpiresAt?: string | null;
 }
 
 interface AuthContextType {
