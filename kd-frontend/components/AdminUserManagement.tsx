@@ -799,9 +799,9 @@ const AdminUserManagement: React.FC = () => {
   const allowedRoles = isSuperAdmin ? ['user', 'r4', 'r5'] : ['user', 'r4'];
   const canAssignR5 = isSuperAdmin || currentUser?.role === 'r5';
   
-  // 🆕 Neu: R5 darf auch den Link sehen
-  const showInviteLinkCard = canManageUsers && !!inviteLink; 
-  const showPublicLinkCard = canManageUsers && !!publicLink; // 📝 Public Link Card zeigen
+  // 🆕 Neu: R5 darf auch den Link sehen (Superadmin sieht die Karten nicht)
+  const showInviteLinkCard = canManageUsers && !!inviteLink && !isSuperAdmin;
+  const showPublicLinkCard = canManageUsers && !!publicLink && !isSuperAdmin; // 📝 Public Link Card zeigen
   
   // Filtere Benutzer, die bereits Admin oder R5 sind, um sie nicht erneut zuzuweisen
   const assignableUsersR5 = users.filter(u => u.role !== 'admin' && u.role !== 'r5' && u.id !== currentUser?.id);
