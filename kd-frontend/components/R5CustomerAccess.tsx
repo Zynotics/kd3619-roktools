@@ -1,5 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
-import { fetchMyR5Codes, activateSelfR5Code } from '../api';
+import React, { useEffect, useMemo, useState } from 'react';
+import { API_BASE_URL, fetchMyR5Codes, activateSelfR5Code } from '../api';
 import { R5Code } from '../types';
 import { Card } from './Card';
 import { useAuth } from './AuthContext';
@@ -35,6 +35,7 @@ const R5CustomerAccess: React.FC = () => {
   const [codeInput, setCodeInput] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isActivating, setIsActivating] = useState(false);
+  const [kingdomSlug, setKingdomSlug] = useState<string | null>(null);
 
   const activeStatus = useMemo(() => {
     if (!user) return null;
@@ -45,6 +46,25 @@ const R5CustomerAccess: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
+    const loadKingdomSlug = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token || !user.kingdomId) return;
+        const res = await fetch(`${API_BASE_URL}/api/admin/kingdoms`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const current = Array.isArray(data) ? data.find((k: any) => k.id === user.kingdomId) : null;
+        if (current && current.slug) {
+          setKingdomSlug(current.slug);
+        }
+      } catch {
+        /* ignore slug load errors */
+      }
+    };
+    loadKingdomSlug();
+
     const load = async () => {
       setIsLoading(true);
       setError(null);
@@ -70,12 +90,7 @@ const R5CustomerAccess: React.FC = () => {
 
   const canActivate = !!user.kingdomId;
 
-  const handleActivate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!codeInput.trim()) {
-      setError('Please enter a code.');
-      return;
-    }
+  const handleActivate = async (code: string) => {
     if (!canActivate) {
       setError('No kingdom linked to your account. Please contact the superadmin.');
       return;
@@ -83,9 +98,8 @@ const R5CustomerAccess: React.FC = () => {
     setIsActivating(true);
     setError(null);
     try {
-      await activateSelfR5Code(codeInput.trim(), user.kingdomId || undefined);
+      await activateSelfR5Code(code, user.kingdomId || undefined);
       setSuccessMessage('Code activated successfully. Your role will update shortly.');
-      setCodeInput('');
       await refreshUser();
       const updated = await fetchMyR5Codes();
       setCodes(updated);
@@ -125,7 +139,7 @@ const R5CustomerAccess: React.FC = () => {
           <div className="space-y-2 text-sm text-gray-300">
             <div className="flex items-center justify-between">
               <span>Kingdom</span>
-              <span className="font-semibold">{user.kingdomId || 'Not set'}</span>
+              <span className="font-semibold">{kingdomSlug || user.kingdomId || 'Not set'}</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Role</span>
@@ -143,101 +157,79 @@ const R5CustomerAccess: React.FC = () => {
               Your account is not approved yet. An active R5 code will approve you automatically.
             </p>
           )}
+          <p className="mt-3 text-xs text-gray-400">
+            Multiple codes stack: activating another code adds its duration to your current expiry.
+          </p>
         </Card>
 
         <Card className="border-gray-700">
-          <h3 className="text-lg font-semibold text-white mb-3">Redeem code</h3>
+          <h3 className="text-lg font-semibold text-white mb-3">My codes</h3>
           <p className="text-sm text-gray-400 mb-4">
-            Enter your purchased R5 code. The code will be applied to your kingdom and update your role.
+            Codes assigned to your account. Activate them to extend your R5 access; durations stack.
           </p>
-          <form onSubmit={handleActivate} className="space-y-3">
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Code</label>
-              <input
-                type="text"
-                value={codeInput}
-                onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
-                className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="e.g. 3F9A-1C2D-9E8B-4F0A"
-              />
-              <p className="text-[11px] text-gray-500 mt-1">Case-insensitive.</p>
+          {error && (
+            <div className="mb-3 text-sm text-red-400 bg-red-900/30 border border-red-700 px-3 py-2 rounded">
+              {error}
             </div>
-            <div className="flex items-center justify-between">
-              <div className="text-xs text-gray-500">
-                {user.kingdomId ? (
-                  <span>Kingdom ID: {user.kingdomId}</span>
-                ) : (
-                  <span>No kingdom linked.</span>
-                )}
-              </div>
-              <button
-                type="submit"
-                disabled={!canActivate || isActivating}
-                className={`px-4 py-2 rounded text-sm font-semibold ${
-                  !canActivate || isActivating
-                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
-              >
-                {isActivating ? 'Redeeming...' : 'Redeem code'}
-              </button>
+          )}
+          {successMessage && (
+            <div className="mb-3 text-sm text-green-400 bg-green-900/20 border border-green-700 px-3 py-2 rounded">
+              {successMessage}
             </div>
-            {error && <p className="text-xs text-red-400">{error}</p>}
-            {successMessage && <p className="text-xs text-green-400">{successMessage}</p>}
-          </form>
+          )}
+          {isLoading ? (
+            <p className="text-gray-400 text-sm">Loading...</p>
+          ) : codes.length === 0 ? (
+            <p className="text-gray-400 text-sm">No codes redeemed yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {codes.map((code) => {
+                const tag = statusTag(code);
+                const canRedeem = !code.isActive;
+                return (
+                  <div
+                    key={code.code}
+                    className="p-4 rounded-lg border border-gray-700 bg-gray-900/60 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-white tracking-wide">{code.code}</p>
+                      <p className="text-xs text-gray-400">
+                      Duration: {durationLabel(code.durationDays)}  Created {formatDate(code.createdAt)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className={`px-2 py-1 rounded-full font-semibold ${tag.color}`}>{tag.label}</span>
+                      <div className="flex flex-col text-right text-gray-300">
+                        <span className="text-[11px] text-gray-400">Activated</span>
+                        <span className="font-semibold">{formatDate(code.activatedAt)}</span>
+                      </div>
+                      <div className="flex flex-col text-right text-gray-300">
+                        <span className="text-[11px] text-gray-400">Expires</span>
+                        <span className="font-semibold">{formatDate(code.expiresAt)}</span>
+                      </div>
+                      {canRedeem && (
+                        <button
+                          onClick={() => handleActivate(code.code)}
+                          disabled={isActivating || !canActivate}
+                          className={`px-3 py-1 rounded text-xs font-semibold ${
+                            isActivating || !canActivate
+                              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                        >
+                          {isActivating ? 'Activating...' : 'Activate'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       </div>
-
-      <Card className="border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-white">My codes</h3>
-            <p className="text-sm text-gray-400">Activated codes linked to your account.</p>
-          </div>
-          {isLoading && <span className="text-xs text-gray-400">Loading...</span>}
-        </div>
-        {error && !isActivating && (
-          <div className="mb-3 text-sm text-red-400 bg-red-900/30 border border-red-700 px-3 py-2 rounded">
-            {error}
-          </div>
-        )}
-        {codes.length === 0 ? (
-          <p className="text-gray-400 text-sm">No codes redeemed yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {codes.map((code) => {
-              const tag = statusTag(code);
-              return (
-                <div
-                  key={code.code}
-                  className="p-4 rounded-lg border border-gray-700 bg-gray-900/60 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-white tracking-wide">{code.code}</p>
-                    <p className="text-xs text-gray-400">
-                      Duration: {durationLabel(code.durationDays)} - Created {formatDate(code.createdAt)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs">
-                    <span className={`px-2 py-1 rounded-full font-semibold ${tag.color}`}>{tag.label}</span>
-                    <div className="flex flex-col text-right text-gray-300">
-                      <span className="text-[11px] text-gray-400">Activated</span>
-                      <span className="font-semibold">{formatDate(code.activatedAt)}</span>
-                    </div>
-                    <div className="flex flex-col text-right text-gray-300">
-                      <span className="text-[11px] text-gray-400">Expires</span>
-                      <span className="font-semibold">{formatDate(code.expiresAt)}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
     </div>
   );
 };
 
 export default R5CustomerAccess;
-
