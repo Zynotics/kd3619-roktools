@@ -851,6 +851,24 @@ app.post('/api/admin/r5-codes/activate', authenticateToken, requireAdmin, async 
     }
 });
 
+// Admin: Unbenutzten Code löschen
+app.delete('/api/admin/r5-codes/:code', authenticateToken, requireAdmin, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    try {
+        const code = req.params.code;
+        const existing = await get('SELECT code, used_by_user_id, is_active FROM r5_codes WHERE code = $1', [code]);
+        if (!existing) return res.status(404).json({ error: 'Code nicht gefunden' });
+        if (existing.used_by_user_id || existing.is_active) {
+            return res.status(400).json({ error: 'Code ist bereits zugewiesen oder aktiviert und kann nicht gelöscht werden.' });
+        }
+        await query('DELETE FROM r5_codes WHERE code = $1', [code]);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting R5 code:', error);
+        res.status(500).json({ error: 'Code konnte nicht gelöscht werden' });
+    }
+});
+
 // Kunden-Endpunkt: Eigene Codes abrufen
 app.get('/api/r5-codes/my', authenticateToken, async (req, res) => {
   try {

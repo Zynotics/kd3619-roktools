@@ -227,3 +227,14 @@ export async function activateSelfR5Code(code: string, kingdomId?: string): Prom
 
   return res.json();
 }
+
+export async function deleteAdminR5Code(code: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/admin/r5-codes/${code}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to delete code');
+  }
+}
