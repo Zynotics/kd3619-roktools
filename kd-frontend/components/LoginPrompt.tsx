@@ -32,10 +32,15 @@ const LoginPrompt: React.FC = () => {
   useEffect(() => {
       const searchParams = new URLSearchParams(window.location.search);
       const slug = searchParams.get('slug');
+      const forceLogin = searchParams.get('login') === 'true';
       if (slug) {
           setInviteSlug(slug);
-          // Wenn Slug da ist, vermutlich eher Registrierung gewünscht:
-          setIsLogin(false);
+          // Wenn Slug da ist, vermutlich eher Registrierung gewünscht – es sei denn, Login wird erzwungen
+          setIsLogin(forceLogin ? true : false);
+          return;
+      }
+      if (forceLogin) {
+          setIsLogin(true);
       }
   }, []);
 
