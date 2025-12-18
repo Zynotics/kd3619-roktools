@@ -98,6 +98,67 @@ async function deleteKingdom(kingdomId) {
   return res.rowCount;
 }
 
+async function generateR5Code(durationDays, code) {
+  const res = await query(
+    `INSERT INTO r5_codes (code, duration_days) VALUES ($1, $2) RETURNING *`,
+    [code, durationDays]
+  );
+  return res.rows[0];
+}
+
+async function getR5Codes() {
+  return all(
+    `SELECT code, duration_days, created_at, used_by_user_id, kingdom_id, activated_at, expires_at, is_active FROM r5_codes ORDER BY created_at DESC`
+  );
+}
+
+async function getR5Code(code) {
+  return get(
+    `SELECT code, duration_days, created_at, used_by_user_id, kingdom_id, activated_at, expires_at, is_active FROM r5_codes WHERE code = $1`,
+    [code]
+  );
+}
+
+async function activateR5Code(code, userId, kingdomId) {
+  const existing = await getR5Code(code);
+  if (!existing) throw new Error('Code nicht gefunden.');
+  if (existing.is_active) throw new Error('Code wurde bereits verwendet.');
+
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + existing.duration_days);
+
+  const res = await query(
+    `
+      UPDATE r5_codes
+      SET used_by_user_id = $1,
+          kingdom_id = $2,
+          activated_at = NOW(),
+          expires_at = $3,
+          is_active = TRUE
+      WHERE code = $4
+      RETURNING code, duration_days, created_at, used_by_user_id, kingdom_id, activated_at, expires_at, is_active
+    `,
+    [userId, kingdomId, expiresAt, code]
+  );
+
+  if (res.rowCount === 0) throw new Error('Aktivierung fehlgeschlagen.');
+  return res.rows[0];
+}
+
+async function getActiveR5Access(userId) {
+  const row = await get(
+    `
+      SELECT code, duration_days, created_at, used_by_user_id, kingdom_id, activated_at, expires_at, is_active
+      FROM r5_codes
+      WHERE used_by_user_id = $1 AND is_active = TRUE AND expires_at > NOW()
+      ORDER BY expires_at DESC
+      LIMIT 1
+    `,
+    [userId]
+  );
+  return row || null;
+}
+
 // ------------------------------------------------
 // KVK EVENT MANAGER (UPDATED FOR MODULAR & RANGE)
 // ------------------------------------------------
@@ -160,9 +221,30 @@ async function initKvkTable() {
   }
 }
 
+async function initR5CodesTable() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS r5_codes (
+        code TEXT PRIMARY KEY,
+        duration_days INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        used_by_user_id TEXT,
+        kingdom_id TEXT,
+        activated_at TIMESTAMP,
+        expires_at TIMESTAMP,
+        is_active BOOLEAN DEFAULT FALSE
+      )
+    `);
+    console.log("✅ Postgres: r5_codes Tabelle geprüft/aktualisiert.");
+  } catch (e) {
+    console.error("⚠️  Fehler beim Initialisieren der r5_codes Tabelle:", e.message);
+  }
+}
+
 // Init sofort ausführen, wenn Verbindung da ist
 if (process.env.DATABASE_URL) {
     initKvkTable();
+    initR5CodesTable();
 }
 
 /**
@@ -329,6 +411,10 @@ module.exports = {
   assignR5,
   updateKingdomStatus,
   deleteKingdom,
+  generateR5Code,
+  getR5Codes,
+  activateR5Code,
+  getActiveR5Access,
   // KvK Exports
   createKvkEvent,
   getKvkEvents,
