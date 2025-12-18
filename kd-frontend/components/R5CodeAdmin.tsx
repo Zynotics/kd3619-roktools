@@ -20,7 +20,7 @@ const durationLabel = (days: number) => {
 };
 
 const formatDate = (value?: string | null) => {
-  if (!value) return '—';
+  if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
@@ -51,12 +51,14 @@ const R5CodeAdmin: React.FC = () => {
     userId: '',
     kingdomId: '',
   });
+  const [assignOnly, setAssignOnly] = useState(false);
 
   const inactiveCodes = useMemo(() => codes.filter((c) => !c.isActive), [codes]);
   const expiredCodes = useMemo(() => codes.filter((c) => c.expiresAt && new Date(c.expiresAt) < new Date()), [codes]);
 
   useEffect(() => {
     loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getToken = () => {
@@ -114,7 +116,7 @@ const R5CodeAdmin: React.FC = () => {
       setKingdoms(data);
       return data;
     } catch (err: any) {
-      setActivateError(err.message || 'Fehler beim Laden der K\u00f6nigreiche.');
+      setActivateError(err.message || 'Fehler beim Laden der Königreiche.');
       return [];
     }
   };
@@ -138,17 +140,18 @@ const R5CodeAdmin: React.FC = () => {
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activationForm.code || !activationForm.userId || !activationForm.kingdomId) {
-      setActivateError('Code, Benutzer und K\u00f6nigreich sind erforderlich.');
+      setActivateError('Code, Benutzer und Königreich sind erforderlich.');
       return;
     }
     setActivateError(null);
     setIsActivating(true);
     try {
-      await activateAdminR5Code(activationForm);
+      await activateAdminR5Code({ ...activationForm, assignOnly });
       const updated = await fetchAdminR5Codes();
       setCodes(updated);
-      setSuccessMessage('Code wurde aktiviert und R5 vergeben.');
+      setSuccessMessage(assignOnly ? 'Code wurde zugewiesen (nicht aktiviert).' : 'Code wurde aktiviert und R5 vergeben.');
       setActivationForm({ code: '', userId: '', kingdomId: '' });
+      setAssignOnly(false);
     } catch (err: any) {
       setActivateError(err.message || 'Aktivierung fehlgeschlagen.');
     } finally {
@@ -158,13 +161,13 @@ const R5CodeAdmin: React.FC = () => {
   };
 
   const getUserLabel = (id?: string | null) => {
-    if (!id) return '—';
+    if (!id) return '-';
     const entry = users.find((u) => u.id === id);
     return entry ? `${entry.username} (${entry.role})` : id;
   };
 
   const getKingdomLabel = (id?: string | null) => {
-    if (!id) return '—';
+    if (!id) return '-';
     const entry = kingdoms.find((k) => k.id === id);
     return entry ? `${entry.displayName} (${entry.slug})` : id;
   };
@@ -172,7 +175,7 @@ const R5CodeAdmin: React.FC = () => {
   if (!user || user.role !== 'admin') {
     return (
       <div className="text-center p-8 bg-gray-800 rounded-xl text-red-200">
-        Nur Superadmins k\u00f6nnen diese Ansicht nutzen.
+        Nur Superadmins können diese Ansicht nutzen.
       </div>
     );
   }
@@ -230,7 +233,7 @@ const R5CodeAdmin: React.FC = () => {
                 onChange={(e) => setActivationForm((prev) => ({ ...prev, userId: e.target.value }))}
                 className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                <option value="">Ausw\u00e4hlen...</option>
+                <option value="">Auswählen...</option>
                 {users.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.username} ({u.role})
@@ -239,19 +242,31 @@ const R5CodeAdmin: React.FC = () => {
               </select>
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-400 mb-1">K\u00f6nigreich</label>
+              <label className="text-xs text-gray-400 mb-1">Königreich</label>
               <select
                 value={activationForm.kingdomId}
                 onChange={(e) => setActivationForm((prev) => ({ ...prev, kingdomId: e.target.value }))}
                 className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                <option value="">Ausw\u00e4hlen...</option>
+                <option value="">Auswählen...</option>
                 {kingdoms.map((k) => (
                   <option key={k.id} value={k.id}>
                     {k.displayName} ({k.slug})
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="md:col-span-3 flex items-center gap-2">
+              <input
+                id="assign-only"
+                type="checkbox"
+                className="h-4 w-4 text-blue-600 bg-gray-900 border-gray-700 rounded"
+                checked={assignOnly}
+                onChange={(e) => setAssignOnly(e.target.checked)}
+              />
+              <label htmlFor="assign-only" className="text-xs text-gray-300">
+                Nur zuweisen (Benutzer kann später aktivieren; Laufzeiten addieren sich beim Aktivieren)
+              </label>
             </div>
             <div className="md:col-span-3 flex items-center justify-between">
               <div className="text-xs text-gray-500">
@@ -322,7 +337,7 @@ const R5CodeAdmin: React.FC = () => {
                       <span className="font-semibold">{formatDate(code.activatedAt)}</span>
                     </div>
                     <div className="flex flex-col text-right text-gray-300">
-                      <span className="text-[11px] text-gray-400">L\u00e4uft ab</span>
+                      <span className="text-[11px] text-gray-400">Läuft ab</span>
                       <span className="font-semibold">{formatDate(code.expiresAt)}</span>
                     </div>
                   </div>

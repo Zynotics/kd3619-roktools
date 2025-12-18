@@ -16,7 +16,7 @@ const { v4: uuidv4 } = require('uuid');
 const {
   query, get, all, assignR5, updateKingdomStatus, deleteKingdom,
   createKvkEvent, getKvkEvents, getAllKvkEvents, getKvkEventById, updateKvkEvent, deleteKvkEvent,
-  generateR5Code, getR5Codes, activateR5Code, getActiveR5Access
+  generateR5Code, getR5Codes, activateR5Code, getActiveR5Access, assignR5Code
 } = require('./db-pg');
 
 const app = express();
@@ -812,7 +812,7 @@ app.post('/api/admin/r5-codes', authenticateToken, requireAdmin, async (req, res
 app.post('/api/admin/r5-codes/activate', authenticateToken, requireAdmin, async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
     try {
-        const { code, userId, kingdomId } = req.body;
+        const { code, userId, kingdomId, assignOnly } = req.body;
         if (!code || !userId || !kingdomId) {
             return res.status(400).json({ error: 'Code, Benutzer und Königreich werden benötigt.' });
         }
@@ -822,6 +822,18 @@ app.post('/api/admin/r5-codes/activate', authenticateToken, requireAdmin, async 
 
         const kingdom = await get('SELECT id FROM kingdoms WHERE id = $1', [kingdomId]);
         if (!kingdom) return res.status(404).json({ error: 'Königreich nicht gefunden' });
+
+        if (assignOnly) {
+            const assigned = await assignR5Code(code, userId, kingdomId);
+            return res.json({
+                success: true,
+                assignedOnly: true,
+                code: assigned.code,
+                durationDays: assigned.duration_days,
+                kingdomId: assigned.kingdom_id,
+                usedByUserId: assigned.used_by_user_id
+            });
+        }
 
         const activation = await activateR5Code(code, userId, kingdomId);
         await assignR5(userId, kingdomId);

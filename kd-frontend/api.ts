@@ -185,7 +185,7 @@ export async function createAdminR5Code(durationDays: number): Promise<R5Code> {
   return res.json();
 }
 
-export async function activateAdminR5Code(payload: { code: string; userId: string; kingdomId: string }): Promise<R5Code> {
+export async function activateAdminR5Code(payload: { code: string; userId: string; kingdomId: string; assignOnly?: boolean }): Promise<R5Code> {
   const res = await fetch(`${API_BASE_URL}/api/admin/r5-codes/activate`, {
     method: 'POST',
     headers: getAuthHeaders(),
