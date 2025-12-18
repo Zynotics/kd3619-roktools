@@ -16,13 +16,13 @@ const { v4: uuidv4 } = require('uuid');
 const {
   query, get, all, assignR5, updateKingdomStatus, deleteKingdom,
   createKvkEvent, getKvkEvents, getAllKvkEvents, getKvkEventById, updateKvkEvent, deleteKvkEvent,
-  generateR5Code, getR5Codes, activateR5Code, getActiveR5Access, assignR5Code
+  generateR5Code, getR5Codes, getR5Code, activateR5Code, getActiveR5Access, assignR5Code, deactivateR5Code
 } = require('./db-pg');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'kd3619-secret-key-change-in-production';
-const R5_CODE_DURATIONS = [30, 60, 365];
+const R5_CODE_DURATIONS = [1, 7, 14, 30, 60, 365];
 
 // CORS
 const allowedOrigins = [
@@ -799,7 +799,7 @@ app.post('/api/admin/r5-codes', authenticateToken, requireAdmin, async (req, res
     try {
         const { durationDays } = req.body;
         if (!R5_CODE_DURATIONS.includes(Number(durationDays))) {
-            return res.status(400).json({ error: 'Ungültige Laufzeit. Erlaubt sind 30, 60 oder 365 Tage.' });
+            return res.status(400).json({ error: `Ungültige Laufzeit. Erlaubt sind ${R5_CODE_DURATIONS.join(', ')} Tage.` });
         }
         const code = uuidv4().replace(/-/g, '').slice(0, 16).toUpperCase();
         const created = await generateR5Code(Number(durationDays), code);
@@ -855,15 +855,42 @@ app.post('/api/admin/r5-codes/activate', authenticateToken, requireAdmin, async 
     }
 });
 
-// Admin: Unbenutzten Code löschen
+// Admin: Code deaktivieren oder Zuweisung entfernen
+app.post('/api/admin/r5-codes/:code/deactivate', authenticateToken, requireAdmin, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    try {
+        const code = req.params.code;
+        const existing = await getR5Code(code);
+        if (!existing) return res.status(404).json({ error: 'Code nicht gefunden' });
+
+        const cleared = await deactivateR5Code(code, { clearAssignment: true });
+        return res.json({
+            success: true,
+            code: cleared.code,
+            durationDays: cleared.duration_days,
+            createdAt: cleared.created_at,
+            usedByUserId: cleared.used_by_user_id,
+            kingdomId: cleared.kingdom_id,
+            activatedAt: cleared.activated_at,
+            expiresAt: cleared.expires_at,
+            isActive: cleared.is_active
+        });
+    } catch (error) {
+        console.error('Error deactivating R5 code:', error);
+        res.status(500).json({ error: 'Code konnte nicht deaktiviert werden' });
+    }
+});
+
+// Admin: Code löschen (auch wenn zugewiesen/aktiviert)
 app.delete('/api/admin/r5-codes/:code', authenticateToken, requireAdmin, async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
     try {
         const code = req.params.code;
-        const existing = await get('SELECT code, used_by_user_id, is_active FROM r5_codes WHERE code = $1', [code]);
+        const existing = await getR5Code(code);
         if (!existing) return res.status(404).json({ error: 'Code nicht gefunden' });
+
         if (existing.used_by_user_id || existing.is_active) {
-            return res.status(400).json({ error: 'Code ist bereits zugewiesen oder aktiviert und kann nicht gelöscht werden.' });
+            await deactivateR5Code(code, { clearAssignment: true });
         }
         await query('DELETE FROM r5_codes WHERE code = $1', [code]);
         res.json({ success: true });
