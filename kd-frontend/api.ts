@@ -238,3 +238,17 @@ export async function deleteAdminR5Code(code: string): Promise<void> {
     throw new Error(errorData.error || 'Failed to delete code');
   }
 }
+
+export async function deactivateAdminR5Code(code: string): Promise<R5Code> {
+  const res = await fetch(`${API_BASE_URL}/api/admin/r5-codes/${code}/deactivate`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to deactivate code');
+  }
+
+  return res.json();
+}

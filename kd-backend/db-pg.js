@@ -184,6 +184,29 @@ async function assignR5Code(code, userId, kingdomId) {
   return res.rows[0];
 }
 
+async function deactivateR5Code(code, { clearAssignment = true } = {}) {
+  const setClauses = [
+    'is_active = FALSE',
+    'expires_at = NULL',
+    'activated_at = NULL'
+  ];
+
+  if (clearAssignment) {
+    setClauses.push('used_by_user_id = NULL', 'kingdom_id = NULL');
+  }
+
+  const res = await query(
+    `UPDATE r5_codes
+     SET ${setClauses.join(', ')}
+     WHERE code = $1
+     RETURNING code, duration_days, created_at, used_by_user_id, kingdom_id, activated_at, expires_at, is_active`,
+    [code]
+  );
+
+  if (res.rowCount === 0) throw new Error('Deaktivierung fehlgeschlagen.');
+  return res.rows[0];
+}
+
 // ------------------------------------------------
 // KVK EVENT MANAGER (UPDATED FOR MODULAR & RANGE)
 // ------------------------------------------------
@@ -438,9 +461,11 @@ module.exports = {
   deleteKingdom,
   generateR5Code,
   getR5Codes,
+  getR5Code,
   activateR5Code,
   getActiveR5Access,
   assignR5Code,
+  deactivateR5Code,
   // KvK Exports
   createKvkEvent,
   getKvkEvents,

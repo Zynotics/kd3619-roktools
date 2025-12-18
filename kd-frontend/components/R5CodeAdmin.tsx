@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card } from './Card';
 import { Kingdom, R5Code } from '../types';
-import { API_BASE_URL, activateAdminR5Code, createAdminR5Code, fetchAdminR5Codes, deleteAdminR5Code } from '../api';
+import {
+  API_BASE_URL,
+  activateAdminR5Code,
+  createAdminR5Code,
+  fetchAdminR5Codes,
+  deleteAdminR5Code,
+  deactivateAdminR5Code,
+} from '../api';
 import { useAuth } from './AuthContext';
 
 type UserSummary = {
@@ -13,6 +20,9 @@ type UserSummary = {
 };
 
 const durationLabel = (days: number) => {
+  if (days === 1) return '1 Tag';
+  if (days === 7) return '7 Tage';
+  if (days === 14) return '14 Tage';
   if (days === 30) return '30 Tage';
   if (days === 60) return '60 Tage';
   if (days >= 365) return '1 Jahr';
@@ -46,6 +56,7 @@ const R5CodeAdmin: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [codeActionLoading, setCodeActionLoading] = useState<string | null>(null);
   const [activationForm, setActivationForm] = useState<{ code: string; userId: string; kingdomId: string }>({
     code: '',
     userId: '',
@@ -180,13 +191,29 @@ const R5CodeAdmin: React.FC = () => {
 
   const handleDelete = async (code: string) => {
     try {
+      setCodeActionLoading(code);
       await deleteAdminR5Code(code);
       setCodes((prev) => prev.filter((c) => c.code !== code));
       setSuccessMessage('Code gelscht.');
-      setTimeout(() => setSuccessMessage(null), 2500);
     } catch (err: any) {
       setAssignError(err.message || 'Lschen fehlgeschlagen.');
     }
+    setCodeActionLoading(null);
+    setTimeout(() => setSuccessMessage(null), 2500);
+  };
+
+  const handleDeactivate = async (code: string) => {
+    try {
+      setCodeActionLoading(code);
+      await deactivateAdminR5Code(code);
+      const updated = await fetchAdminR5Codes();
+      setCodes(updated);
+      setSuccessMessage('Code deaktiviert.');
+    } catch (err: any) {
+      setAssignError(err.message || 'Deaktivierung fehlgeschlagen.');
+    }
+    setCodeActionLoading(null);
+    setTimeout(() => setSuccessMessage(null), 2500);
   };
 
   const getUserLabel = (id?: string | null) => {
@@ -222,7 +249,7 @@ const R5CodeAdmin: React.FC = () => {
                 onChange={(e) => setDurationDays(Number(e.target.value))}
                 className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                {[30, 60, 365].map((d) => (
+                {[1, 7, 14, 30, 60, 365].map((d) => (
                   <option key={d} value={d}>
                     {durationLabel(d)}
                   </option>
@@ -360,7 +387,7 @@ const R5CodeAdmin: React.FC = () => {
           <div className="space-y-3">
             {filteredSortedCodes.map((code) => {
               const meta = statusMeta(code);
-              const deletable = !code.isActive && !code.usedByUserId;
+              const isActionLoading = codeActionLoading === code.code;
               return (
                 <div
                   key={code.code}
@@ -388,14 +415,30 @@ const R5CodeAdmin: React.FC = () => {
                       <span className="text-[11px] text-gray-400">Laeuft ab</span>
                       <span className="font-semibold">{formatDate(code.expiresAt)}</span>
                     </div>
-                    {deletable && (
+                    {(code.isActive || code.usedByUserId) && (
                       <button
-                        onClick={() => handleDelete(code.code)}
-                        className="px-3 py-1 rounded text-xs font-semibold bg-red-700 text-white hover:bg-red-800"
+                        onClick={() => handleDeactivate(code.code)}
+                        disabled={isActionLoading}
+                        className={`px-3 py-1 rounded text-xs font-semibold ${
+                          isActionLoading
+                            ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                            : 'bg-yellow-700 text-white hover:bg-yellow-800'
+                        }`}
                       >
-                        Lschen
+                        {isActionLoading ? 'Wird bearbeitet...' : 'Deaktivieren'}
                       </button>
                     )}
+                    <button
+                      onClick={() => handleDelete(code.code)}
+                      disabled={isActionLoading}
+                      className={`px-3 py-1 rounded text-xs font-semibold ${
+                        isActionLoading
+                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                          : 'bg-red-700 text-white hover:bg-red-800'
+                      }`}
+                    >
+                      {isActionLoading ? 'Bitte warten...' : 'Lschen'}
+                    </button>
                   </div>
                 </div>
               );
