@@ -708,7 +708,6 @@ app.post('/api/admin/users/role', authenticateToken, requireAdmin, async (req, r
               const activation = await activateR5Code(accessCode, userId, targetK);
               await assignR5(userId, targetK);
               await query('UPDATE users SET is_approved = TRUE WHERE id = $1', [userId]);
-              return res.json({ success: true, expiresAt: activation.expires_at });
           }
 
           // Ohne Code: Rolle vergeben, aber kein aktiver Zugang (User kann später selbst aktivieren)
@@ -847,7 +846,6 @@ app.post('/api/admin/r5-codes/activate', authenticateToken, requireAdmin, async 
 
         res.json({
             success: true,
-            expiresAt: activation.expires_at,
             activatedAt: activation.activated_at,
             durationDays: activation.duration_days
         });
@@ -924,7 +922,6 @@ app.post('/api/r5-codes/activate-self', authenticateToken, async (req, res) => {
 
     return res.json({
       success: true,
-      expiresAt: activation.expires_at,
       activatedAt: activation.activated_at,
       durationDays: activation.duration_days,
       kingdomId: targetKingdomId,
@@ -1021,7 +1018,7 @@ app.post('/api/admin/kingdoms/:id/assign-r5', authenticateToken, requireAdmin, a
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
     try {
         const { r5UserId, accessCode } = req.body;
-        if (!r5UserId || !accessCode) return res.status(400).json({ error: 'R5 Benutzer und Zugangscode sind erforderlich.' });
+        if (!r5UserId) return res.status(400).json({ error: 'R5 Benutzer ist erforderlich.' });
 
         const targetUser = await get('SELECT id FROM users WHERE id = $1', [r5UserId]);
         if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
@@ -1029,11 +1026,16 @@ app.post('/api/admin/kingdoms/:id/assign-r5', authenticateToken, requireAdmin, a
         const kingdom = await get('SELECT id FROM kingdoms WHERE id = $1', [req.params.id]);
         if (!kingdom) return res.status(404).json({ error: 'Königreich nicht gefunden' });
 
-        const activation = await activateR5Code(accessCode, r5UserId, req.params.id);
+        let expiresAt = null;
+        if (accessCode) {
+            const activation = await activateR5Code(accessCode, r5UserId, req.params.id);
+            expiresAt = activation.expires_at;
+        }
+
         await assignR5(r5UserId, req.params.id);
         await query('UPDATE users SET is_approved = TRUE WHERE id = $1', [r5UserId]);
 
-        res.json({ success: true, message: `R5 zugewiesen.`, expiresAt: activation.expires_at });
+        res.json({ success: true, message: `R5 zugewiesen.`, expiresAt });
     } catch(e) { res.status(500).json({error: e.message}); }
 });
 
@@ -1480,3 +1482,5 @@ app.get('/', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
+
