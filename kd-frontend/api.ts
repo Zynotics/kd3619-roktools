@@ -1,5 +1,5 @@
 // api.ts
-import { CreateKvkEventPayload, KvkEvent } from './types';
+import { CreateKvkEventPayload, KvkEvent, R5Code } from './types';
 
 // Zentrale URL-Konfiguration
 const API_BASE_URL =
@@ -153,4 +153,77 @@ export async function deleteFile(type: 'overview' | 'honor' | 'activity', fileId
     if (!res.ok) {
         throw new Error('Failed to delete file');
     }
+}
+
+// ==================== R5 CODES ====================
+
+export async function fetchAdminR5Codes(): Promise<R5Code[]> {
+  const res = await fetch(`${API_BASE_URL}/api/admin/r5-codes`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to load R5 codes');
+  }
+
+  return res.json();
+}
+
+export async function createAdminR5Code(durationDays: number): Promise<R5Code> {
+  const res = await fetch(`${API_BASE_URL}/api/admin/r5-codes`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ durationDays }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to create R5 code');
+  }
+
+  return res.json();
+}
+
+export async function activateAdminR5Code(payload: { code: string; userId: string; kingdomId: string }): Promise<R5Code> {
+  const res = await fetch(`${API_BASE_URL}/api/admin/r5-codes/activate`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to activate R5 code');
+  }
+
+  return res.json();
+}
+
+export async function fetchMyR5Codes(): Promise<R5Code[]> {
+  const res = await fetch(`${API_BASE_URL}/api/r5-codes/my`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to load your R5 codes');
+  }
+
+  return res.json();
+}
+
+export async function activateSelfR5Code(code: string, kingdomId?: string): Promise<{ expiresAt?: string; activatedAt?: string; durationDays?: number; kingdomId: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/r5-codes/activate-self`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ code, kingdomId }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to activate code');
+  }
+
+  return res.json();
 }

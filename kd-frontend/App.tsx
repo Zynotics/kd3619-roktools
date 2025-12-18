@@ -9,12 +9,14 @@ import LoginPrompt from './components/LoginPrompt';
 import KvkManager from './components/KvkManager';     
 import PublicKvKView from './components/PublicKvKView'; 
 import SuperadminKingdomOverview from './components/SuperadminKingdomOverview';
+import R5CustomerAccess from './components/R5CustomerAccess';
+import R5CodeAdmin from './components/R5CodeAdmin';
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
     ? 'https://api.rise-of-stats.com'
     : 'http://localhost:4000';
 // ðŸ†• 'kvk-manager' als eigener View-Typ hinzugefÃ¼gt
-type ActiveView = 'overview' | 'kvk' | 'kvk-manager' | 'analytics' | 'admin' | 'activity' | 'kingdoms-overview';
+type ActiveView = 'overview' | 'kvk' | 'kvk-manager' | 'analytics' | 'admin' | 'activity' | 'kingdoms-overview' | 'r5-access' | 'r5-codes';
 // Sidebar Navigation Item
 const NavItem: React.FC<{
   view: ActiveView;
@@ -114,7 +116,7 @@ const AppContent: React.FC = () => {
         return;
     }
     if (isSuperAdminWithoutSlug) {
-        if (activeView !== 'kingdoms-overview' && activeView !== 'admin') {
+        if (activeView !== 'kingdoms-overview' && activeView !== 'admin' && activeView !== 'r5-codes' && activeView !== 'r5-access') {
             setActiveView('kingdoms-overview');
         }
         if (activeView === 'kvk-manager') {
@@ -269,6 +271,15 @@ const AppContent: React.FC = () => {
                   label="Players"
                   icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
                 />
+                {user && (
+                  <NavItem
+                    view="r5-access"
+                    currentActiveView={activeView}
+                    setActiveView={setActiveView}
+                    label="R5 Zugang"
+                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 11-4 0 2 2 0 014 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-5" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7h5v5" /></svg>}
+                  />
+                )}
               </>
             )}
             {/* ========== ADMINISTRATION BEREICH ========== */}
@@ -302,6 +313,15 @@ const AppContent: React.FC = () => {
                     setActiveView={setActiveView}
                     label="User Management"
                     icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.525.32 1.157.495 1.724.319v0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+                  />
+                )}
+                {isSuperAdmin && (
+                  <NavItem
+                    view="r5-codes"
+                    currentActiveView={activeView}
+                    setActiveView={setActiveView}
+                    label="R5 Codes"
+                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11c0 7-7 10-7 10S5 18 5 11a7 7 0 1114 0z" /></svg>}
                   />
                 )}
               </div>
@@ -436,6 +456,14 @@ const AppContent: React.FC = () => {
                     />
                 </PublicOrProtectedRoute>
             )}
+                {activeView === 'r5-access' && user && (
+                  <R5CustomerAccess />
+                )}
+                {activeView === 'r5-codes' && user && isSuperAdmin && (
+                  <ProtectedRoute accessType='admin'>
+                    <R5CodeAdmin />
+                  </ProtectedRoute>
+                )}
                 {activeView === 'admin' && user && hasAdminAccess && (
                     <ProtectedRoute accessType='admin'>
                     <AdminUserManagement />
