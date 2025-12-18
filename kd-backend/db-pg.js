@@ -122,9 +122,19 @@ async function getR5Code(code) {
 async function activateR5Code(code, userId, kingdomId) {
   const existing = await getR5Code(code);
   if (!existing) throw new Error('Code nicht gefunden.');
-  if (existing.is_active) throw new Error('Code wurde bereits verwendet.');
+  if (existing.used_by_user_id && existing.used_by_user_id !== userId) {
+    throw new Error('Code ist einem anderen Benutzer zugeordnet.');
+  }
+  if (existing.is_active) throw new Error('Code wurde bereits aktiviert.');
 
-  const expiresAt = new Date();
+  // Laufzeit an vorhandene Restlaufzeit anhängen (Stacking)
+  const now = new Date();
+  let baseDate = now;
+  const current = await getActiveR5Access(userId);
+  if (current && current.expires_at && new Date(current.expires_at) > now) {
+    baseDate = new Date(current.expires_at);
+  }
+  const expiresAt = new Date(baseDate);
   expiresAt.setDate(expiresAt.getDate() + existing.duration_days);
 
   const res = await query(
@@ -157,6 +167,21 @@ async function getActiveR5Access(userId) {
     [userId]
   );
   return row || null;
+}
+
+async function assignR5Code(code, userId, kingdomId) {
+  const existing = await getR5Code(code);
+  if (!existing) throw new Error('Code nicht gefunden.');
+  if (existing.is_active) throw new Error('Code wurde bereits aktiviert.');
+  if (existing.used_by_user_id && existing.used_by_user_id !== userId) {
+    throw new Error('Code ist einem anderen Benutzer zugeordnet.');
+  }
+  const res = await query(
+    `UPDATE r5_codes SET used_by_user_id = $1, kingdom_id = $2 WHERE code = $3 RETURNING code, duration_days, created_at, used_by_user_id, kingdom_id, activated_at, expires_at, is_active`,
+    [userId, kingdomId || existing.kingdom_id, code]
+  );
+  if (res.rowCount === 0) throw new Error('Zuweisung fehlgeschlagen.');
+  return res.rows[0];
 }
 
 // ------------------------------------------------
@@ -415,6 +440,7 @@ module.exports = {
   getR5Codes,
   activateR5Code,
   getActiveR5Access,
+  assignR5Code,
   // KvK Exports
   createKvkEvent,
   getKvkEvents,
