@@ -11,12 +11,23 @@ import PublicKvKView from './components/PublicKvKView';
 import SuperadminKingdomOverview from './components/SuperadminKingdomOverview';
 import R5CustomerAccess from './components/R5CustomerAccess';
 import R5CodeAdmin from './components/R5CodeAdmin';
+import ShopWidget from './components/ShopWidget';
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
     ? 'https://api.rise-of-stats.com'
     : 'http://localhost:4000';
 // ðŸ†• 'kvk-manager' als eigener View-Typ hinzugefÃ¼gt
-type ActiveView = 'overview' | 'kvk' | 'kvk-manager' | 'analytics' | 'admin' | 'activity' | 'kingdoms-overview' | 'r5-access' | 'r5-codes';
+type ActiveView =
+  | 'overview'
+  | 'kvk'
+  | 'kvk-manager'
+  | 'analytics'
+  | 'admin'
+  | 'activity'
+  | 'kingdoms-overview'
+  | 'r5-access'
+  | 'r5-codes'
+  | 'shop';
 // Sidebar Navigation Item
 const NavItem: React.FC<{
   view: ActiveView;
@@ -274,6 +285,13 @@ const AppContent: React.FC = () => {
                   label="Players"
                   icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
                 />
+                <NavItem
+                  view="shop"
+                  currentActiveView={activeView}
+                  setActiveView={setActiveView}
+                  label="Shop"
+                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18l-2 10H5L3 7zm2 0 1-3h12l1 3M9 11h6" /></svg>}
+                />
               </>
             )}
             {/* ========== ADMINISTRATION BEREICH ========== */}
@@ -459,6 +477,16 @@ const AppContent: React.FC = () => {
                     />
                 </PublicOrProtectedRoute>
             )}
+                {activeView === 'shop' && (
+                    <PublicOrProtectedRoute
+                    isPublic={effectivePublicView}
+                    publicSlug={publicSlug}
+                    accessType="overview"
+                    isAdminOverride={isAdminOverrideView}
+                    >
+                      <ShopWidget kingdomSlug={publicSlug || undefined} />
+                    </PublicOrProtectedRoute>
+                )}
                 {activeView === 'r5-access' && user && isR5 && (
                   <ProtectedRoute accessType='admin'>
                     <R5CustomerAccess />
