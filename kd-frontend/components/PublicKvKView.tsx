@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { KvkEvent, UploadedFile, HonorPlayerInfo, PlayerHonorHistory } from '../types';
-import { fetchPublicKvkEvents, API_BASE_URL } from '../api'; 
+import { fetchPublicKvkEvents, API_BASE_URL } from '../api';
 import { findColumnIndex, formatNumber, parseGermanNumber } from '../utils';
-import HonorOverviewTable from './HonorOverviewTable'; 
+import HonorOverviewTable from './HonorOverviewTable';
 import HonorHistoryChart from './HonorHistoryChart';
 import HonorPlayerSearch from './HonorPlayerSearch';
 import { useAuth } from './AuthContext';
+import ShopWidget from './ShopWidget';
 
 // Typ für die aggregierten Stats (Erweitert)
 type StatProgressRow = {
@@ -621,7 +622,8 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
   return (
     <div className="bg-gray-900 min-h-screen text-gray-100 font-sans pb-20">
-      
+      <ShopWidget kingdomSlug={slug} />
+
       <div className="bg-gradient-to-r from-blue-900 to-gray-900 p-6 shadow-lg border-b border-gray-700 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
