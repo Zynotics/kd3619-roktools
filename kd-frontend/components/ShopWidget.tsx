@@ -17,11 +17,11 @@ interface CartItem extends Product {
 }
 
 const PRODUCTS: Product[] = [
-  { id: '1d', label: '1 Tag Zugang', price: 5, description: 'Kurztest fuer einen Tag.' },
-  { id: '7d', label: '7 Tage Zugang', price: 10, description: 'Woche volles Feature-Set.' },
-  { id: '14d', label: '14 Tage Zugang', price: 20, description: 'Zwei Wochen Zugriff & Support.' },
-  { id: '30d', label: '30 Tage Zugang', price: 26, description: 'Monats-Pass mit Rabatt.' },
-  { id: '1y', label: '1 Jahr Zugang', price: 220, description: 'Jahreslizenz fuer Power User.' },
+  { id: '1d', label: '1 Day Access', price: 5, description: 'Quick access for a day.' },
+  { id: '7d', label: '7 Day Access', price: 10, description: 'Full access for one week.' },
+  { id: '14d', label: '14 Day Access', price: 20, description: 'Two weeks with support.' },
+  { id: '30d', label: '30 Day Access', price: 26, description: 'Monthly pass with discount.' },
+  { id: '1y', label: '1 Year Access', price: 220, description: 'Annual license for power users.' },
 ];
 
 const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
@@ -75,7 +75,7 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
 
     if (cart.length === 0) return;
 
-    setCheckoutMessage('Vielen Dank! Dein Checkout ist vorbereitet. Ein Admin wird die Freischaltung vornehmen.');
+    setCheckoutMessage('Thanks! Your checkout is prepared. An admin will finalize the activation.');
     clearCart();
   };
 
@@ -84,7 +84,7 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
       <div className="bg-gray-900 border border-blue-700 rounded-2xl shadow-xl overflow-hidden">
         <div className="px-6 py-4 bg-blue-700/20 border-b border-blue-700">
           <p className="text-xs uppercase tracking-widest text-blue-200">KD Shop</p>
-          <p className="text-lg font-semibold text-white">Zugaenge kaufen</p>
+          <p className="text-lg font-semibold text-white">Choose your access duration</p>
         </div>
         <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 grid grid-cols-1 gap-4">
@@ -103,7 +103,7 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
                     className="mt-2 text-xs px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 transition"
                     onClick={() => addToCart(product)}
                   >
-                    In den Warenkorb
+                    Add to cart
                   </button>
                 </div>
               </div>
@@ -112,25 +112,25 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
 
           <div className="bg-black/30 border border-gray-700 rounded-xl p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold">Warenkorb</p>
+              <p className="text-sm font-semibold">Cart</p>
               <button
                 onClick={clearCart}
                 className="text-xs text-gray-400 hover:text-white"
                 disabled={cart.length === 0}
               >
-                Zuruecksetzen
+                Clear
               </button>
             </div>
 
             {cart.length === 0 ? (
-              <p className="text-xs text-gray-500">Keine Artikel hinzugefuegt.</p>
+              <p className="text-xs text-gray-500">No items added.</p>
             ) : (
               <div className="space-y-2">
                 {cart.map(item => (
                   <div key={item.id} className="flex items-center justify-between text-sm">
                     <div>
                       <p className="font-medium">{item.label}</p>
-                      <p className="text-xs text-gray-500">${item.price} pro Lizenz</p>
+                      <p className="text-xs text-gray-500">${item.price} per license</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -150,7 +150,7 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
                   </div>
                 ))}
                 <div className="flex items-center justify-between border-t border-gray-700 pt-2 text-sm font-semibold">
-                  <span>Gesamtsumme</span>
+                  <span>Total</span>
                   <span>${total.toFixed(2)}</span>
                 </div>
               </div>
@@ -159,7 +159,7 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
             <div className="space-y-2">
               {!user && (
                 <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-600 rounded-lg p-2">
-                  Bitte einloggen oder registrieren um den Checkout abzuschliessen.
+                  Please log in or register to complete checkout.
                 </div>
               )}
               {checkoutMessage && (
@@ -178,7 +178,7 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
                       : 'bg-blue-700 hover:bg-blue-600 text-white'
                 }`}
               >
-                {user ? 'Jetzt Checkout starten' : 'Login/Registrierung starten'}
+                {user ? 'Proceed to checkout' : 'Start login/registration'}
               </button>
             </div>
           </div>
