@@ -67,6 +67,8 @@ const KvkManager: React.FC = () => {
   // --- Form State ---
   const [name, setName] = useState('');
   const [isPublic, setIsPublic] = useState(false);
+  const [isRankingPublic, setIsRankingPublic] = useState(true);
+  const [isHonorPublic, setIsHonorPublic] = useState(true);
   const [eventStartId, setEventStartId] = useState('');
   
   // Honor Range Selection
@@ -117,6 +119,8 @@ const KvkManager: React.FC = () => {
     setEditingEventId(null);
     setName('');
     setIsPublic(false);
+    setIsRankingPublic(true);
+    setIsHonorPublic(true);
     setEventStartId('');
     setHonorStartId('');
     setHonorEndId('');
@@ -138,6 +142,8 @@ const KvkManager: React.FC = () => {
     setEditingEventId(ev.id);
     setName(ev.name);
     setIsPublic(ev.isPublic);
+    setIsRankingPublic(ev.isRankingPublic ?? ev.isPublic ?? true);
+    setIsHonorPublic(ev.isHonorPublic ?? ev.isPublic ?? true);
     setEventStartId(ev.eventStartFileId || '');
     setHonorStartId(ev.honorStartFileId || '');
     setHonorEndId(ev.honorEndFileId || '');
@@ -294,6 +300,8 @@ const KvkManager: React.FC = () => {
         honorStartFileId: honorStartId,
         honorEndFileId: honorEndId,
         isPublic,
+        isRankingPublic,
+        isHonorPublic,
     };
 
     setLoading(true);
@@ -439,10 +447,10 @@ const KvkManager: React.FC = () => {
                 onChange={e => setName(e.target.value)}
               />
             </div>
-            <div className="md:col-span-1 flex items-end pb-2">
+            <div className="md:col-span-1 flex flex-col gap-3 pb-2">
               <label className="flex items-center cursor-pointer select-none group">
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   className="mr-3 w-5 h-5 accent-green-500 cursor-pointer"
                   checked={isPublic}
                   onChange={e => setIsPublic(e.target.checked)}
@@ -454,6 +462,32 @@ const KvkManager: React.FC = () => {
                     <span className="text-[10px] text-gray-500">
                         {isPublic ? 'Visible to everyone' : 'Visible for R4/R5 of this kingdom'}
                     </span>
+                </div>
+              </label>
+
+              <label className="flex items-start cursor-pointer select-none group">
+                <input
+                  type="checkbox"
+                  className="mr-3 mt-0.5 w-4 h-4 accent-blue-400 cursor-pointer"
+                  checked={isRankingPublic}
+                  onChange={e => setIsRankingPublic(e.target.checked)}
+                />
+                <div className="flex flex-col leading-tight">
+                  <span className={`font-semibold text-sm ${isRankingPublic ? 'text-blue-200' : 'text-gray-400'}`}>Total Ranking</span>
+                  <span className="text-[10px] text-gray-500">{isRankingPublic ? 'Leaderboard visible for public visitors' : 'Only R4/R5/Admin can see the ranking'}</span>
+                </div>
+              </label>
+
+              <label className="flex items-start cursor-pointer select-none group">
+                <input
+                  type="checkbox"
+                  className="mr-3 mt-0.5 w-4 h-4 accent-purple-400 cursor-pointer"
+                  checked={isHonorPublic}
+                  onChange={e => setIsHonorPublic(e.target.checked)}
+                />
+                <div className="flex flex-col leading-tight">
+                  <span className={`font-semibold text-sm ${isHonorPublic ? 'text-purple-200' : 'text-gray-400'}`}>Honor Dashboard</span>
+                  <span className="text-[10px] text-gray-500">{isHonorPublic ? 'Honor charts visible for public visitors' : 'Restrict honor view to R4/R5/Admin'}</span>
                 </div>
               </label>
             </div>
@@ -835,6 +869,19 @@ const KvkManager: React.FC = () => {
                                 ) : (
                                   <span className="text-red-400">⚠️ Missing</span>
                                 )}
+                            </div>
+                            <div className="flex items-center text-sm text-gray-300 flex-wrap gap-2">
+                              <span className="w-20 text-xs text-gray-500 uppercase">Sections:</span>
+                              <span className={`text-[11px] px-2 py-1 rounded border ${
+                                ev.isRankingPublic ? 'border-blue-500/50 bg-blue-900/30 text-blue-100' : 'border-gray-600 bg-gray-800 text-gray-300'
+                              }`}>
+                                Total Ranking: {ev.isRankingPublic ? 'Public' : 'Private'}
+                              </span>
+                              <span className={`text-[11px] px-2 py-1 rounded border ${
+                                ev.isHonorPublic ? 'border-purple-500/50 bg-purple-900/30 text-purple-100' : 'border-gray-600 bg-gray-800 text-gray-300'
+                              }`}>
+                                Honor Dashboard: {ev.isHonorPublic ? 'Public' : 'Private'}
+                              </span>
                             </div>
                         </div>
                       </td>

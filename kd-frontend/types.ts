@@ -206,8 +206,10 @@ export interface KvkEvent {
   // Honor tracking definition (range instead of list)
   honorStartFileId?: string; // ID from the honor pool
   honorEndFileId?: string;   // ID from the honor pool
-  
+
   isPublic: boolean;
+  isRankingPublic?: boolean;
+  isHonorPublic?: boolean;
   createdAt: string;
 }
 
@@ -222,6 +224,8 @@ export interface CreateKvkEventPayload {
   honorStartFileId?: string;
   honorEndFileId?: string;
   isPublic: boolean;
+  isRankingPublic?: boolean;
+  isHonorPublic?: boolean;
 }
 
 export interface R5Code {

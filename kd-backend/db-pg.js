@@ -285,6 +285,13 @@ async function initKvkTable() {
     await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS dkp_formula TEXT`);
     await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS goals_formula TEXT`);
 
+    // Separate Sichtbarkeit je Bereich
+    await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS ranking_public BOOLEAN DEFAULT TRUE`);
+    await query(`ALTER TABLE kvk_events ADD COLUMN IF NOT EXISTS honor_public BOOLEAN DEFAULT TRUE`);
+
+    await query(`UPDATE kvk_events SET ranking_public = is_public WHERE ranking_public IS NULL`);
+    await query(`UPDATE kvk_events SET honor_public = is_public WHERE honor_public IS NULL`);
+
     // Alte Spalten (start_file_id, end_file_id) könnten hier theoretisch gelöscht werden,
     // aber wir lassen sie zur Sicherheit für Legacy-Zwecke drin oder ignorieren sie einfach.
 
@@ -354,9 +361,11 @@ async function createKvkEvent(event) {
       dkp_formula,
       goals_formula,
       is_public,
-      created_at
+      created_at,
+      ranking_public,
+      honor_public
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     RETURNING *
   `;
 
@@ -376,7 +385,9 @@ async function createKvkEvent(event) {
     dkpFormulaStr,
     goalsFormulaStr,
     !!event.isPublic,
-    event.createdAt || new Date()
+    event.createdAt || new Date(),
+    event.isRankingPublic ?? event.isPublic ?? true,
+    event.isHonorPublic ?? event.isPublic ?? true
   ]);
   return res.rows[0];
 }
@@ -404,6 +415,8 @@ async function getKvkEvents(kingdomId) {
     honorEndFileId: row.honor_end_file_id,
 
     isPublic: row.is_public,
+    isRankingPublic: row.ranking_public ?? row.is_public,
+    isHonorPublic: row.honor_public ?? row.is_public,
     createdAt: row.created_at
   }));
 }
@@ -426,6 +439,8 @@ async function getAllKvkEvents() {
     honorStartFileId: row.honor_start_file_id,
     honorEndFileId: row.honor_end_file_id,
     isPublic: row.is_public,
+    isRankingPublic: row.ranking_public ?? row.is_public,
+    isHonorPublic: row.honor_public ?? row.is_public,
     createdAt: row.created_at
   }));
 }
@@ -448,6 +463,8 @@ async function getKvkEventById(id) {
     honorStartFileId: row.honor_start_file_id,
     honorEndFileId: row.honor_end_file_id,
     isPublic: row.is_public,
+    isRankingPublic: row.ranking_public ?? row.is_public,
+    isHonorPublic: row.honor_public ?? row.is_public,
     createdAt: row.created_at
   };
 }
@@ -465,8 +482,10 @@ async function updateKvkEvent(id, data) {
         honor_end_file_id = $5,
         dkp_formula = $6,
         goals_formula = $7,
-        is_public = $8
-    WHERE id = $9
+        is_public = $8,
+        ranking_public = $9,
+        honor_public = $10
+    WHERE id = $11
     RETURNING *
   `;
 
@@ -483,6 +502,8 @@ async function updateKvkEvent(id, data) {
     dkpFormulaStr,
     goalsFormulaStr,
     !!data.isPublic,
+    data.isRankingPublic ?? data.isPublic ?? true,
+    data.isHonorPublic ?? data.isPublic ?? true,
     id
   ]);
   return res.rows[0];

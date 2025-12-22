@@ -1184,7 +1184,7 @@ app.get('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (re
 app.post('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (req, res) => {
   try {
     // UPDATED: Jetzt mit honorStartFileId / honorEndFileId
-    const { name, fights, eventStartFileId, honorStartFileId, honorEndFileId, dkpFormula, goalsFormula, isPublic, kingdomId: bodyKingdomId } = req.body;
+    const { name, fights, eventStartFileId, honorStartFileId, honorEndFileId, dkpFormula, goalsFormula, isPublic, rankingPublic, honorPublic, kingdomId: bodyKingdomId } = req.body;
 
     let targetKingdomId = req.user.kingdomId;
     if (req.user.role === 'admin') {
@@ -1223,6 +1223,8 @@ app.post('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (r
       dkpFormula: dkpFormula || null,
       goalsFormula: goalsFormula || null,
       isPublic: !!isPublic,
+      isRankingPublic: rankingPublic ?? isPublic ?? true,
+      isHonorPublic: honorPublic ?? isPublic ?? true,
       createdAt: new Date().toISOString()
     };
 
@@ -1237,7 +1239,7 @@ app.post('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (r
 // 3. PUT /api/admin/kvk/events/:id - Event bearbeiten
 app.put('/api/admin/kvk/events/:id', authenticateToken, requireKvkManager, async (req, res) => {
   try {
-    const { name, fights, eventStartFileId, honorStartFileId, honorEndFileId, dkpFormula, goalsFormula, isPublic } = req.body;
+    const { name, fights, eventStartFileId, honorStartFileId, honorEndFileId, dkpFormula, goalsFormula, isPublic, rankingPublic, honorPublic } = req.body;
     const eventId = req.params.id;
 
     // Check ownership
@@ -1262,7 +1264,9 @@ app.put('/api/admin/kvk/events/:id', authenticateToken, requireKvkManager, async
       honorEndFileId,
       dkpFormula: dkpFormula || null,
       goalsFormula: goalsFormula || null,
-      isPublic
+      isPublic,
+      isRankingPublic: rankingPublic ?? existing.isRankingPublic ?? existing.isPublic,
+      isHonorPublic: honorPublic ?? existing.isHonorPublic ?? existing.isPublic
     });
     res.json(updated);
   } catch (error) {
