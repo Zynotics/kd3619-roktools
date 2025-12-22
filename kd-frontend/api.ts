@@ -124,6 +124,17 @@ export async function fetchPublicKvkEvents(kingdomSlug: string, token?: string):
   return res.json();
 }
 
+export async function fetchShopVisibility(): Promise<{ enabled: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/api/shop-visibility`);
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to load shop visibility');
+  }
+
+  return res.json();
+}
+
 // ==================== FILE MANAGEMENT API ====================
 
 /**
