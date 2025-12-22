@@ -16,13 +16,15 @@ const { v4: uuidv4 } = require('uuid');
 const {
   query, get, all, assignR5, updateKingdomStatus, deleteKingdom,
   createKvkEvent, getKvkEvents, getAllKvkEvents, getKvkEventById, updateKvkEvent, deleteKvkEvent,
-  generateR5Code, getR5Codes, getR5Code, activateR5Code, getActiveR5Access, assignR5Code, deactivateR5Code
+  generateR5Code, getR5Codes, getR5Code, activateR5Code, getActiveR5Access, assignR5Code, deactivateR5Code,
+  getAppSetting, setAppSetting
 } = require('./db-pg');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'kd3619-secret-key-change-in-production';
 const R5_CODE_DURATIONS = [1, 7, 14, 30, 60, 365];
+const R5_SHOP_VISIBILITY_KEY = 'r5_shop_enabled';
 
 // CORS
 const allowedOrigins = [
@@ -106,6 +108,17 @@ function parseExcel(filePath) {
       reject(error);
     }
   });
+}
+
+async function getR5ShopVisibilitySetting() {
+  const entry = await getAppSetting(R5_SHOP_VISIBILITY_KEY);
+  if (!entry || entry.value == null) return true;
+  return String(entry.value).toLowerCase() === 'true';
+}
+
+async function setR5ShopVisibilitySetting(enabled) {
+  const value = enabled ? 'true' : 'false';
+  return setAppSetting(R5_SHOP_VISIBILITY_KEY, value);
 }
 
 // (Behalten für Legacy-Kompatibilität, auch wenn ungenutzt)
@@ -773,6 +786,43 @@ app.post('/api/admin/users/assign-r4', authenticateToken, requireAdmin, async (r
 });
 
 // ==================== R5 ACCESS CODES ====================
+
+// Global Shop Visibility for R5 (Superadmin control)
+app.get('/api/r5-shop-visibility', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const enabled = await getR5ShopVisibilitySetting();
+        res.json({ enabled });
+    } catch (error) {
+        console.error('Error loading R5 shop visibility:', error);
+        res.status(500).json({ error: 'Fehler beim Laden der Shop-Einstellung' });
+    }
+});
+
+app.get('/api/admin/r5-shop-visibility', authenticateToken, requireAdmin, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    try {
+        const enabled = await getR5ShopVisibilitySetting();
+        res.json({ enabled });
+    } catch (error) {
+        console.error('Error loading R5 shop visibility:', error);
+        res.status(500).json({ error: 'Fehler beim Laden der Shop-Einstellung' });
+    }
+});
+
+app.put('/api/admin/r5-shop-visibility', authenticateToken, requireAdmin, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    try {
+        const { enabled } = req.body;
+        if (typeof enabled !== 'boolean') {
+            return res.status(400).json({ error: 'enabled muss boolean sein' });
+        }
+        await setR5ShopVisibilitySetting(enabled);
+        res.json({ success: true, enabled });
+    } catch (error) {
+        console.error('Error saving R5 shop visibility:', error);
+        res.status(500).json({ error: 'Fehler beim Speichern der Shop-Einstellung' });
+    }
+});
 
 app.get('/api/admin/r5-codes', authenticateToken, requireAdmin, async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
