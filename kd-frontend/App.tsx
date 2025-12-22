@@ -37,7 +37,8 @@ const NavItem: React.FC<{
   label: string;
   icon: React.ReactNode;
   isDisabled?: boolean;
-}> = ({ view, currentActiveView, setActiveView, label, icon, isDisabled = false }) => {
+  onNavigate?: () => void;
+}> = ({ view, currentActiveView, setActiveView, label, icon, isDisabled = false, onNavigate }) => {
   const isActive = view === currentActiveView;
   const baseClasses = 'flex items-center w-full px-4 py-3 text-sm font-medium transition-colors duration-200 rounded-lg group';
   const activeClasses = 'bg-blue-600 text-white shadow-lg shadow-blue-900/50';
@@ -52,7 +53,10 @@ const NavItem: React.FC<{
   }
   return (
     <button
-      onClick={() => setActiveView(view)}
+      onClick={() => {
+        setActiveView(view);
+        if (onNavigate) onNavigate();
+      }}
       className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses}`}
     >
       <span className={`${isActive ? 'text-white' : 'text-gray-400 group-hover:text-white'} mr-3`}>
@@ -69,6 +73,7 @@ const AppContent: React.FC = () => {
   const [slugKingdomId, setSlugKingdomId] = useState<string | null>(null);
   const [r5ShopEnabled, setR5ShopEnabled] = useState(false);
   const [isShopVisibilityLoading, setIsShopVisibilityLoading] = useState(true);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
   const forceLogin = queryParams.get('login') === 'true';
@@ -108,6 +113,158 @@ const AppContent: React.FC = () => {
   const showDashboardInterface =
     (user || isAdminOverrideView || effectivePublicView) && !(forceLogin && !user);
 
+  const renderMainNavigation = (onNavigate?: () => void) => {
+    if (hideStandardNavigation) return null;
+    return (
+      <>
+        <NavItem
+          view="overview"
+          currentActiveView={activeView}
+          setActiveView={setActiveView}
+          label="Analytics"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>}
+          onNavigate={onNavigate}
+        />
+        {canViewActivity && (
+          <NavItem
+            view="activity"
+            currentActiveView={activeView}
+            setActiveView={setActiveView}
+            label="Activity"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>}
+            onNavigate={onNavigate}
+          />
+        )}
+        <NavItem
+          view="kvk"
+          currentActiveView={activeView}
+          setActiveView={setActiveView}
+          label="KvK"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
+          onNavigate={onNavigate}
+        />
+        <NavItem
+          view="analytics"
+          currentActiveView={activeView}
+          setActiveView={setActiveView}
+          label="Players"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
+          onNavigate={onNavigate}
+        />
+        {canAccessShop && (
+          <NavItem
+            view="shop"
+            currentActiveView={activeView}
+            setActiveView={setActiveView}
+            label="Shop"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18l-2 10H5L3 7zm2 0 1-3h12l1 3M9 11h6" /></svg>}
+            onNavigate={onNavigate}
+          />
+        )}
+      </>
+    );
+  };
+
+  const renderAdminNavigation = (onNavigate?: () => void) => {
+    if (!showAdminNavigation) return null;
+    return (
+      <div className="pt-4 mt-4 border-t border-gray-800">
+        <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+          Administration
+        </p>
+        {showSuperadminKingdomOverview && (
+          <NavItem
+            view="kingdoms-overview"
+            currentActiveView={activeView}
+            setActiveView={setActiveView}
+            label="Königreiche"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.326 0 2.402-1.105 2.402-2.468S13.326 6.064 12 6.064s-2.402 1.105-2.402 2.468S10.674 11 12 11z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.732 19.5a6.27 6.27 0 0112.536 0M4.5 7.5h15M4.5 12h15" /></svg>}
+            onNavigate={onNavigate}
+          />
+        )}
+        {canManageKvk && (
+          <NavItem
+            view="kvk-manager"
+            currentActiveView={activeView}
+            setActiveView={setActiveView}
+            label="KvK Manager"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>}
+            onNavigate={onNavigate}
+          />
+        )}
+        {isAdmin && (
+          <NavItem
+            view="admin"
+            currentActiveView={activeView}
+            setActiveView={setActiveView}
+            label="User Management"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.525.32 1.157.495 1.724.319v0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+            onNavigate={onNavigate}
+          />
+        )}
+        {isR5 && (
+          <NavItem
+            view="r5-access"
+            currentActiveView={activeView}
+            setActiveView={setActiveView}
+            label="R5 Access"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 11-4 0 2 2 0 014 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-5" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7h5v5" /></svg>}
+            onNavigate={onNavigate}
+          />
+        )}
+        {isSuperAdmin && (
+          <NavItem
+            view="r5-codes"
+            currentActiveView={activeView}
+            setActiveView={setActiveView}
+            label="R5 Codes"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11c0 7-7 10-7 10S5 18 5 11a7 7 0 1114 0z" /></svg>}
+            onNavigate={onNavigate}
+          />
+        )}
+      </div>
+    );
+  };
+
+  const renderUserSection = (onNavigate?: () => void) => (
+    <div className="p-4 border-t border-gray-800 bg-gray-900/50">
+      {user ? (
+        <div className="flex flex-col space-y-3">
+          <div className="flex items-center">
+            <div className="ml-0">
+              <p className="text-sm font-medium text-white">{user.username}</p>
+              <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              logout();
+              if (onNavigate) onNavigate();
+            }}
+            className="w-full flex items-center justify-center px-4 py-2 border border-gray-700 rounded-md shadow-sm text-xs font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 focus:outline-none"
+          >
+            Log out
+          </button>
+        </div>
+      ) : (
+        <div className="text-center space-y-2">
+          <div className="text-xs text-gray-500">Not logged in</div>
+          {publicSlug && (
+            <button
+              onClick={() => {
+                redirectToLogin();
+                if (onNavigate) onNavigate();
+              }}
+              className="w-full flex items-center justify-center px-4 py-2 border border-gray-700 rounded-md shadow-sm text-xs font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 focus:outline-none"
+            >
+              Login to access
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   const activeViewStorageKey = publicSlug ? `kd-active-view:${publicSlug}` : 'kd-active-view';
 
   // Restore last visited view on load
@@ -117,6 +274,10 @@ const AppContent: React.FC = () => {
       setActiveView(savedView);
     }
   }, [activeViewStorageKey]);
+
+  useEffect(() => {
+    setIsMobileNavOpen(false);
+  }, [activeView]);
 
   const redirectToLogin = () => {
     const newUrl = new URL(window.location.href);
@@ -294,147 +455,31 @@ const AppContent: React.FC = () => {
            </span>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-6 space-y-2">
-            {!hideStandardNavigation && (
-              <>
-                <NavItem
-                  view="overview"
-                  currentActiveView={activeView}
-                  setActiveView={setActiveView}
-                  label="Analytics"
-                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>}
-                />
-                {/* Activity */}
-                {canViewActivity && (
-                  <NavItem
-                    view="activity"
-                    currentActiveView={activeView}
-                    setActiveView={setActiveView}
-                    label="Activity"
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>}
-                  />
-                )}
-                {/* KvK Ansicht */}
-                <NavItem
-                  view="kvk"
-                  currentActiveView={activeView}
-                  setActiveView={setActiveView}
-                  label="KvK"
-                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
-                />
-                <NavItem
-                  view="analytics"
-                  currentActiveView={activeView}
-                  setActiveView={setActiveView}
-                  label="Players"
-                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
-                />
-                {canAccessShop && (
-                  <NavItem
-                    view="shop"
-                    currentActiveView={activeView}
-                    setActiveView={setActiveView}
-                    label="Shop"
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18l-2 10H5L3 7zm2 0 1-3h12l1 3M9 11h6" /></svg>}
-                  />
-                )}
-              </>
-            )}
+            {renderMainNavigation()}
             {/* ========== ADMINISTRATION BEREICH ========== */}
-            {showAdminNavigation && (
-              <div className="pt-4 mt-4 border-t border-gray-800">
-                <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                  Administration
-                </p>
-                {showSuperadminKingdomOverview && (
-                  <NavItem
-                    view="kingdoms-overview"
-                    currentActiveView={activeView}
-                    setActiveView={setActiveView}
-                    label="Königreiche"
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.326 0 2.402-1.105 2.402-2.468S13.326 6.064 12 6.064s-2.402 1.105-2.402 2.468S10.674 11 12 11z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.732 19.5a6.27 6.27 0 0112.536 0M4.5 7.5h15M4.5 12h15" /></svg>}
-                  />
-                )}
-                {canManageKvk && (
-                  <NavItem
-                    view="kvk-manager"
-                    currentActiveView={activeView}
-                    setActiveView={setActiveView}
-                    label="KvK Manager"
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>}
-                  />
-                )}
-                {isAdmin && (
-                  <NavItem
-                    view="admin"
-                    currentActiveView={activeView}
-                    setActiveView={setActiveView}
-                    label="User Management"
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.525.32 1.157.495 1.724.319v0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-                  />
-                )}
-                {isR5 && (
-                  <NavItem
-                    view="r5-access"
-                    currentActiveView={activeView}
-                    setActiveView={setActiveView}
-                    label="R5 Access"
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 11-4 0 2 2 0 014 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-5" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7h5v5" /></svg>}
-                  />
-                )}
-                {isSuperAdmin && (
-                  <NavItem
-                    view="r5-codes"
-                    currentActiveView={activeView}
-                    setActiveView={setActiveView}
-                    label="R5 Codes"
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11c0 7-7 10-7 10S5 18 5 11a7 7 0 1114 0z" /></svg>}
-                  />
-                )}
-              </div>
-            )}
+            {renderAdminNavigation()}
         </div>
         {/* Sidebar Footer (User Info) */}
-        <div className="p-4 border-t border-gray-800 bg-gray-900/50">
-            {user ? (
-                <div className="flex flex-col space-y-3">
-                    <div className="flex items-center">
-                        <div className="ml-0">
-                            <p className="text-sm font-medium text-white">{user.username}</p>
-                            <p className="text-xs text-gray-500 capitalize">{user.role}</p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={logout}
-                        className="w-full flex items-center justify-center px-4 py-2 border border-gray-700 rounded-md shadow-sm text-xs font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 focus:outline-none"
-                    >
-                        Log out
-                    </button>
-                </div>
-            ) : (
-                <div className="text-center space-y-2">
-                  <div className="text-xs text-gray-500">Not logged in</div>
-                  {publicSlug && (
-                    <button
-                      onClick={redirectToLogin}
-                      className="w-full flex items-center justify-center px-4 py-2 border border-gray-700 rounded-md shadow-sm text-xs font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 focus:outline-none"
-                    >
-                      Login to access
-                    </button>
-                  )}
-                </div>
-            )}
-        </div>
+        {renderUserSection()}
       </aside>
       {/* ================= MAIN CONTENT WRAPPER ================= */}
       <div className="lg:pl-64 flex flex-col min-h-screen">
         
         {/* Mobile Header (Nur sichtbar bis lg) */}
         <header className="lg:hidden sticky top-0 z-40 flex h-16 items-center gap-x-4 border-b border-gray-800 bg-gray-900 px-4 shadow-sm">
+             <button
+               onClick={() => setIsMobileNavOpen(true)}
+               className="text-gray-300 hover:text-white focus:outline-none"
+               aria-label="Hauptmenü öffnen"
+               aria-expanded={isMobileNavOpen}
+             >
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+             </button>
              <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
                  <span className="font-bold text-white text-xs">KD</span>
              </div>
              <div className="flex-1 text-sm font-bold text-white truncate">{headerTitle}</div>
-             
+
              {user && (
                 <button onClick={logout} className="text-gray-400 hover:text-white">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
@@ -446,6 +491,38 @@ const AppContent: React.FC = () => {
                 </button>
              )}
         </header>
+        {isMobileNavOpen && (
+          <div
+            className="lg:hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+            onClick={() => setIsMobileNavOpen(false)}
+          >
+            <div
+              className="absolute inset-y-0 left-0 w-80 max-w-full bg-gray-900 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between h-16 px-4 border-b border-gray-800 bg-gray-900/80">
+                <div className="flex items-center space-x-3 overflow-hidden">
+                  <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                    <span className="font-bold text-white text-xs">KD</span>
+                  </div>
+                  <div className="text-sm font-semibold text-white truncate">{headerTitle}</div>
+                </div>
+                <button
+                  onClick={() => setIsMobileNavOpen(false)}
+                  className="text-gray-400 hover:text-white"
+                  aria-label="Menü schließen"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="p-4 space-y-6 overflow-y-auto max-h-[calc(100vh-4rem)]">
+                <div className="space-y-2">{renderMainNavigation(() => setIsMobileNavOpen(false))}</div>
+                {renderAdminNavigation(() => setIsMobileNavOpen(false))}
+                <div className="pt-2">{renderUserSection(() => setIsMobileNavOpen(false))}</div>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Content Area */}
         <main className="flex-1 py-8 px-4 sm:px-6 lg:px-8 bg-black/20">
             <div className="max-w-7xl mx-auto">
