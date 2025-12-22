@@ -5,6 +5,7 @@ import { Card } from './Card';
 import { useAuth } from './AuthContext';
 
 const durationLabel = (days: number | undefined) => {
+  if (days === 0) return 'Lifetime';
   if (!days) return 'Unknown duration';
   if (days === 30) return '30 days';
   if (days === 60) return '60 days';
@@ -148,7 +149,11 @@ const R5CustomerAccess: React.FC = () => {
             <div className="flex items-center justify-between">
               <span>Valid until</span>
               <span className="font-semibold">
-                {user.r5AccessExpiresAt ? formatDate(user.r5AccessExpiresAt) : '-'}
+                {user.r5AccessExpiresAt
+                  ? formatDate(user.r5AccessExpiresAt)
+                  : user.r5AccessValid
+                  ? 'Lifetime'
+                  : '-'}
               </span>
             </div>
           </div>
@@ -205,7 +210,9 @@ const R5CustomerAccess: React.FC = () => {
                       </div>
                       <div className="flex flex-col text-right text-gray-300">
                         <span className="text-[11px] text-gray-400">Expires</span>
-                        <span className="font-semibold">{formatDate(code.expiresAt)}</span>
+                        <span className="font-semibold">
+                          {code.durationDays === 0 && code.isActive ? 'Lifetime' : formatDate(code.expiresAt)}
+                        </span>
                       </div>
                       {canRedeem && (
                         <button

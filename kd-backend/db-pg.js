@@ -127,15 +127,19 @@ async function activateR5Code(code, userId, kingdomId) {
   }
   if (existing.is_active) throw new Error('Code wurde bereits aktiviert.');
 
-  // Laufzeit an vorhandene Restlaufzeit anhängen (Stacking)
-  const now = new Date();
-  let baseDate = now;
-  const current = await getActiveR5Access(userId);
-  if (current && current.expires_at && new Date(current.expires_at) > now) {
-    baseDate = new Date(current.expires_at);
+  const isLifetime = Number(existing.duration_days) === 0;
+  let expiresAt = null;
+  if (!isLifetime) {
+    const now = new Date();
+    let baseDate = now;
+    const current = await getActiveR5Access(userId);
+    if (current && current.expires_at && new Date(current.expires_at) > now) {
+      baseDate = new Date(current.expires_at);
+    }
+    const nextExpiry = new Date(baseDate);
+    nextExpiry.setDate(nextExpiry.getDate() + existing.duration_days);
+    expiresAt = nextExpiry;
   }
-  const expiresAt = new Date(baseDate);
-  expiresAt.setDate(expiresAt.getDate() + existing.duration_days);
 
   const res = await query(
     `
@@ -160,8 +164,8 @@ async function getActiveR5Access(userId) {
     `
       SELECT code, duration_days, created_at, used_by_user_id, kingdom_id, activated_at, expires_at, is_active
       FROM r5_codes
-      WHERE used_by_user_id = $1 AND is_active = TRUE AND expires_at > NOW()
-      ORDER BY expires_at DESC
+      WHERE used_by_user_id = $1 AND is_active = TRUE AND (expires_at > NOW() OR expires_at IS NULL)
+      ORDER BY (expires_at IS NULL) DESC, expires_at DESC
       LIMIT 1
     `,
     [userId]
@@ -515,3 +519,5 @@ module.exports = {
   updateKvkEvent,
   deleteKvkEvent
 };
+
+

@@ -23,7 +23,7 @@ const {
 const app = express();
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'kd3619-secret-key-change-in-production';
-const R5_CODE_DURATIONS = [1, 7, 14, 30, 60, 365];
+const R5_CODE_DURATIONS = [0, 1, 7, 14, 30, 60, 365];
 const R5_SHOP_VISIBILITY_KEY = 'r5_shop_enabled';
 
 // CORS
@@ -993,6 +993,11 @@ app.post('/api/r5-codes/activate-self', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Kein KÇônigreich hinterlegt. Bitte wende dich an den Superadmin.' });
     }
 
+    const targetCode = await getR5Code(code);
+    if (targetCode && Number(targetCode.duration_days) === 0) {
+      return res.status(403).json({ error: 'Lifetime Codes koennen nur vom Superadmin vergeben werden.' });
+    }
+
     const activation = await activateR5Code(code, req.user.id, targetKingdomId);
     await assignR5(req.user.id, targetKingdomId);
     await query('UPDATE users SET is_approved = TRUE WHERE id = $1', [req.user.id]);
@@ -1559,5 +1564,8 @@ app.get('/', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
+
+
 
 

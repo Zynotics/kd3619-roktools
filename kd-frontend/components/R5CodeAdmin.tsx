@@ -22,6 +22,7 @@ type UserSummary = {
 };
 
 const durationLabel = (days: number) => {
+  if (days === 0) return 'Lifetime';
   if (days === 1) return '1 Tag';
   if (days === 7) return '7 Tage';
   if (days === 14) return '14 Tage';
@@ -63,6 +64,7 @@ const R5CodeAdmin: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [codeActionLoading, setCodeActionLoading] = useState<string | null>(null);
+  const [activateNow, setActivateNow] = useState(false);
   const [activationForm, setActivationForm] = useState<{ code: string; userId: string; kingdomId: string }>({
     code: '',
     userId: '',
@@ -215,11 +217,12 @@ const R5CodeAdmin: React.FC = () => {
     setAssignError(null);
     setIsAssigning(true);
     try {
-      await activateAdminR5Code({ ...activationForm, assignOnly: true });
+      await activateAdminR5Code({ ...activationForm, assignOnly: !activateNow });
       const updated = await fetchAdminR5Codes();
       setCodes(updated);
-      setSuccessMessage('Code wurde zugewiesen (nicht aktiviert).');
+      setSuccessMessage(activateNow ? 'Code wurde zugewiesen und aktiviert.' : 'Code wurde zugewiesen (nicht aktiviert).');
       setActivationForm({ code: '', userId: '', kingdomId: '' });
+      setActivateNow(false);
     } catch (err: any) {
       setAssignError(err.message || 'Zuweisung fehlgeschlagen.');
     } finally {
@@ -288,7 +291,7 @@ const R5CodeAdmin: React.FC = () => {
                 onChange={(e) => setDurationDays(Number(e.target.value))}
                 className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                {[1, 7, 14, 30, 60, 365].map((d) => (
+                {[1, 7, 14, 30, 60, 365, 0].map((d) => (
                   <option key={d} value={d}>
                     {durationLabel(d)}
                   </option>
@@ -355,15 +358,27 @@ const R5CodeAdmin: React.FC = () => {
               <div className="text-xs text-gray-500">
                 Nutzer: {users.length}  Kingdoms: {kingdoms.length}
               </div>
-              <button
-                type="submit"
-                disabled={isAssigning}
-                className={`px-4 py-2 rounded text-sm font-semibold ${
-                  isAssigning ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'
-                }`}
-              >
-                {isAssigning ? 'Weise zu...' : 'Code zuweisen'}
-              </button>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-xs text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={activateNow}
+                    onChange={(e) => setActivateNow(e.target.checked)}
+                    disabled={isAssigning}
+                    className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-green-600 focus:ring-green-500"
+                  />
+                  Sofort aktivieren
+                </label>
+                <button
+                  type="submit"
+                  disabled={isAssigning}
+                  className={`px-4 py-2 rounded text-sm font-semibold ${
+                    isAssigning ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'
+                  }`}
+                >
+                  {isAssigning ? 'Weise zu...' : 'Code zuweisen'}
+                </button>
+              </div>
             </div>
             {assignError && (
               <div className="md:col-span-3 text-xs text-red-400">
