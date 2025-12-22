@@ -812,7 +812,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             className="flex items-center gap-1 justify-end w-full"
                             onClick={() => toggleSort('killPointsDiff')}
                           >
-                            Kill Points Δ {renderSortIndicator('killPointsDiff')}
+                            Kill Points {renderSortIndicator('killPointsDiff')}
                           </button>
                         </th>
                         <th className="p-3 text-right text-red-300">
@@ -821,7 +821,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             className="flex items-center gap-1 justify-end w-full"
                             onClick={() => toggleSort('t4KillsDiff')}
                           >
-                            T4 Kills Δ {renderSortIndicator('t4KillsDiff')}
+                            T4 Kills {renderSortIndicator('t4KillsDiff')}
                           </button>
                         </th>
                         <th className="p-3 text-right text-red-400">
@@ -830,7 +830,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             className="flex items-center gap-1 justify-end w-full"
                             onClick={() => toggleSort('t5KillsDiff')}
                           >
-                            T5 Kills Δ {renderSortIndicator('t5KillsDiff')}
+                            T5 Kills {renderSortIndicator('t5KillsDiff')}
                           </button>
                         </th>
                         <th className="p-3 text-right text-red-500 font-bold bg-gray-800/50">
@@ -839,7 +839,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             className="flex items-center gap-1 justify-end w-full"
                             onClick={() => toggleSort('t4t5KillsDiff')}
                           >
-                            T4+T5 Kills Δ {renderSortIndicator('t4t5KillsDiff')}
+                            T4+T5 Kills {renderSortIndicator('t4t5KillsDiff')}
                           </button>
                         </th>
                       </tr>
