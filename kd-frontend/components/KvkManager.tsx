@@ -264,8 +264,8 @@ const KvkManager: React.FC = () => {
         {
           minPower: 0,
           maxPower: null,
-          dkpPercent: prev.basePowerToDkpPercent || 0,
-          deadPercent: prev.basePowerToDeadTroopsPercent || 0,
+          dkpPercent: 0,
+          deadPercent: 0,
         }
       ]
     }));
@@ -634,35 +634,11 @@ const KvkManager: React.FC = () => {
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-bold text-cyan-300">🎯 Goals Formula</h3>
-                  <p className="text-xs text-gray-400">R5 guidance: What percent of base power becomes the DKP score and what percent must be achieved as dead troops.</p>
+                  <p className="text-xs text-gray-400">Set DKP and dead troop goals per base power range.</p>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <div>
-                  <label className="block text-xs text-gray-400 uppercase font-bold mb-1">% Base Power → DKP Score</label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-cyan-400 outline-none"
-                    value={formatLocalizedDecimalValue(goalsFormula.basePowerToDkpPercent)}
-                    onChange={(e) => setGoalsFormula({ ...goalsFormula, basePowerToDkpPercent: parseLocalizedDecimalInput(e.target.value) })}
-                    placeholder="e.g. 120 (120% of base power becomes DKP score)"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-gray-400 uppercase font-bold mb-1">% Base Power → Dead Troops Goal</label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-cyan-400 outline-none"
-                    value={formatLocalizedDecimalValue(goalsFormula.basePowerToDeadTroopsPercent)}
-                    onChange={(e) => setGoalsFormula({ ...goalsFormula, basePowerToDeadTroopsPercent: parseLocalizedDecimalInput(e.target.value) })}
-                    placeholder="e.g. 10 (10% of base power must fall)"
-                  />
-                </div>
-
                 <div className="bg-gray-800/60 border border-cyan-800/50 rounded p-3 space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <div>
@@ -680,7 +656,7 @@ const KvkManager: React.FC = () => {
 
                   {powerBrackets.length === 0 && (
                     <div className="text-[12px] text-gray-400 bg-gray-900/60 border border-dashed border-gray-700 rounded p-3">
-                      No ranges defined – general percentages above will be used.
+                      No ranges defined – add at least one to apply goals.
                     </div>
                   )}
 
@@ -753,7 +729,7 @@ const KvkManager: React.FC = () => {
 
                 <div className="text-xs text-gray-500 bg-gray-800/70 border border-dashed border-gray-600 rounded p-3">
                   <p className="font-semibold text-white mb-1">Notes</p>
-                  <p>The DKP formula sets how kills/deads score points. The Goals formula defines the baseline targets each player must hit (based on base power). Base power ranges override the general percentages.</p>
+                  <p>The DKP formula sets how kills/deads score points. The Goals formula defines the baseline targets each player must hit (based on base power). Configure ranges to set those targets.</p>
                 </div>
               </div>
             </div>
@@ -841,9 +817,6 @@ const KvkManager: React.FC = () => {
                                 <span className="w-20 text-xs text-gray-500 uppercase mt-0.5">Goals:</span>
                                 {ev.goalsFormula ? (
                                   <div className="flex flex-col gap-1">
-                                    <span className="text-[11px] px-2 py-1 rounded border border-cyan-500/50 bg-cyan-500/5 text-white">
-                                      Base: {ev.goalsFormula.basePowerToDkpPercent || 0}% DKP / {ev.goalsFormula.basePowerToDeadTroopsPercent || 0}% Dead
-                                    </span>
                                     {ev.goalsFormula.powerBrackets?.length ? (
                                       <div className="flex flex-col gap-1">
                                         {ev.goalsFormula.powerBrackets.map((bracket, idx) => (
