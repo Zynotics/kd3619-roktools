@@ -53,7 +53,7 @@ interface PublicKvKViewProps {
 
 const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const slug = kingdomSlug;
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -87,6 +87,20 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const [searchResults, setSearchResults] = useState<HonorPlayerInfo[] | 'not_found' | null>(null);
 
   const activeEvent = useMemo(() => events.find(e => e.id === selectedEventId), [events, selectedEventId]);
+  const rankingPublicFlag = useMemo(() => activeEvent?.isRankingPublic ?? activeEvent?.isPublic ?? false, [activeEvent]);
+  const honorPublicFlag = useMemo(() => activeEvent?.isHonorPublic ?? activeEvent?.isPublic ?? false, [activeEvent]);
+  const isPrivilegedViewer = useMemo(() => {
+    if (!user) return false;
+    return user.role === 'admin' || user.role === 'r4' || (user.role === 'r5' && user.r5AccessValid);
+  }, [user]);
+  const rankingAvailable = useMemo(() => {
+    if (!activeEvent) return false;
+    return rankingPublicFlag || isPrivilegedViewer;
+  }, [activeEvent, rankingPublicFlag, isPrivilegedViewer]);
+  const honorAvailable = useMemo(() => {
+    if (!activeEvent) return false;
+    return honorPublicFlag || isPrivilegedViewer;
+  }, [activeEvent, honorPublicFlag, isPrivilegedViewer]);
 
   useEffect(() => { if (slug) loadEvents(); }, [slug, token]);
   useEffect(() => { if (slug && selectedEventId) loadFilesAndCalculate(); }, [slug, selectedEventId]);
@@ -106,6 +120,15 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       setHonorEndSelection(honorRange[honorRange.length - 1]?.id || evt.honorEndFileId || '');
     }
   }, [events, selectedEventId, allHonorFiles]);
+
+  useEffect(() => {
+    if (!activeEvent) return;
+    if (viewMode === 'stats' && !rankingAvailable && honorAvailable) {
+      setViewMode('honor');
+    } else if (viewMode === 'honor' && !honorAvailable && rankingAvailable) {
+      setViewMode('stats');
+    }
+  }, [activeEvent, rankingAvailable, honorAvailable, viewMode]);
 
   const loadEvents = async () => {
     try {
@@ -630,13 +653,27 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
               {activeEvent ? activeEvent.name : 'KvK Tracker'}
             </h1>
             {activeEvent && (
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex flex-wrap items-center gap-2 mt-2">
                 <span className={`px-2 py-1 rounded text-xs font-semibold border ${
                   activeEvent.isPublic
                     ? 'bg-green-900/70 text-green-200 border-green-700'
                     : 'bg-gray-800 text-gray-200 border-gray-600'
                 }`}>
-                  {activeEvent.isPublic ? 'Public' : 'Private'}
+                  {activeEvent.isPublic ? 'Public Event' : 'Private Event'}
+                </span>
+                <span className={`px-2 py-1 rounded text-[11px] font-semibold border ${
+                  rankingPublicFlag
+                    ? 'bg-blue-900/60 text-blue-100 border-blue-700'
+                    : 'bg-gray-800 text-gray-200 border-gray-700'
+                }`}>
+                  Total Ranking: {rankingPublicFlag ? 'Public' : 'Private'}
+                </span>
+                <span className={`px-2 py-1 rounded text-[11px] font-semibold border ${
+                  honorPublicFlag
+                    ? 'bg-purple-900/60 text-purple-100 border-purple-700'
+                    : 'bg-gray-800 text-gray-200 border-gray-700'
+                }`}>
+                  Honor Dashboard: {honorPublicFlag ? 'Public' : 'Private'}
                 </span>
                 {!activeEvent.isPublic && (
                   <span className="text-[11px] text-gray-400">Visible only to R4/R5 until it is published.</span>
@@ -667,22 +704,26 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         <div className="flex justify-center mb-8">
           <div className="bg-gray-800 p-1 rounded-lg inline-flex shadow-md border border-gray-700">
             <button
-              onClick={() => setViewMode('stats')}
+              onClick={() => rankingAvailable && setViewMode('stats')}
+              disabled={!rankingAvailable}
+              title={rankingAvailable ? '' : 'Total Ranking is private for public visitors'}
               className={`px-4 md:px-6 py-2 rounded-md font-bold text-sm md:text-base transition-all duration-200 ${
-                viewMode === 'stats' 
-                  ? 'bg-blue-600 text-white shadow' 
+                viewMode === 'stats'
+                  ? 'bg-blue-600 text-white shadow'
                   : 'text-gray-400 hover:text-white hover:bg-gray-700'
-              }`}
+              } ${rankingAvailable ? '' : 'opacity-50 cursor-not-allowed'}`}
             >
               Total Ranking
             </button>
             <button
-              onClick={() => setViewMode('honor')}
+              onClick={() => honorAvailable && setViewMode('honor')}
+              disabled={!honorAvailable}
+              title={honorAvailable ? '' : 'Honor Dashboard is private for public visitors'}
               className={`px-4 md:px-6 py-2 rounded-md font-bold text-sm md:text-base transition-all duration-200 ${
-                viewMode === 'honor' 
-                  ? 'bg-purple-600 text-white shadow' 
+                viewMode === 'honor'
+                  ? 'bg-purple-600 text-white shadow'
                   : 'text-gray-400 hover:text-white hover:bg-gray-700'
-              }`}
+              } ${honorAvailable ? '' : 'opacity-50 cursor-not-allowed'}`}
             >
               Honor Dashboard
             </button>
@@ -695,7 +736,14 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         {!loading && !error && activeEvent && (
           <div className="animate-fade-in-up">
             
-            {viewMode === 'stats' && (
+            {viewMode === 'stats' && !rankingAvailable && (
+              <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 p-6 text-center text-gray-300">
+                <h2 className="text-xl font-semibold text-blue-200 mb-2">Total Ranking is private</h2>
+                <p className="text-sm text-gray-400">Log in as R4/R5/Admin to view this leaderboard.</p>
+              </div>
+            )}
+
+            {viewMode === 'stats' && rankingAvailable && (
               <div className="bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-700">
                 <div className="p-4 bg-gray-800 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1">
@@ -735,7 +783,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                       Top {statsData.length} Players
                   </div>
                 </div>
-                
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
@@ -914,7 +962,13 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             )}
 
             {/* --- VIEW B: HONOR DASHBOARD --- */}
-            {viewMode === 'honor' && (
+            {viewMode === 'honor' && !honorAvailable && (
+              <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 p-6 text-center text-gray-300">
+                <h2 className="text-xl font-semibold text-purple-200 mb-2">Honor Dashboard is private</h2>
+                <p className="text-sm text-gray-400">Log in as R4/R5/Admin to view honor progression.</p>
+              </div>
+            )}
+            {viewMode === 'honor' && honorAvailable && (
               <div className="space-y-8">
                  
                  {/* Chart & Filter */}
