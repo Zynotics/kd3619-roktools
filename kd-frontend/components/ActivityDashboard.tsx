@@ -306,7 +306,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
             {/* Linke Seite: Titel & File Select */}
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center w-full xl:w-auto">
                 <div>
-                    <h2 className="text-xl font-bold text-white">Activity Ranking</h2>
+                    <h2 className="text-xl font-bold text-white">Weekly Activity Ranking</h2>
                 </div>
                 <div className="flex items-center space-x-2">
                     <select 
