@@ -23,13 +23,13 @@ type UserSummary = {
 
 const durationLabel = (days: number) => {
   if (days === 0) return 'Lifetime';
-  if (days === 1) return '1 Tag';
-  if (days === 7) return '7 Tage';
-  if (days === 14) return '14 Tage';
-  if (days === 30) return '30 Tage';
-  if (days === 60) return '60 Tage';
-  if (days >= 365) return '1 Jahr';
-  return `${days} Tage`;
+  if (days === 1) return '1 day';
+  if (days === 7) return '7 days';
+  if (days === 14) return '14 days';
+  if (days === 30) return '30 days';
+  if (days === 60) return '60 days';
+  if (days >= 365) return '1 year';
+  return `${days} days`;
 };
 
 const formatDate = (value?: string | null) => {
@@ -40,11 +40,11 @@ const formatDate = (value?: string | null) => {
 };
 
 const statusMeta = (code: R5Code) => {
-  if (!code.isActive) return { label: 'Unbenutzt', color: 'bg-gray-800 text-gray-200' };
+  if (!code.isActive) return { label: 'Unused', color: 'bg-gray-800 text-gray-200' };
   if (code.expiresAt && new Date(code.expiresAt) < new Date()) {
-    return { label: 'Abgelaufen', color: 'bg-red-800 text-red-100' };
+    return { label: 'Expired', color: 'bg-red-800 text-red-100' };
   }
-  return { label: 'Aktiv', color: 'bg-green-800 text-green-100' };
+  return { label: 'Active', color: 'bg-green-800 text-green-100' };
 };
 
 const R5CodeAdmin: React.FC = () => {
@@ -101,7 +101,7 @@ const R5CodeAdmin: React.FC = () => {
 
   const getToken = () => {
     const token = localStorage.getItem('authToken');
-    if (!token) throw new Error('Nicht angemeldet.');
+    if (!token) throw new Error('Not signed in.');
     return token;
   };
 
@@ -113,7 +113,7 @@ const R5CodeAdmin: React.FC = () => {
       const [codeList] = await Promise.all([fetchAdminR5Codes(), loadUsers(), loadKingdoms(), loadShopSetting()]);
       setCodes(codeList);
     } catch (err: any) {
-      setCreateError(err.message || 'Fehler beim Laden der Codes.');
+      setCreateError(err.message || 'Failed to load codes.');
     } finally {
       setIsLoading(false);
     }
@@ -125,7 +125,7 @@ const R5CodeAdmin: React.FC = () => {
       const res = await fetch(`${API_BASE_URL}/api/admin/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('Users konnten nicht geladen werden');
+      if (!res.ok) throw new Error('Could not load users');
       const data: any[] = await res.json();
       const mapped = data.map((u) => ({
         id: u.id,
@@ -137,7 +137,7 @@ const R5CodeAdmin: React.FC = () => {
       setUsers(mapped);
       return mapped;
     } catch (err: any) {
-      setAssignError(err.message || 'Fehler beim Laden der Nutzer.');
+      setAssignError(err.message || 'Failed to load users.');
       return [];
     }
   };
@@ -148,13 +148,13 @@ const R5CodeAdmin: React.FC = () => {
       const res = await fetch(`${API_BASE_URL}/api/admin/kingdoms`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('Kingdoms konnten nicht geladen werden');
+      if (!res.ok) throw new Error('Could not load kingdoms');
       const data: Kingdom[] = await res.json();
       data.sort((a, b) => a.displayName.localeCompare(b.displayName));
       setKingdoms(data);
       return data;
     } catch (err: any) {
-      setAssignError(err.message || 'Fehler beim Laden der Knigreiche.');
+      setAssignError(err.message || 'Failed to load kingdoms.');
       return [];
     }
   };
@@ -167,7 +167,7 @@ const R5CodeAdmin: React.FC = () => {
       setR5ShopEnabled(!!data.enabled);
       return data;
     } catch (err: any) {
-      setShopSettingError(err.message || 'Fehler beim Laden der Shop-Einstellung.');
+      setShopSettingError(err.message || 'Failed to load shop visibility.');
       return null;
     } finally {
       setIsLoadingShopSetting(false);
@@ -182,10 +182,10 @@ const R5CodeAdmin: React.FC = () => {
     try {
       const updated = await updateAdminR5ShopVisibility(nextValue);
       setR5ShopEnabled(!!updated.enabled);
-      setSuccessMessage('Shop-Einstellung gespeichert.');
+      setSuccessMessage('Shop visibility saved.');
     } catch (err: any) {
       setR5ShopEnabled(previous);
-      setShopSettingError(err.message || 'Shop-Einstellung konnte nicht gespeichert werden.');
+      setShopSettingError(err.message || 'Could not save shop visibility.');
     } finally {
       setIsSavingShopSetting(false);
       setTimeout(() => setSuccessMessage(null), 2500);
@@ -199,9 +199,9 @@ const R5CodeAdmin: React.FC = () => {
     try {
       const created = await createAdminR5Code(durationDays);
       setCodes((prev) => [created, ...prev]);
-      setSuccessMessage(`Code ${created.code} erstellt.`);
+      setSuccessMessage(`Code ${created.code} created.`);
     } catch (err: any) {
-      setCreateError(err.message || 'Erstellung fehlgeschlagen.');
+      setCreateError(err.message || 'Creation failed.');
     } finally {
       setIsCreating(false);
       setTimeout(() => setSuccessMessage(null), 2500);
@@ -211,7 +211,7 @@ const R5CodeAdmin: React.FC = () => {
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activationForm.code || !activationForm.userId || !activationForm.kingdomId) {
-      setAssignError('Code, Benutzer und Knigreich sind erforderlich.');
+      setAssignError('Code, user, and kingdom are required.');
       return;
     }
     setAssignError(null);
@@ -220,11 +220,11 @@ const R5CodeAdmin: React.FC = () => {
       await activateAdminR5Code({ ...activationForm, assignOnly: !activateNow });
       const updated = await fetchAdminR5Codes();
       setCodes(updated);
-      setSuccessMessage(activateNow ? 'Code wurde zugewiesen und aktiviert.' : 'Code wurde zugewiesen (nicht aktiviert).');
+      setSuccessMessage(activateNow ? 'Code assigned and activated.' : 'Code assigned (not activated).');
       setActivationForm({ code: '', userId: '', kingdomId: '' });
       setActivateNow(false);
     } catch (err: any) {
-      setAssignError(err.message || 'Zuweisung fehlgeschlagen.');
+      setAssignError(err.message || 'Assignment failed.');
     } finally {
       setIsAssigning(false);
       setTimeout(() => setSuccessMessage(null), 2500);
@@ -236,9 +236,9 @@ const R5CodeAdmin: React.FC = () => {
       setCodeActionLoading(code);
       await deleteAdminR5Code(code);
       setCodes((prev) => prev.filter((c) => c.code !== code));
-      setSuccessMessage('Code gelscht.');
+      setSuccessMessage('Code deleted.');
     } catch (err: any) {
-      setAssignError(err.message || 'Lschen fehlgeschlagen.');
+      setAssignError(err.message || 'Deletion failed.');
     }
     setCodeActionLoading(null);
     setTimeout(() => setSuccessMessage(null), 2500);
@@ -250,9 +250,9 @@ const R5CodeAdmin: React.FC = () => {
       await deactivateAdminR5Code(code);
       const updated = await fetchAdminR5Codes();
       setCodes(updated);
-      setSuccessMessage('Code deaktiviert.');
+      setSuccessMessage('Code deactivated.');
     } catch (err: any) {
-      setAssignError(err.message || 'Deaktivierung fehlgeschlagen.');
+      setAssignError(err.message || 'Deactivation failed.');
     }
     setCodeActionLoading(null);
     setTimeout(() => setSuccessMessage(null), 2500);
@@ -273,7 +273,7 @@ const R5CodeAdmin: React.FC = () => {
   if (!user || user.role !== 'admin') {
     return (
       <div className="text-center p-8 bg-gray-800 rounded-xl text-red-200">
-        Nur Superadmins knnen diese Ansicht nutzen.
+        Only superadmins can use this view.
       </div>
     );
   }
@@ -282,10 +282,10 @@ const R5CodeAdmin: React.FC = () => {
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="border-gray-700">
-          <h3 className="text-lg font-semibold text-white mb-3">Neuen Code erstellen</h3>
+          <h3 className="text-lg font-semibold text-white mb-3">Create new code</h3>
           <form onSubmit={handleCreate} className="space-y-3">
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Laufzeit</label>
+              <label className="block text-xs text-gray-400 mb-1">Duration</label>
               <select
                 value={durationDays}
                 onChange={(e) => setDurationDays(Number(e.target.value))}
@@ -305,14 +305,14 @@ const R5CodeAdmin: React.FC = () => {
                 isCreating ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
             >
-              {isCreating ? 'Erstelle...' : 'Code generieren'}
+              {isCreating ? 'Creating...' : 'Generate code'}
             </button>
             {createError && <p className="text-xs text-red-400">{createError}</p>}
           </form>
         </Card>
 
         <Card className="lg:col-span-2 border-gray-700">
-          <h3 className="text-lg font-semibold text-white mb-3">Code zu Benutzer zuweisen</h3>
+          <h3 className="text-lg font-semibold text-white mb-3">Assign code to user</h3>
           <form onSubmit={handleAssign} className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="flex flex-col">
               <label className="text-xs text-gray-400 mb-1">Code</label>
@@ -321,17 +321,17 @@ const R5CodeAdmin: React.FC = () => {
                 value={activationForm.code}
                 onChange={(e) => setActivationForm((prev) => ({ ...prev, code: e.target.value.trim().toUpperCase() }))}
                 className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="16-stelliger Code"
+                placeholder="16-character code"
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-400 mb-1">Benutzer</label>
+              <label className="text-xs text-gray-400 mb-1">User</label>
               <select
                 value={activationForm.userId}
                 onChange={(e) => setActivationForm((prev) => ({ ...prev, userId: e.target.value }))}
                 className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                <option value="">Auswaehlen...</option>
+                <option value="">Select...</option>
                 {users.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.username} ({u.role})
@@ -340,13 +340,13 @@ const R5CodeAdmin: React.FC = () => {
               </select>
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-400 mb-1">Knigreich</label>
+              <label className="text-xs text-gray-400 mb-1">Kingdom</label>
               <select
                 value={activationForm.kingdomId}
                 onChange={(e) => setActivationForm((prev) => ({ ...prev, kingdomId: e.target.value }))}
                 className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                <option value="">Auswaehlen...</option>
+                <option value="">Select...</option>
                 {kingdoms.map((k) => (
                   <option key={k.id} value={k.id}>
                     {k.displayName} ({k.slug})
@@ -356,7 +356,7 @@ const R5CodeAdmin: React.FC = () => {
             </div>
             <div className="md:col-span-3 flex items-center justify-between">
               <div className="text-xs text-gray-500">
-                Nutzer: {users.length}  Kingdoms: {kingdoms.length}
+                Users: {users.length}  Kingdoms: {kingdoms.length}
               </div>
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-2 text-xs text-gray-300">
@@ -367,7 +367,7 @@ const R5CodeAdmin: React.FC = () => {
                     disabled={isAssigning}
                     className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-green-600 focus:ring-green-500"
                   />
-                  Sofort aktivieren
+                  Activate immediately
                 </label>
                 <button
                   type="submit"
@@ -376,7 +376,7 @@ const R5CodeAdmin: React.FC = () => {
                     isAssigning ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'
                   }`}
                 >
-                  {isAssigning ? 'Weise zu...' : 'Code zuweisen'}
+                  {isAssigning ? 'Assigning...' : 'Assign code'}
                 </button>
               </div>
             </div>
@@ -395,8 +395,8 @@ const R5CodeAdmin: React.FC = () => {
       <Card className="border-gray-700">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-white">R5 Shop Freigabe</h3>
-            <p className="text-sm text-gray-400">Steuert, ob der Shop f&#252;r R5-Benutzer sichtbar ist.</p>
+            <h3 className="text-lg font-semibold text-white">R5 Shop Visibility</h3>
+            <p className="text-sm text-gray-400">Controls whether the shop is visible for R5 users.</p>
           </div>
           <label className="flex items-center gap-3 text-sm text-gray-200">
             <input
@@ -406,11 +406,11 @@ const R5CodeAdmin: React.FC = () => {
               disabled={isLoadingShopSetting || isSavingShopSetting}
               className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-blue-600 focus:ring-blue-500"
             />
-            <span>{r5ShopEnabled ? 'Shop sichtbar' : 'Shop verborgen'}</span>
+            <span>{r5ShopEnabled ? 'Shop visible' : 'Shop hidden'}</span>
           </label>
         </div>
         {isLoadingShopSetting && (
-          <p className="mt-3 text-xs text-gray-400">Lade Shop-Einstellung...</p>
+          <p className="mt-3 text-xs text-gray-400">Loading shop visibility...</p>
         )}
         {shopSettingError && (
           <p className="mt-3 text-xs text-red-400">{shopSettingError}</p>
@@ -420,12 +420,12 @@ const R5CodeAdmin: React.FC = () => {
       <Card className="border-gray-700">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-white">Alle Codes</h3>
-            <p className="text-sm text-gray-400">Verwalte generierte Codes, Status und Zuweisungen.</p>
+            <h3 className="text-lg font-semibold text-white">All codes</h3>
+            <p className="text-sm text-gray-400">Manage generated codes, status, and assignments.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs text-gray-300">
-            <span className="px-2 py-1 rounded bg-gray-800 border border-gray-700">Offen: {inactiveCodes.length}</span>
-            <span className="px-2 py-1 rounded bg-red-900/50 border border-red-700">Abgelaufen: {expiredCodes.length}</span>
+            <span className="px-2 py-1 rounded bg-gray-800 border border-gray-700">Open: {inactiveCodes.length}</span>
+            <span className="px-2 py-1 rounded bg-red-900/50 border border-red-700">Expired: {expiredCodes.length}</span>
           </div>
         </div>
         <div className="flex flex-wrap gap-3 mb-4 text-xs">
@@ -436,10 +436,10 @@ const R5CodeAdmin: React.FC = () => {
               onChange={(e) => setStatusFilter(e.target.value as any)}
               className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-gray-100"
             >
-              <option value="all">Alle</option>
-              <option value="unused">Unbenutzt</option>
-              <option value="active">Aktiv</option>
-              <option value="expired">Abgelaufen</option>
+              <option value="all">All</option>
+              <option value="unused">Unused</option>
+              <option value="active">Active</option>
+              <option value="expired">Expired</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
@@ -449,19 +449,19 @@ const R5CodeAdmin: React.FC = () => {
               onChange={(e) => setSortBy(e.target.value as any)}
               className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-gray-100"
             >
-              <option value="createdDesc">Erstellt (neu zuerst)</option>
-              <option value="createdAsc">Erstellt (alt zuerst)</option>
-              <option value="expiresDesc">Ablauf (spt zuerst)</option>
-              <option value="expiresAsc">Ablauf (frh zuerst)</option>
-              <option value="durationDesc">Laufzeit (lang zuerst)</option>
-              <option value="durationAsc">Laufzeit (kurz zuerst)</option>
+              <option value="createdDesc">Created (new first)</option>
+              <option value="createdAsc">Created (old first)</option>
+              <option value="expiresDesc">Expiry (late first)</option>
+              <option value="expiresAsc">Expiry (early first)</option>
+              <option value="durationDesc">Duration (long first)</option>
+              <option value="durationAsc">Duration (short first)</option>
             </select>
           </div>
         </div>
         {isLoading ? (
-          <p className="text-gray-400 text-sm">Lade Codes...</p>
+          <p className="text-gray-400 text-sm">Loading codes...</p>
         ) : filteredSortedCodes.length === 0 ? (
-          <p className="text-gray-400 text-sm">Keine Codes vorhanden.</p>
+          <p className="text-gray-400 text-sm">No codes available.</p>
         ) : (
           <div className="space-y-3">
             {filteredSortedCodes.map((code) => {
@@ -475,7 +475,7 @@ const R5CodeAdmin: React.FC = () => {
                   <div>
                     <p className="text-sm font-semibold text-white tracking-wide">{code.code}</p>
                     <p className="text-xs text-gray-400">
-                      Laufzeit: {durationLabel(code.durationDays)}  Erstellt {formatDate(code.createdAt)}
+                      Duration: {durationLabel(code.durationDays)}  Created {formatDate(code.createdAt)}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3 text-xs text-gray-300">
@@ -487,11 +487,11 @@ const R5CodeAdmin: React.FC = () => {
                       Kingdom: {getKingdomLabel(code.kingdomId)}
                     </span>
                     <div className="flex flex-col text-right text-gray-300">
-                      <span className="text-[11px] text-gray-400">Aktiviert</span>
+                      <span className="text-[11px] text-gray-400">Activated</span>
                       <span className="font-semibold">{formatDate(code.activatedAt)}</span>
                     </div>
                     <div className="flex flex-col text-right text-gray-300">
-                      <span className="text-[11px] text-gray-400">Laeuft ab</span>
+                      <span className="text-[11px] text-gray-400">Expires</span>
                       <span className="font-semibold">{formatDate(code.expiresAt)}</span>
                     </div>
                     {(code.isActive || code.usedByUserId) && (
@@ -504,7 +504,7 @@ const R5CodeAdmin: React.FC = () => {
                             : 'bg-yellow-700 text-white hover:bg-yellow-800'
                         }`}
                       >
-                        {isActionLoading ? 'Wird bearbeitet...' : 'Deaktivieren'}
+                        {isActionLoading ? 'Processing...' : 'Deactivate'}
                       </button>
                     )}
                     <button
@@ -516,7 +516,7 @@ const R5CodeAdmin: React.FC = () => {
                           : 'bg-red-700 text-white hover:bg-red-800'
                       }`}
                     >
-                      {isActionLoading ? 'Bitte warten...' : 'Lschen'}
+                      {isActionLoading ? 'Please wait...' : 'Delete'}
                     </button>
                   </div>
                 </div>

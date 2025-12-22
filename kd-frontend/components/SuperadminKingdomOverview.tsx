@@ -46,7 +46,7 @@ const SuperadminKingdomOverview: React.FC = () => {
         if (!res.ok) {
           const text = await res.text();
           console.error('Failed to load kingdoms:', text);
-          setError('Konnte Königreiche nicht laden.');
+          setError('Could not load kingdoms.');
           return;
         }
 
@@ -54,7 +54,7 @@ const SuperadminKingdomOverview: React.FC = () => {
         setKingdoms(data);
       } catch (e) {
         console.error('Error loading kingdoms', e);
-        setError('Konnte Königreiche nicht laden.');
+        setError('Could not load kingdoms.');
       } finally {
         setIsLoading(false);
       }
@@ -74,14 +74,14 @@ const SuperadminKingdomOverview: React.FC = () => {
       setTimeout(() => setCopiedKey(null), 1500);
     } catch (e) {
       console.error('Clipboard copy failed', e);
-      setError('Copy in Zwischenablage fehlgeschlagen.');
+      setError('Copy to clipboard failed.');
     }
   };
 
   if (!user || user.role !== 'admin') {
     return (
       <div className="text-gray-300 bg-gray-800 border border-gray-700 p-4 rounded-lg">
-        Nur Superadmins können diese Übersicht sehen.
+        Only superadmins can view this overview.
       </div>
     );
   }
@@ -89,9 +89,9 @@ const SuperadminKingdomOverview: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold text-white">Königreichsübersicht</h1>
+        <h1 className="text-2xl font-bold text-white">Kingdom overview</h1>
         <p className="text-sm text-gray-400">
-          Schneller Zugriff auf alle Königreiche inklusive Public- und Registrierungs-Link.
+          Quick access to all kingdoms including public and registration links.
         </p>
       </div>
 
@@ -102,9 +102,9 @@ const SuperadminKingdomOverview: React.FC = () => {
       )}
 
       {isLoading ? (
-        <Card className="text-gray-300 text-sm">Lade Königreiche...</Card>
+        <Card className="text-gray-300 text-sm">Loading kingdoms...</Card>
       ) : sortedKingdoms.length === 0 ? (
-        <Card className="text-gray-300 text-sm">Keine Königreiche vorhanden.</Card>
+        <Card className="text-gray-300 text-sm">No kingdoms available.</Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {sortedKingdoms.map((kingdom) => {
@@ -116,7 +116,7 @@ const SuperadminKingdomOverview: React.FC = () => {
               <Card key={kingdom.id} className="relative h-full flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-500">Königreich</p>
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Kingdom</p>
                     <h2 className="text-lg font-semibold text-white leading-tight">
                       {kingdom.displayName || kingdom.slug.toUpperCase()}
                     </h2>
@@ -160,7 +160,7 @@ const SuperadminKingdomOverview: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <div className="text-xs text-gray-400">Registrierungs-Link</div>
+                  <div className="text-xs text-gray-400">Registration link</div>
                   <div className="flex items-center gap-2">
                     <a
                       href={registrationLink}
@@ -182,7 +182,7 @@ const SuperadminKingdomOverview: React.FC = () => {
 
                 {copySuccess && (
                   <div className="absolute top-3 right-3 text-[10px] bg-green-700 text-white px-2 py-1 rounded">
-                    Kopiert
+                    Copied
                   </div>
                 )}
               </Card>
