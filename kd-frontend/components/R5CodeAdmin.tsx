@@ -3,6 +3,8 @@ import { Card } from './Card';
 import { Kingdom, R5Code } from '../types';
 import {
   API_BASE_URL,
+  fetchAdminR5ShopVisibility,
+  updateAdminR5ShopVisibility,
   activateAdminR5Code,
   createAdminR5Code,
   fetchAdminR5Codes,
@@ -50,10 +52,14 @@ const R5CodeAdmin: React.FC = () => {
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [kingdoms, setKingdoms] = useState<Kingdom[]>([]);
   const [durationDays, setDurationDays] = useState(30);
+  const [r5ShopEnabled, setR5ShopEnabled] = useState(true);
   const [createError, setCreateError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [shopSettingError, setShopSettingError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingShopSetting, setIsLoadingShopSetting] = useState(false);
+  const [isSavingShopSetting, setIsSavingShopSetting] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [codeActionLoading, setCodeActionLoading] = useState<string | null>(null);
@@ -102,7 +108,7 @@ const R5CodeAdmin: React.FC = () => {
     setCreateError(null);
     setAssignError(null);
     try {
-      const [codeList] = await Promise.all([fetchAdminR5Codes(), loadUsers(), loadKingdoms()]);
+      const [codeList] = await Promise.all([fetchAdminR5Codes(), loadUsers(), loadKingdoms(), loadShopSetting()]);
       setCodes(codeList);
     } catch (err: any) {
       setCreateError(err.message || 'Fehler beim Laden der Codes.');
@@ -148,6 +154,39 @@ const R5CodeAdmin: React.FC = () => {
     } catch (err: any) {
       setAssignError(err.message || 'Fehler beim Laden der Knigreiche.');
       return [];
+    }
+  };
+
+  const loadShopSetting = async () => {
+    setIsLoadingShopSetting(true);
+    setShopSettingError(null);
+    try {
+      const data = await fetchAdminR5ShopVisibility();
+      setR5ShopEnabled(!!data.enabled);
+      return data;
+    } catch (err: any) {
+      setShopSettingError(err.message || 'Fehler beim Laden der Shop-Einstellung.');
+      return null;
+    } finally {
+      setIsLoadingShopSetting(false);
+    }
+  };
+
+  const handleShopVisibilityChange = async (nextValue: boolean) => {
+    const previous = r5ShopEnabled;
+    setR5ShopEnabled(nextValue);
+    setIsSavingShopSetting(true);
+    setShopSettingError(null);
+    try {
+      const updated = await updateAdminR5ShopVisibility(nextValue);
+      setR5ShopEnabled(!!updated.enabled);
+      setSuccessMessage('Shop-Einstellung gespeichert.');
+    } catch (err: any) {
+      setR5ShopEnabled(previous);
+      setShopSettingError(err.message || 'Shop-Einstellung konnte nicht gespeichert werden.');
+    } finally {
+      setIsSavingShopSetting(false);
+      setTimeout(() => setSuccessMessage(null), 2500);
     }
   };
 
@@ -337,6 +376,31 @@ const R5CodeAdmin: React.FC = () => {
           </form>
         </Card>
       </div>
+
+      <Card className="border-gray-700">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-white">R5 Shop Freigabe</h3>
+            <p className="text-sm text-gray-400">Steuert, ob der Shop f&#252;r R5-Benutzer sichtbar ist.</p>
+          </div>
+          <label className="flex items-center gap-3 text-sm text-gray-200">
+            <input
+              type="checkbox"
+              checked={r5ShopEnabled}
+              onChange={(e) => handleShopVisibilityChange(e.target.checked)}
+              disabled={isLoadingShopSetting || isSavingShopSetting}
+              className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-blue-600 focus:ring-blue-500"
+            />
+            <span>{r5ShopEnabled ? 'Shop sichtbar' : 'Shop verborgen'}</span>
+          </label>
+        </div>
+        {isLoadingShopSetting && (
+          <p className="mt-3 text-xs text-gray-400">Lade Shop-Einstellung...</p>
+        )}
+        {shopSettingError && (
+          <p className="mt-3 text-xs text-red-400">{shopSettingError}</p>
+        )}
+      </Card>
 
       <Card className="border-gray-700">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">

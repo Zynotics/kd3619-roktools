@@ -208,6 +208,44 @@ async function deactivateR5Code(code, { clearAssignment = true } = {}) {
 }
 
 // ------------------------------------------------
+// APP SETTINGS
+// ------------------------------------------------
+
+async function initAppSettingsTable() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log("✅ Postgres: app_settings Tabelle geprüft/aktualisiert.");
+  } catch (e) {
+    console.error("❌ Fehler beim Initialisieren der app_settings Tabelle:", e.message);
+  }
+}
+
+async function getAppSetting(key) {
+  const row = await get('SELECT key, value FROM app_settings WHERE key = $1', [key]);
+  return row || null;
+}
+
+async function setAppSetting(key, value) {
+  const res = await query(
+    `
+      INSERT INTO app_settings (key, value, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (key)
+      DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+      RETURNING key, value
+    `,
+    [key, value]
+  );
+  return res.rows[0];
+}
+
+// ------------------------------------------------
 // KVK EVENT MANAGER (UPDATED FOR MODULAR & RANGE)
 // ------------------------------------------------
 
@@ -293,6 +331,7 @@ async function initR5CodesTable() {
 if (process.env.DATABASE_URL) {
     initKvkTable();
     initR5CodesTable();
+    initAppSettingsTable();
 }
 
 /**
@@ -466,6 +505,8 @@ module.exports = {
   getActiveR5Access,
   assignR5Code,
   deactivateR5Code,
+  getAppSetting,
+  setAppSetting,
   // KvK Exports
   createKvkEvent,
   getKvkEvents,

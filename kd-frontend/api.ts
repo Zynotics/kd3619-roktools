@@ -157,6 +157,47 @@ export async function deleteFile(type: 'overview' | 'honor' | 'activity', fileId
 
 // ==================== R5 CODES ====================
 
+export async function fetchR5ShopVisibility(): Promise<{ enabled: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/api/r5-shop-visibility`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to load shop visibility');
+  }
+
+  return res.json();
+}
+
+export async function fetchAdminR5ShopVisibility(): Promise<{ enabled: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/api/admin/r5-shop-visibility`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to load shop visibility');
+  }
+
+  return res.json();
+}
+
+export async function updateAdminR5ShopVisibility(enabled: boolean): Promise<{ enabled: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/api/admin/r5-shop-visibility`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ enabled }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to update shop visibility');
+  }
+
+  return res.json();
+}
+
 export async function fetchAdminR5Codes(): Promise<R5Code[]> {
   const res = await fetch(`${API_BASE_URL}/api/admin/r5-codes`, {
     headers: getAuthHeaders(),

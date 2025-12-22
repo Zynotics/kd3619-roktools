@@ -12,6 +12,7 @@ import SuperadminKingdomOverview from './components/SuperadminKingdomOverview';
 import R5CustomerAccess from './components/R5CustomerAccess';
 import R5CodeAdmin from './components/R5CodeAdmin';
 import ShopWidget from './components/ShopWidget';
+import { fetchR5ShopVisibility } from './api';
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
     ? 'https://api.rise-of-stats.com'
@@ -66,6 +67,7 @@ const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('overview');
   const [headerTitle, setHeaderTitle] = useState<string>('Rise of Stats');
   const [slugKingdomId, setSlugKingdomId] = useState<string | null>(null);
+  const [r5ShopEnabled, setR5ShopEnabled] = useState(true);
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
   const forceLogin = queryParams.get('login') === 'true';
@@ -75,6 +77,7 @@ const AppContent: React.FC = () => {
   const isR4 = user?.role === 'r4';
   const isR4OrR5 = isR5 || isR4;
   const isAdmin = isSuperAdmin || isR5;
+  const canAccessShop = !isR5 || r5ShopEnabled;
   const hasKingdomSlug = !!publicSlug;
   // ðŸ†• Helper fÃ¼r KvK Manager Zugriff (freischaltbar Ã¼ber Rechte)
   const isSameKingdomAsSlug = user?.kingdomId && slugKingdomId ? user.kingdomId === slugKingdomId : false;
@@ -140,6 +143,9 @@ const AppContent: React.FC = () => {
     if (activeView === 'r5-access' && !isR5) {
         setActiveView('overview');
     }
+    if (activeView === 'shop' && isR5 && !r5ShopEnabled) {
+        setActiveView('overview');
+    }
   }, [
     publicSlug,
     isSuperAdminWithoutSlug,
@@ -148,7 +154,29 @@ const AppContent: React.FC = () => {
     isRegisterInvite,
     isRegistrationInviteView,
     shouldForcePublicForForeignKingdom,
+    isR5,
+    r5ShopEnabled,
   ]);
+  useEffect(() => {
+    let isMounted = true;
+    const loadShopVisibility = async () => {
+      if (!user || user.role !== 'r5') {
+        if (isMounted) setR5ShopEnabled(true);
+        return;
+      }
+      try {
+        const data = await fetchR5ShopVisibility();
+        if (isMounted) setR5ShopEnabled(!!data.enabled);
+      } catch (err) {
+        console.error('Failed to load R5 shop visibility', err);
+        if (isMounted) setR5ShopEnabled(true);
+      }
+    };
+    loadShopVisibility();
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
   // 2. R5/R4 REDIRECT
   useEffect(() => {
     const redirectToSlug = async () => {
@@ -285,13 +313,15 @@ const AppContent: React.FC = () => {
                   label="Players"
                   icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
                 />
-                <NavItem
-                  view="shop"
-                  currentActiveView={activeView}
-                  setActiveView={setActiveView}
-                  label="Shop"
-                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18l-2 10H5L3 7zm2 0 1-3h12l1 3M9 11h6" /></svg>}
-                />
+                {canAccessShop && (
+                  <NavItem
+                    view="shop"
+                    currentActiveView={activeView}
+                    setActiveView={setActiveView}
+                    label="Shop"
+                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18l-2 10H5L3 7zm2 0 1-3h12l1 3M9 11h6" /></svg>}
+                  />
+                )}
               </>
             )}
             {/* ========== ADMINISTRATION BEREICH ========== */}
@@ -477,7 +507,7 @@ const AppContent: React.FC = () => {
                     />
                 </PublicOrProtectedRoute>
             )}
-                {activeView === 'shop' && (
+                {activeView === 'shop' && canAccessShop && (
                     <PublicOrProtectedRoute
                     isPublic={effectivePublicView}
                     publicSlug={publicSlug}
