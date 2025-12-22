@@ -652,34 +652,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
               <span className="text-3xl md:text-4xl mr-3">⚔️</span> 
               {activeEvent ? activeEvent.name : 'KvK Tracker'}
             </h1>
-            {activeEvent && (
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                <span className={`px-2 py-1 rounded text-xs font-semibold border ${
-                  activeEvent.isPublic
-                    ? 'bg-green-900/70 text-green-200 border-green-700'
-                    : 'bg-gray-800 text-gray-200 border-gray-600'
-                }`}>
-                  {activeEvent.isPublic ? 'Public Event' : 'Private Event'}
-                </span>
-                <span className={`px-2 py-1 rounded text-[11px] font-semibold border ${
-                  rankingPublicFlag
-                    ? 'bg-blue-900/60 text-blue-100 border-blue-700'
-                    : 'bg-gray-800 text-gray-200 border-gray-700'
-                }`}>
-                  Total Ranking: {rankingPublicFlag ? 'Public' : 'Private'}
-                </span>
-                <span className={`px-2 py-1 rounded text-[11px] font-semibold border ${
-                  honorPublicFlag
-                    ? 'bg-purple-900/60 text-purple-100 border-purple-700'
-                    : 'bg-gray-800 text-gray-200 border-gray-700'
-                }`}>
-                  Honor Dashboard: {honorPublicFlag ? 'Public' : 'Private'}
-                </span>
-                {!activeEvent.isPublic && (
-                  <span className="text-[11px] text-gray-400">Visible only to R4/R5 until it is published.</span>
-                )}
-              </div>
-            )}
+            {activeEvent && <div className="mt-2" />}
             {activeEvent?.fights && activeEvent.fights.length > 0 && (
                 <p className="text-xs text-blue-300 mt-1 ml-12">
                    {activeEvent.fights.length} Battle Phases Tracked
@@ -706,14 +679,14 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             <button
               onClick={() => rankingAvailable && setViewMode('stats')}
               disabled={!rankingAvailable}
-              title={rankingAvailable ? '' : 'Total Ranking is private for public visitors'}
+              title={rankingAvailable ? '' : 'DKP Ranking is private for public visitors'}
               className={`px-4 md:px-6 py-2 rounded-md font-bold text-sm md:text-base transition-all duration-200 ${
                 viewMode === 'stats'
                   ? 'bg-blue-600 text-white shadow'
                   : 'text-gray-400 hover:text-white hover:bg-gray-700'
               } ${rankingAvailable ? '' : 'opacity-50 cursor-not-allowed'}`}
             >
-              Total Ranking
+              DKP Ranking
             </button>
             <button
               onClick={() => honorAvailable && setViewMode('honor')}
@@ -738,7 +711,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             
             {viewMode === 'stats' && !rankingAvailable && (
               <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 p-6 text-center text-gray-300">
-                <h2 className="text-xl font-semibold text-blue-200 mb-2">Total Ranking is private</h2>
+                <h2 className="text-xl font-semibold text-blue-200 mb-2">DKP Ranking is private</h2>
                 <p className="text-sm text-gray-400">Log in as R4/R5/Admin to view this leaderboard.</p>
               </div>
             )}
@@ -748,7 +721,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                 <div className="p-4 bg-gray-800 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                        <h2 className="text-lg font-semibold text-blue-200">Total War Ranking</h2>
+                        <h2 className="text-lg font-semibold text-blue-200">DKP Ranking</h2>
                       </div>
                       <p className="text-xs text-gray-400">
                           Aggregated stats based on the selected battle phase.

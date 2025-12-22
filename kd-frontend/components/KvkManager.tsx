@@ -473,7 +473,7 @@ const KvkManager: React.FC = () => {
                   onChange={e => setIsRankingPublic(e.target.checked)}
                 />
                 <div className="flex flex-col leading-tight">
-                  <span className={`font-semibold text-sm ${isRankingPublic ? 'text-blue-200' : 'text-gray-400'}`}>Total Ranking</span>
+                  <span className={`font-semibold text-sm ${isRankingPublic ? 'text-blue-200' : 'text-gray-400'}`}>DKP Ranking</span>
                   <span className="text-[10px] text-gray-500">{isRankingPublic ? 'Leaderboard visible for public visitors' : 'Only R4/R5/Admin can see the ranking'}</span>
                 </div>
               </label>
@@ -875,7 +875,7 @@ const KvkManager: React.FC = () => {
                               <span className={`text-[11px] px-2 py-1 rounded border ${
                                 ev.isRankingPublic ? 'border-blue-500/50 bg-blue-900/30 text-blue-100' : 'border-gray-600 bg-gray-800 text-gray-300'
                               }`}>
-                                Total Ranking: {ev.isRankingPublic ? 'Public' : 'Private'}
+                                DKP Ranking: {ev.isRankingPublic ? 'Public' : 'Private'}
                               </span>
                               <span className={`text-[11px] px-2 py-1 rounded border ${
                                 ev.isHonorPublic ? 'border-purple-500/50 bg-purple-900/30 text-purple-100' : 'border-gray-600 bg-gray-800 text-gray-300'
