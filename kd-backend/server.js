@@ -1184,7 +1184,21 @@ app.get('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (re
 app.post('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (req, res) => {
   try {
     // UPDATED: Jetzt mit honorStartFileId / honorEndFileId
-    const { name, fights, eventStartFileId, honorStartFileId, honorEndFileId, dkpFormula, goalsFormula, isPublic, rankingPublic, honorPublic, kingdomId: bodyKingdomId } = req.body;
+    const {
+      name,
+      fights,
+      eventStartFileId,
+      honorStartFileId,
+      honorEndFileId,
+      dkpFormula,
+      goalsFormula,
+      isPublic,
+      rankingPublic,
+      honorPublic,
+      isRankingPublic,
+      isHonorPublic,
+      kingdomId: bodyKingdomId
+    } = req.body;
 
     let targetKingdomId = req.user.kingdomId;
     if (req.user.role === 'admin') {
@@ -1211,6 +1225,9 @@ app.post('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (r
       return res.status(400).json({ error: validationError.message });
     }
 
+    const resolvedRankingPublic = rankingPublic ?? isRankingPublic;
+    const resolvedHonorPublic = honorPublic ?? isHonorPublic;
+
     const newEvent = {
       id: 'kvk-' + Date.now(),
       name,
@@ -1223,8 +1240,8 @@ app.post('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (r
       dkpFormula: dkpFormula || null,
       goalsFormula: goalsFormula || null,
       isPublic: !!isPublic,
-      isRankingPublic: rankingPublic ?? isPublic ?? true,
-      isHonorPublic: honorPublic ?? isPublic ?? true,
+      isRankingPublic: resolvedRankingPublic ?? isPublic ?? true,
+      isHonorPublic: resolvedHonorPublic ?? isPublic ?? true,
       createdAt: new Date().toISOString()
     };
 
@@ -1239,7 +1256,20 @@ app.post('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (r
 // 3. PUT /api/admin/kvk/events/:id - Event bearbeiten
 app.put('/api/admin/kvk/events/:id', authenticateToken, requireKvkManager, async (req, res) => {
   try {
-    const { name, fights, eventStartFileId, honorStartFileId, honorEndFileId, dkpFormula, goalsFormula, isPublic, rankingPublic, honorPublic } = req.body;
+    const {
+      name,
+      fights,
+      eventStartFileId,
+      honorStartFileId,
+      honorEndFileId,
+      dkpFormula,
+      goalsFormula,
+      isPublic,
+      rankingPublic,
+      honorPublic,
+      isRankingPublic,
+      isHonorPublic
+    } = req.body;
     const eventId = req.params.id;
 
     // Check ownership
@@ -1256,6 +1286,9 @@ app.put('/api/admin/kvk/events/:id', authenticateToken, requireKvkManager, async
       return res.status(400).json({ error: validationError.message });
     }
 
+    const resolvedRankingPublic = rankingPublic ?? isRankingPublic;
+    const resolvedHonorPublic = honorPublic ?? isHonorPublic;
+
     const updated = await updateKvkEvent(eventId, {
       name,
       fights,
@@ -1265,8 +1298,8 @@ app.put('/api/admin/kvk/events/:id', authenticateToken, requireKvkManager, async
       dkpFormula: dkpFormula || null,
       goalsFormula: goalsFormula || null,
       isPublic,
-      isRankingPublic: rankingPublic ?? existing.isRankingPublic ?? existing.isPublic,
-      isHonorPublic: honorPublic ?? existing.isHonorPublic ?? existing.isPublic
+      isRankingPublic: resolvedRankingPublic ?? existing.isRankingPublic ?? existing.isPublic,
+      isHonorPublic: resolvedHonorPublic ?? existing.isHonorPublic ?? existing.isPublic
     });
     res.json(updated);
   } catch (error) {
