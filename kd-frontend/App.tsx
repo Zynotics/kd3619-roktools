@@ -107,6 +107,16 @@ const AppContent: React.FC = () => {
   const showDashboardInterface =
     (user || isAdminOverrideView || effectivePublicView) && !(forceLogin && !user);
 
+  const activeViewStorageKey = publicSlug ? `kd-active-view:${publicSlug}` : 'kd-active-view';
+
+  // Restore last visited view on load
+  useEffect(() => {
+    const savedView = localStorage.getItem(activeViewStorageKey) as ActiveView | null;
+    if (savedView) {
+      setActiveView(savedView);
+    }
+  }, [activeViewStorageKey]);
+
   const redirectToLogin = () => {
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.set('login', 'true');
@@ -156,6 +166,11 @@ const AppContent: React.FC = () => {
     shouldForcePublicForForeignKingdom,
     r5ShopEnabled,
   ]);
+
+  // Persist last visited view for refreshes
+  useEffect(() => {
+    localStorage.setItem(activeViewStorageKey, activeView);
+  }, [activeView, activeViewStorageKey]);
   useEffect(() => {
     let isMounted = true;
     const loadShopVisibility = async () => {
