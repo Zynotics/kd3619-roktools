@@ -112,7 +112,7 @@ function parseExcel(filePath) {
 
 async function getR5ShopVisibilitySetting() {
   const entry = await getAppSetting(R5_SHOP_VISIBILITY_KEY);
-  if (!entry || entry.value == null) return true;
+  if (!entry || entry.value == null) return false;
   return String(entry.value).toLowerCase() === 'true';
 }
 
@@ -788,6 +788,16 @@ app.post('/api/admin/users/assign-r4', authenticateToken, requireAdmin, async (r
 // ==================== R5 ACCESS CODES ====================
 
 // Global Shop Visibility for R5 (Superadmin control)
+app.get('/api/shop-visibility', async (req, res) => {
+    try {
+        const enabled = await getR5ShopVisibilitySetting();
+        res.json({ enabled });
+    } catch (error) {
+        console.error('Error loading shop visibility:', error);
+        res.status(500).json({ error: 'Fehler beim Laden der Shop-Einstellung' });
+    }
+});
+
 app.get('/api/r5-shop-visibility', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const enabled = await getR5ShopVisibilitySetting();

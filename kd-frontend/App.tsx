@@ -12,7 +12,7 @@ import SuperadminKingdomOverview from './components/SuperadminKingdomOverview';
 import R5CustomerAccess from './components/R5CustomerAccess';
 import R5CodeAdmin from './components/R5CodeAdmin';
 import ShopWidget from './components/ShopWidget';
-import { fetchR5ShopVisibility } from './api';
+import { fetchShopVisibility } from './api';
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
     ? 'https://api.rise-of-stats.com'
@@ -67,7 +67,7 @@ const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('overview');
   const [headerTitle, setHeaderTitle] = useState<string>('Rise of Stats');
   const [slugKingdomId, setSlugKingdomId] = useState<string | null>(null);
-  const [r5ShopEnabled, setR5ShopEnabled] = useState(true);
+  const [r5ShopEnabled, setR5ShopEnabled] = useState(false);
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
   const forceLogin = queryParams.get('login') === 'true';
@@ -77,7 +77,7 @@ const AppContent: React.FC = () => {
   const isR4 = user?.role === 'r4';
   const isR4OrR5 = isR5 || isR4;
   const isAdmin = isSuperAdmin || isR5;
-  const canAccessShop = !isR5 || r5ShopEnabled;
+  const canAccessShop = r5ShopEnabled;
   const hasKingdomSlug = !!publicSlug;
   // ðŸ†• Helper fÃ¼r KvK Manager Zugriff (freischaltbar Ã¼ber Rechte)
   const isSameKingdomAsSlug = user?.kingdomId && slugKingdomId ? user.kingdomId === slugKingdomId : false;
@@ -143,7 +143,7 @@ const AppContent: React.FC = () => {
     if (activeView === 'r5-access' && !isR5) {
         setActiveView('overview');
     }
-    if (activeView === 'shop' && isR5 && !r5ShopEnabled) {
+    if (activeView === 'shop' && !r5ShopEnabled) {
         setActiveView('overview');
     }
   }, [
@@ -154,22 +154,17 @@ const AppContent: React.FC = () => {
     isRegisterInvite,
     isRegistrationInviteView,
     shouldForcePublicForForeignKingdom,
-    isR5,
     r5ShopEnabled,
   ]);
   useEffect(() => {
     let isMounted = true;
     const loadShopVisibility = async () => {
-      if (!user || user.role !== 'r5') {
-        if (isMounted) setR5ShopEnabled(true);
-        return;
-      }
       try {
-        const data = await fetchR5ShopVisibility();
+        const data = await fetchShopVisibility();
         if (isMounted) setR5ShopEnabled(!!data.enabled);
       } catch (err) {
         console.error('Failed to load R5 shop visibility', err);
-        if (isMounted) setR5ShopEnabled(true);
+        if (isMounted) setR5ShopEnabled(false);
       }
     };
     loadShopVisibility();
