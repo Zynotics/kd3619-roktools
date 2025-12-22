@@ -68,6 +68,7 @@ const AppContent: React.FC = () => {
   const [headerTitle, setHeaderTitle] = useState<string>('Rise of Stats');
   const [slugKingdomId, setSlugKingdomId] = useState<string | null>(null);
   const [r5ShopEnabled, setR5ShopEnabled] = useState(false);
+  const [isShopVisibilityLoading, setIsShopVisibilityLoading] = useState(true);
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
   const forceLogin = queryParams.get('login') === 'true';
@@ -77,7 +78,7 @@ const AppContent: React.FC = () => {
   const isR4 = user?.role === 'r4';
   const isR4OrR5 = isR5 || isR4;
   const isAdmin = isSuperAdmin || isR5;
-  const canAccessShop = r5ShopEnabled;
+  const canAccessShop = r5ShopEnabled && !isShopVisibilityLoading;
   const hasKingdomSlug = !!publicSlug;
   // ðŸ†• Helper fÃ¼r KvK Manager Zugriff (freischaltbar Ã¼ber Rechte)
   const isSameKingdomAsSlug = user?.kingdomId && slugKingdomId ? user.kingdomId === slugKingdomId : false;
@@ -153,7 +154,7 @@ const AppContent: React.FC = () => {
     if (activeView === 'r5-access' && !isR5) {
         setActiveView('overview');
     }
-    if (activeView === 'shop' && !r5ShopEnabled) {
+    if (activeView === 'shop' && (isShopVisibilityLoading || !r5ShopEnabled)) {
         setActiveView('overview');
     }
   }, [
@@ -165,6 +166,7 @@ const AppContent: React.FC = () => {
     isRegistrationInviteView,
     shouldForcePublicForForeignKingdom,
     r5ShopEnabled,
+    isShopVisibilityLoading,
   ]);
 
   // Persist last visited view for refreshes
@@ -174,19 +176,22 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
     const loadShopVisibility = async () => {
+      setIsShopVisibilityLoading(true);
       try {
         const data = await fetchShopVisibility();
         if (isMounted) setR5ShopEnabled(!!data.enabled);
       } catch (err) {
         console.error('Failed to load R5 shop visibility', err);
         if (isMounted) setR5ShopEnabled(false);
+      } finally {
+        if (isMounted) setIsShopVisibilityLoading(false);
       }
     };
     loadShopVisibility();
     return () => {
       isMounted = false;
     };
-  }, [user]);
+  }, [user, publicSlug]);
   // 2. R5/R4 REDIRECT
   useEffect(() => {
     const redirectToSlug = async () => {
