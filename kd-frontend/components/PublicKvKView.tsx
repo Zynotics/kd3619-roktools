@@ -110,14 +110,13 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       setSelectedFightId('all');
       setEventStartSelection(evt.eventStartFileId || '');
 
-      const honorRange = getHonorFilesWithinEventRange(
-        allHonorFiles,
-        evt.honorStartFileId,
-        evt.honorEndFileId
-      );
+      const honorRangeConfigured = evt.honorStartFileId && evt.honorEndFileId;
+      const honorRange = honorRangeConfigured
+        ? getHonorFilesWithinEventRange(allHonorFiles, evt.honorStartFileId, evt.honorEndFileId)
+        : [];
 
-      setHonorStartSelection(honorRange[0]?.id || evt.honorStartFileId || '');
-      setHonorEndSelection(honorRange[honorRange.length - 1]?.id || evt.honorEndFileId || '');
+      setHonorStartSelection(honorRangeConfigured ? honorRange[0]?.id || evt.honorStartFileId || '' : '');
+      setHonorEndSelection(honorRangeConfigured ? honorRange[honorRange.length - 1]?.id || evt.honorEndFileId || '' : '');
     }
   }, [events, selectedEventId, allHonorFiles]);
 
@@ -174,14 +173,17 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
       const defaultEventStart = event.eventStartFileId || loadedOverview[0]?.id || '';
 
-      const honorRange = getHonorFilesWithinEventRange(
-        loadedHonor,
-        event.honorStartFileId,
-        event.honorEndFileId
-      );
+      const honorRangeConfigured = event.honorStartFileId && event.honorEndFileId;
+      const honorRange = honorRangeConfigured
+        ? getHonorFilesWithinEventRange(
+            loadedHonor,
+            event.honorStartFileId,
+            event.honorEndFileId
+          )
+        : [];
 
-      const defaultHonorStart = honorRange[0]?.id || '';
-      const defaultHonorEnd = honorRange[honorRange.length - 1]?.id || defaultHonorStart;
+      const defaultHonorStart = honorRangeConfigured ? honorRange[0]?.id || '' : '';
+      const defaultHonorEnd = honorRangeConfigured ? honorRange[honorRange.length - 1]?.id || defaultHonorStart : '';
 
       setEventStartSelection(defaultEventStart);
       setHonorStartSelection(defaultHonorStart);
