@@ -312,8 +312,8 @@ const KvkManager: React.FC = () => {
         } else {
             await createKvkEvent(payload);
             alert('Event successfully created!');
+            resetForm();
         }
-        resetForm();
         loadData();
     } catch (err: any) {
         alert(err.message || 'Error saving event');
