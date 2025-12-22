@@ -784,7 +784,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             className="flex items-center gap-1 justify-end w-full"
                             onClick={() => toggleSort('dkpPercent')}
                           >
-                            DKP Progress {renderSortIndicator('dkpPercent')}
+                            DKP Score {renderSortIndicator('dkpPercent')}
                           </button>
                         </th>
                         <th className="p-3 text-right text-red-200">
@@ -793,7 +793,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             className="flex items-center gap-1 justify-end w-full"
                             onClick={() => toggleSort('deadPercent')}
                           >
-                            Dead Goal {renderSortIndicator('deadPercent')}
+                            All Dead {renderSortIndicator('deadPercent')}
                           </button>
                         </th>
 
