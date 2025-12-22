@@ -53,15 +53,17 @@ const HonorPlayerSearch: React.FC<HonorPlayerSearchProps> = ({
                 >
                     Search
                 </button>
-                 {(results || selectedPlayerHistory) && (
-                     <button
+            </div>
+            {(results || selectedPlayerHistory) && (
+                <div className="flex justify-end mt-2">
+                    <button
                         onClick={onClear}
-                        className="px-6 py-2.5 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-500 transition-colors"
+                        className="px-6 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-500 transition-colors"
                     >
                         Clear
                     </button>
-                 )}
-            </div>
+                </div>
+            )}
             {!isDataLoaded && <p className="text-sm text-gray-400 mt-2">Please upload data to enable search.</p>}
 
             <div className="mt-6">
