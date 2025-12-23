@@ -19,6 +19,7 @@ const {
   generateR5Code, getR5Codes, getR5Code, activateR5Code, getActiveR5Access, assignR5Code, deactivateR5Code,
   getAppSetting, setAppSetting
 } = require('./db-pg');
+const { init: initPgSchema } = require('./init-pg');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -53,6 +54,12 @@ app.use(
 
 app.options('*', cors());
 app.use(express.json());
+
+if (process.env.DATABASE_URL) {
+  initPgSchema().catch((err) => {
+    console.error('Postgres schema init failed:', err);
+  });
+}
 
 // 📂 Upload-Ordner
 const uploadDir = path.join(__dirname, 'uploads');
