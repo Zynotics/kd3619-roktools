@@ -339,10 +339,50 @@ async function initR5CodesTable() {
 }
 
 // Init sofort ausführen, wenn Verbindung da ist
+async function initUsersColumns() {
+  try {
+    await query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS kingdom_id TEXT
+    `);
+    await query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS can_manage_overview_files BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS can_manage_honor_files BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS can_manage_activity_files BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS can_manage_analytics_files BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS can_access_kvk_manager BOOLEAN DEFAULT FALSE
+    `);
+    await query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_name = 'kingdoms'
+        ) AND NOT EXISTS (
+          SELECT 1
+          FROM information_schema.table_constraints
+          WHERE constraint_name = 'users_kingdom_fk'
+            AND table_name = 'users'
+        ) THEN
+          ALTER TABLE users
+            ADD CONSTRAINT users_kingdom_fk FOREIGN KEY (kingdom_id)
+            REFERENCES kingdoms(id);
+        END IF;
+      END$$;
+    `);
+    console.log("ƒo. Postgres: users Spalten geprÇ¬ft/aktualisiert.");
+  } catch (e) {
+    console.error("ƒ?O Fehler beim Initialisieren der users Spalten:", e.message);
+  }
+}
+
 if (process.env.DATABASE_URL) {
     initKvkTable();
     initR5CodesTable();
     initAppSettingsTable();
+    initUsersColumns();
 }
 
 /**
@@ -540,5 +580,4 @@ module.exports = {
   updateKvkEvent,
   deleteKvkEvent
 };
-
 
