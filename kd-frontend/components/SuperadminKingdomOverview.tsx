@@ -10,7 +10,7 @@ const BACKEND_URL =
 
 const FRONTEND_URL =
   process.env.NODE_ENV === 'production'
-    ? 'https://rise-of-stats.com'
+    ? 'https://www.rise-of-stats.com'
     : 'http://localhost:5173';
 
 const SuperadminKingdomOverview: React.FC = () => {

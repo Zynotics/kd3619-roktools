@@ -40,7 +40,7 @@ const BACKEND_URL =
 // 🌐 NEU: Frontend URL für den Link
 const FRONTEND_URL = 
   process.env.NODE_ENV === 'production'
-    ? 'https://rise-of-stats.com'
+    ? 'https://www.rise-of-stats.com'
     : 'http://localhost:5173';
 
 
