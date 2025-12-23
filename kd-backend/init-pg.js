@@ -198,7 +198,12 @@ async function init() {
   console.log('✅ Postgres schema initialized (users, files [overview, honor, activity], kingdoms)');
 }
 
-init().catch((err) => {
-  console.error('❌ Error initializing Postgres schema:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  init().catch((err) => {
+    console.error('�?O Error initializing Postgres schema:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = { init };
+
