@@ -1,9 +1,9 @@
-// init-pg.js – Postgres-Schema für Users, Files + Kingdoms
+﻿// init-pg.js - Postgres schema for users, files + kingdoms
 
 const { query } = require('./db-pg');
 
 async function init() {
-  console.log('🔧 Initializing Postgres schema...');
+  console.log('Initializing Postgres schema...');
 
   // USERS
   await query(`
@@ -22,15 +22,14 @@ async function init() {
     );
   `);
 
-  // 👑 NEU: kingdom_id zur users-Tabelle hinzufügen
+  // NEW: kingdom_id on users
   await query(`
     ALTER TABLE users
       ADD COLUMN IF NOT EXISTS kingdom_id TEXT
       REFERENCES kingdoms(id);
   `);
 
-  // 📝 NEU: Granulare File Management Rechte zur users-Tabelle hinzufügen
-  // (Hier fügen wir can_manage_activity_files hinzu)
+  // NEW: granular file permissions on users
   await query(`
     ALTER TABLE users
       ADD COLUMN IF NOT EXISTS can_manage_overview_files BOOLEAN DEFAULT FALSE,
@@ -74,7 +73,7 @@ async function init() {
     );
   `);
 
-  // 🆕 ACTIVITY FILES (Neue Tabelle)
+  // ACTIVITY FILES
   await query(`
     CREATE TABLE IF NOT EXISTS activity_files (
       id TEXT PRIMARY KEY,
@@ -91,7 +90,7 @@ async function init() {
     );
   `);
 
-  // 📅 KvK Events (wird zusätzlich in db-pg abgesichert)
+  // KVK EVENTS
   await query(`
     CREATE TABLE IF NOT EXISTS kvk_events (
       id TEXT PRIMARY KEY,
@@ -122,53 +121,50 @@ async function init() {
     );
   `);
 
-  // 👑 NEU: Spalte owner_user_id zur kingdoms-Tabelle hinzufügen
+  // NEW: owner_user_id on kingdoms
   await query(`
     ALTER TABLE kingdoms
       ADD COLUMN IF NOT EXISTS owner_user_id TEXT
       REFERENCES users(id);
   `);
 
-  // 🏰 Default-Kingdom anlegen (für alle bestehenden Daten)
+  // Default kingdom
   await query(`
     INSERT INTO kingdoms (id, display_name, slug, rok_identifier, status, plan)
     VALUES ('kdm-default', 'Default Kingdom', 'default-kingdom', NULL, 'active', 'free')
     ON CONFLICT (id) DO NOTHING;
   `);
 
-  // 🔧 Falls die Files-Tabellen schon existierten: Spalten sicherheitshalber nachziehen
-  // (Dies gilt auch für die neue activity_files Tabelle, falls sie manuell erstellt wurde, schadet aber nicht)
+  // Backfill and FK guardrails for files
   const tables = ['overview_files', 'honor_files', 'activity_files'];
   for (const table of tables) {
-      await query(`
-        ALTER TABLE ${table}
-          ADD COLUMN IF NOT EXISTS kingdom_id TEXT,
-          ADD COLUMN IF NOT EXISTS uploaded_by_user_id TEXT;
-      `);
+    await query(`
+      ALTER TABLE ${table}
+        ADD COLUMN IF NOT EXISTS kingdom_id TEXT,
+        ADD COLUMN IF NOT EXISTS uploaded_by_user_id TEXT;
+    `);
   }
 
-  // ✨ Datenbank-Guardrails: kingdom_id Pflichtfeld + FK auf kingdoms
   for (const table of tables) {
-      // Fehlende kingdom_id mit Default-Kingdom auffüllen
-      await query(`UPDATE ${table} SET kingdom_id = 'kdm-default' WHERE kingdom_id IS NULL;`);
-      await query(`ALTER TABLE ${table} ALTER COLUMN kingdom_id SET NOT NULL;`);
-      await query(`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1 FROM information_schema.table_constraints
-            WHERE constraint_name = '${table}_kingdom_fk'
-              AND table_name = '${table}'
-          ) THEN
-            ALTER TABLE ${table}
-              ADD CONSTRAINT ${table}_kingdom_fk FOREIGN KEY (kingdom_id)
-              REFERENCES kingdoms(id) ON DELETE CASCADE;
-          END IF;
-        END$$;
-      `);
+    await query(`UPDATE ${table} SET kingdom_id = 'kdm-default' WHERE kingdom_id IS NULL;`);
+    await query(`ALTER TABLE ${table} ALTER COLUMN kingdom_id SET NOT NULL;`);
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name = '${table}_kingdom_fk'
+            AND table_name = '${table}'
+        ) THEN
+          ALTER TABLE ${table}
+            ADD CONSTRAINT ${table}_kingdom_fk FOREIGN KEY (kingdom_id)
+            REFERENCES kingdoms(id) ON DELETE CASCADE;
+        END IF;
+      END$$;
+    `);
   }
 
-  // KvK Events: kingdom_id absichern
+  // KvK events: kingdom_id guardrail
   await query(`UPDATE kvk_events SET kingdom_id = 'kdm-default' WHERE kingdom_id IS NULL;`);
   await query(`ALTER TABLE kvk_events ALTER COLUMN kingdom_id SET NOT NULL;`);
   await query(`
@@ -186,24 +182,22 @@ async function init() {
     END$$;
   `);
 
-  // 📎 Alle bestehenden Files dem Default-Kingdom zuordnen (falls noch kein kingdom_id)
+  // Backfill existing files
   await query(`
     UPDATE overview_files SET kingdom_id = 'kdm-default' WHERE kingdom_id IS NULL;
   `);
   await query(`
     UPDATE honor_files SET kingdom_id = 'kdm-default' WHERE kingdom_id IS NULL;
   `);
-  // (Activity files sind neu, daher kein Update nötig, aber der Vollständigkeit halber gut zu wissen)
 
-  console.log('✅ Postgres schema initialized (users, files [overview, honor, activity], kingdoms)');
+  console.log('Postgres schema initialized (users, files [overview, honor, activity], kingdoms)');
 }
 
 if (require.main === module) {
   init().catch((err) => {
-    console.error('�?O Error initializing Postgres schema:', err);
+    console.error('Error initializing Postgres schema:', err);
     process.exit(1);
   });
 }
 
 module.exports = { init };
-
