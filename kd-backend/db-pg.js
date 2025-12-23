@@ -341,6 +341,13 @@ async function initR5CodesTable() {
 // Init sofort ausführen, wenn Verbindung da ist
 async function initUsersColumns() {
   try {
+    const usersTable = await get(
+      `SELECT 1 FROM information_schema.tables WHERE table_name = 'users'`
+    );
+    if (!usersTable) {
+      console.warn('Postgres: users table missing, skipping users column init.');
+      return;
+    }
     await query(`
       ALTER TABLE users
         ADD COLUMN IF NOT EXISTS kingdom_id TEXT
@@ -580,4 +587,3 @@ module.exports = {
   updateKvkEvent,
   deleteKvkEvent
 };
-
