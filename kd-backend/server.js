@@ -32,6 +32,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'https://kd3619-frontend.onrender.com',
   'https://rise-of-stats.com',
+  'https://www.rise-of-stats.com',
 ];
 
 app.use(
@@ -1611,7 +1612,6 @@ app.get('/', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
-
 
 
 
