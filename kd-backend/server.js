@@ -55,12 +55,6 @@ app.use(
 app.options('*', cors());
 app.use(express.json());
 
-if (process.env.DATABASE_URL) {
-  initPgSchema().catch((err) => {
-    console.error('Postgres schema init failed:', err);
-  });
-}
-
 // 📂 Upload-Ordner
 const uploadDir = path.join(__dirname, 'uploads');
 const uploadsOverviewDir = path.join(uploadDir, 'overview');
@@ -1616,9 +1610,23 @@ app.get('/', (req, res) => {
   res.json({ message: 'KD3619 Backend API', version: '2.6.0-KVK-MANAGER' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+async function startServer() {
+  if (process.env.DATABASE_URL) {
+    try {
+      await initPgSchema();
+    } catch (err) {
+      console.error('Postgres schema init failed:', err);
+    }
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+startServer();
+
+
 
 
 

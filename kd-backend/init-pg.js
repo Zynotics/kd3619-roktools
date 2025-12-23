@@ -22,11 +22,10 @@ async function init() {
     );
   `);
 
-  // NEW: kingdom_id on users
+  // NEW: kingdom_id on users (add FK later after kingdoms table exists)
   await query(`
     ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS kingdom_id TEXT
-      REFERENCES kingdoms(id);
+      ADD COLUMN IF NOT EXISTS kingdom_id TEXT;
   `);
 
   // NEW: granular file permissions on users
@@ -121,11 +120,41 @@ async function init() {
     );
   `);
 
-  // NEW: owner_user_id on kingdoms
+  // NEW: owner_user_id on kingdoms (add FK later after users table exists)
   await query(`
     ALTER TABLE kingdoms
-      ADD COLUMN IF NOT EXISTS owner_user_id TEXT
-      REFERENCES users(id);
+      ADD COLUMN IF NOT EXISTS owner_user_id TEXT;
+  `);
+
+  // Add FKs after both tables exist
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'users_kingdom_fk'
+          AND table_name = 'users'
+      ) THEN
+        ALTER TABLE users
+          ADD CONSTRAINT users_kingdom_fk FOREIGN KEY (kingdom_id)
+          REFERENCES kingdoms(id);
+      END IF;
+    END$$;
+  `);
+
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'kingdoms_owner_user_fk'
+          AND table_name = 'kingdoms'
+      ) THEN
+        ALTER TABLE kingdoms
+          ADD CONSTRAINT kingdoms_owner_user_fk FOREIGN KEY (owner_user_id)
+          REFERENCES users(id);
+      END IF;
+    END$$;
   `);
 
   // Default kingdom
