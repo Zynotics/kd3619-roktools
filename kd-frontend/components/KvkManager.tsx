@@ -32,18 +32,13 @@ const dkpCategories: { key: keyof DkpFormula; label: string; helper?: string }[]
 
 const truncateToTwoDecimals = (value: number) => Math.trunc(value * 100) / 100;
 
-const parseLocalizedDecimalInput = (value: string) => {
+const parseDecimalInput = (value: string) => {
+  if (!value.trim()) return 0;
   const normalized = value.replace(',', '.');
   const parsed = Number(normalized);
 
   if (Number.isNaN(parsed)) return 0;
   return truncateToTwoDecimals(parsed);
-};
-
-const formatLocalizedDecimalValue = (value: number) => {
-  if (!Number.isFinite(value)) return '';
-
-  return truncateToTwoDecimals(value).toString().replace('.', ',');
 };
 
 const KvkManager: React.FC = () => {
@@ -735,23 +730,25 @@ const KvkManager: React.FC = () => {
                           <div>
                             <label className="text-[11px] text-gray-400 uppercase font-bold mb-1 block">DKP %</label>
                             <input
-                              type="text"
-                              inputMode="decimal"
+                              type="number"
+                              step="0.01"
+                              min="0"
                               className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-cyan-400 outline-none"
-                              value={formatLocalizedDecimalValue(range.dkpPercent)}
-                              onChange={(e) => handlePowerBracketChange(idx, 'dkpPercent', parseLocalizedDecimalInput(e.target.value))}
-                              placeholder="e.g. 120"
+                              value={Number.isFinite(range.dkpPercent) ? range.dkpPercent : ''}
+                              onChange={(e) => handlePowerBracketChange(idx, 'dkpPercent', parseDecimalInput(e.target.value))}
+                              placeholder="e.g. 120.50"
                             />
                           </div>
                           <div>
                             <label className="text-[11px] text-gray-400 uppercase font-bold mb-1 block">Dead %</label>
                             <input
-                              type="text"
-                              inputMode="decimal"
+                              type="number"
+                              step="0.01"
+                              min="0"
                               className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-cyan-400 outline-none"
-                              value={formatLocalizedDecimalValue(range.deadPercent)}
-                              onChange={(e) => handlePowerBracketChange(idx, 'deadPercent', parseLocalizedDecimalInput(e.target.value))}
-                              placeholder="e.g. 10"
+                              value={Number.isFinite(range.deadPercent) ? range.deadPercent : ''}
+                              onChange={(e) => handlePowerBracketChange(idx, 'deadPercent', parseDecimalInput(e.target.value))}
+                              placeholder="e.g. 10.25"
                             />
                           </div>
                         </div>
