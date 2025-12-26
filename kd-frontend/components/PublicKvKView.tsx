@@ -7,16 +7,16 @@ import HonorHistoryChart from './HonorHistoryChart';
 import HonorPlayerSearch from './HonorPlayerSearch';
 import { useAuth } from './AuthContext';
 
-// Typ für die aggregierten Stats (Erweitert)
+// Type for aggregated stats (extended)
 type StatProgressRow = {
   id: string;
   name: string;
   alliance: string;
-  basePower: number;    // Startkraft (beim ersten Auftreten)
-  powerDiff: number;    // Summe aller Differenzen aus den Kämpfen
+  basePower: number;    // Base power (first snapshot)
+  powerDiff: number;    // Sum of differences across fights
   t4KillsDiff: number;
   t5KillsDiff: number;
-  t4t5KillsDiff: number; // Summe T4 + T5
+  t4t5KillsDiff: number; // Sum of T4 + T5
   deadDiff: number;
   killPointsDiff: number;
   fightsParticipated?: number;
@@ -39,7 +39,7 @@ type SortKey =
   | 't5KillsDiff'
   | 't4t5KillsDiff';
 
-// Typ für die aggregierte Gesamtehre im Verlauf
+// Type for aggregated total honor history
 export type TotalHonorPointData = {
   fileName: string;
   fileId: string;
@@ -59,11 +59,11 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [selectedFightId, setSelectedFightId] = useState<string>('all');
   
-  // Rohdaten
+  // Raw data
   const [overviewFiles, setOverviewFiles] = useState<UploadedFile[]>([]);
   const [allHonorFiles, setAllHonorFiles] = useState<UploadedFile[]>([]);
   
-  // Berechnete Daten
+  // Calculated data
   const [statsData, setStatsData] = useState<StatProgressRow[]>([]);
   const [honorHistory, setHonorHistory] = useState<PlayerHonorHistory[]>([]);
   const [activeHonorFiles, setActiveHonorFiles] = useState<UploadedFile[]>([]);
@@ -81,7 +81,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Suche & Filter
+  // Search & filter
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<HonorPlayerInfo[] | 'not_found' | null>(null);
@@ -157,7 +157,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       const event = events.find(e => e.id === selectedEventId);
       if (!event) return;
 
-      // 1. Alle Dateien laden (Overview & Honor)
+      // 1. Load all files (overview & honor)
       const [ovRes, honRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/public/kingdom/${slug}/overview-files`),
         fetch(`${API_BASE_URL}/api/public/kingdom/${slug}/honor-files`)
@@ -413,7 +413,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         const startData = getSnapshotData(startFile);
         const endData = getSnapshotData(endFile);
 
-        // Wir iterieren über endData, da dies die aktiven Spieler am Ende der Phase repräsentiert
+        // Iterate over endData because it represents active players at the end of the phase
         endData.forEach((curr, playerId) => {
             const prev = startData.get(playerId);
             const prevPower = prev ? prev.power : 0;
@@ -438,7 +438,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                     id: playerId,
                     name: curr.name,
                     alliance: curr.alliance,
-                    basePower: baseSnapshotData?.get(playerId)?.power ?? (prev ? prev.power : curr.power), // Wenn kein Prev, nehmen wir Curr als Basis
+                    basePower: baseSnapshotData?.get(playerId)?.power ?? (prev ? prev.power : curr.power), // If no previous snapshot, use current as base
                     powerDiff: 0,
                     t4KillsDiff: 0,
                     t5KillsDiff: 0,
@@ -492,7 +492,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         }
     });
 
-    // Sortierung nach T4 + T5 Kills (Total Kills Δ)
+    // Sort by T4 + T5 kills (total kills delta)
     return Array.from(grandTotals.values()).sort((a, b) => b.t4t5KillsDiff - a.t4t5KillsDiff);
   };
 
