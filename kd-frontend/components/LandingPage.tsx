@@ -10,81 +10,45 @@ const featureHighlights = [
   {
     title: 'Live KvK Insights',
     description:
-      'Aggregierte Kill- und Power-Deltas, Honor-Verlauf und Spieler-Suche in einer Ansicht - sofort nutzbar, ohne Setup.',
+      'Aggregated kill and power deltas, honor progress, and player search in one view - ready out of the box with no setup.',
   },
   {
-    title: 'Aktivitaet & Uploads',
+    title: 'Activity & Uploads',
     description:
-      'Automatische Verarbeitung von Overview-, Honor- und Aktivitaets-Uploads mit Historie und Visuals fuer dein Team.',
+      'Automatic processing of overview, honor, and activity uploads with history and visuals for your team.',
   },
   {
-    title: 'Zugriffscode & Shop',
+    title: 'Access Code & Shop',
     description:
-      'Flexibler Shop mit Login-Schutz. Nach dem Kauf fuehrt dich der Ablauf sicher durch die Aktivierung.',
+      'Flexible shop with login protection. After purchase, the flow guides you safely through activation.',
   },
   {
-    title: 'Rollen & Onboarding',
+    title: 'Roles & Onboarding',
     description:
-      'R5 wird automatisch gesetzt, neue Koenigreiche folgen der Benennung, Einladungen an R4/R5/Raid-Leads inklusive.',
+      'R5 is assigned automatically, new kingdoms follow naming, and invites to R4/R5/raid leads are included.',
   },
 ];
 
 const flowSteps = [
   {
-    title: 'Zugriffscode sichern',
+    title: 'Secure your access code',
     detail:
-      'Waehle die passende Laufzeit im Shop (1 Tag bis 1 Jahr). Der Checkout erfordert Login oder Registrierung.',
+      'Pick the right duration in the shop (1 day to 1 year). Checkout requires login or registration.',
   },
   {
-    title: 'Koenigreich erstellen und benennen',
+    title: 'Create and name your kingdom',
     detail:
-      'Nach dem Kauf geht es direkt ins Setup. Du waehlst den Namen, wir erstellen das Profil und setzen dich als R5.',
+      'After purchase, go straight to setup. Choose a kingdom name, we create the profile, and set you as R5.',
   },
   {
-    title: 'Code aktivieren',
+    title: 'Activate the code',
     detail:
-      'Aktiviere deinen Code, um Uploads, KvK-Tracking und Analysen freizuschalten. Der Status ist jederzeit sichtbar.',
+      'Activate your code to unlock uploads, KvK tracking, and analytics. The status is visible anytime.',
   },
   {
-    title: 'Team onboarden',
+    title: 'Onboard your team',
     detail:
-      'Lade R4/R5 oder Analysten ein. Standard-User nutzen den Public-Link fuer die read-only Ansicht.',
-  },
-];
-
-const previewStats = [
-  { label: 'Aktive Kaempfer', value: 'Stufe A', hint: 'Beispielwerte' },
-  { label: 'Kill-Index', value: 'Stufe B', hint: 'T4/T5 kombiniert' },
-  { label: 'Honor-Impuls', value: 'Stufe A', hint: 'gegenueber Start' },
-];
-
-const previewCharts = [
-  {
-    title: 'Allianz-Tempo',
-    subtitle: 'Anonymisierte Indizes',
-    bars: [
-      { label: 'Allianz A', value: 78 },
-      { label: 'Allianz B', value: 62 },
-      { label: 'Allianz C', value: 45 },
-    ],
-  },
-  {
-    title: 'Honor-Verlauf',
-    subtitle: 'Beispielhafte Phasen',
-    bars: [
-      { label: 'Phase 1', value: 40 },
-      { label: 'Phase 2', value: 70 },
-      { label: 'Phase 3', value: 55 },
-    ],
-  },
-  {
-    title: 'Aktivitaets-Cluster',
-    subtitle: 'Fiktive Segmente',
-    bars: [
-      { label: 'Segment X', value: 65 },
-      { label: 'Segment Y', value: 52 },
-      { label: 'Segment Z', value: 33 },
-    ],
+      'Invite R4/R5 or analysts. Standard users can use the public link for a safe read-only view.',
   },
 ];
 
@@ -95,15 +59,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
         <section className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
             <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/10 border border-blue-700/50 text-xs uppercase tracking-widest text-blue-200">
-              Rise of Stats | KvK Intelligence fuer Kingdom Leads
+              Rise of Stats | KvK Intelligence for Kingdom Leads
             </div>
             <div className="space-y-3">
               <h1 className="text-4xl lg:text-5xl font-black leading-tight">
-                Das neue Kontrollzentrum <span className="text-blue-400">fuer dein Koenigreich</span>
+                The new control center <span className="text-blue-400">for your kingdom</span>
               </h1>
               <p className="text-lg text-gray-300 leading-relaxed">
-                Ein klarer Einblick in KvK-Analysen, Rankings und Honor-Verlaeufe. Die Demo zeigt den Ablauf von Uploads,
-                Zielen und Vergleichen - kompakt, professionell und ohne reale Spielernamen oder Werte.
+                A clear look into KvK analytics, rankings, and honor progress. The demo shows how uploads, goals, and
+                comparisons work - concise, professional, and easy to evaluate.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -111,67 +75,28 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
                 onClick={onSeeDefault}
                 className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 transition text-sm font-semibold shadow-lg shadow-blue-900/40"
               >
-                Standard-Koenigreich ansehen
+                View the default kingdom
               </button>
               <button
                 onClick={onStartShop}
                 className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 transition text-sm font-semibold shadow-lg shadow-emerald-900/40"
               >
-                Zugriffscode kaufen
+                Buy access code
               </button>
               <button
                 onClick={onOpenLogin}
                 className="px-5 py-3 rounded-xl border border-gray-700 text-sm font-semibold text-gray-200 hover:border-gray-500 hover:text-white transition"
               >
-                Login
+                Log in
               </button>
-            </div>
-            <div className="grid sm:grid-cols-3 gap-4">
-              {previewStats.map(item => (
-                <div
-                  key={item.label}
-                  className="bg-gray-900/70 border border-gray-800 rounded-xl p-4 shadow-inner shadow-black/40"
-                >
-                  <p className="text-xs uppercase tracking-widest text-gray-400">{item.label}</p>
-                  <p className="text-2xl font-bold text-white mt-2">{item.value}</p>
-                  <p className="text-xs text-blue-300 mt-1">{item.hint}</p>
-                </div>
-              ))}
-            </div>
-            <div className="grid md:grid-cols-3 gap-4">
-              {previewCharts.map(chart => (
-                <div
-                  key={chart.title}
-                  className="bg-gray-900/70 border border-gray-800 rounded-xl p-4 shadow-inner shadow-black/40"
-                >
-                  <p className="text-xs uppercase tracking-widest text-gray-400">{chart.title}</p>
-                  <p className="text-[11px] text-blue-300 mt-1">{chart.subtitle}</p>
-                  <div className="mt-4 space-y-2">
-                    {chart.bars.map(bar => (
-                      <div key={bar.label} className="space-y-1">
-                        <div className="flex items-center justify-between text-[11px] text-gray-400">
-                          <span>{bar.label}</span>
-                          <span>Fiktiv</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-black/40 border border-gray-700 overflow-hidden">
-                          <div
-                            className="h-full bg-blue-500/70"
-                            style={{ width: `${bar.value}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
             </div>
             <div className="flex items-start gap-3 text-sm text-gray-400">
               <div className="w-10 h-10 rounded-full bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-200 font-semibold">
                 Demo
               </div>
               <div>
-                <p className="text-gray-200 font-semibold">Standard-Koenigreich ohne Login</p>
-                <p>Teste Rankings, Honor-Kurven und Suche mit anonymisierten Beispielen. Vollstaendig oeffentlich und read-only.</p>
+                <p className="text-gray-200 font-semibold">Default kingdom without login</p>
+                <p>Try rankings, honor curves, and search in a public read-only dataset.</p>
               </div>
             </div>
           </div>
@@ -182,45 +107,28 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-widest text-blue-200">KvK Radar</p>
-                  <p className="text-2xl font-bold">Fiktiver Demo Snapshot</p>
+                  <p className="text-2xl font-bold">Live Demo Preview</p>
                 </div>
                 <span className="text-xs px-3 py-1 rounded-full bg-emerald-600/20 text-emerald-200 border border-emerald-500/40">
                   R5 ready
                 </span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-black/30 border border-gray-700 rounded-2xl p-4 space-y-2">
-                  <p className="text-sm text-gray-400">Kill-Trend</p>
-                  <p className="text-3xl font-black text-white">Index Hoch</p>
-                  <p className="text-xs text-emerald-300">Fuehrung in der Beispiel-Allianz</p>
-                </div>
-                <div className="bg-black/30 border border-gray-700 rounded-2xl p-4 space-y-2">
-                  <p className="text-sm text-gray-400">Honor-Korridor</p>
-                  <p className="text-3xl font-black text-white">Band A bis C</p>
-                  <p className="text-xs text-blue-300">Events und Phasen sichtbar</p>
-                </div>
-                <div className="bg-black/30 border border-gray-700 rounded-2xl p-4 space-y-2 col-span-2">
-                  <p className="text-sm text-gray-400">Profil-Analyse</p>
-                  <p className="text-lg font-semibold">Filter nach ID, Allianz, Kill-Index oder Dead-Goals.</p>
-                  <p className="text-xs text-gray-400">Upload-Historie, Event-Mapping und DKP-Ziele sind im Demo-Beispiel enthalten.</p>
-                </div>
               </div>
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={onSeeDefault}
                   className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold shadow shadow-blue-900/30"
                 >
-                  Demo oeffnen
+                  Open live demo
                 </button>
                 <button
                   onClick={onStartShop}
                   className="px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 hover:border-blue-500 text-sm font-semibold"
                 >
-                  Zugriffscode holen
+                  Get access code
                 </button>
               </div>
               <p className="text-xs text-gray-500">
-                Hinweis: Die Demo ist read-only. Nach Aktivierung stehen Uploads, KvK-Management und R5-Tools bereit.
+                No risk: the demo is read-only. After activation you can use uploads, KvK management, and R5 tools.
               </p>
             </div>
           </div>
@@ -228,8 +136,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
 
         <section className="space-y-6">
           <div>
-            <p className="text-sm uppercase tracking-widest text-blue-200">Was dich erwartet</p>
-            <h2 className="text-3xl font-bold">Highlights der Plattform</h2>
+            <p className="text-sm uppercase tracking-widest text-blue-200">What to expect</p>
+            <h2 className="text-3xl font-bold">Platform highlights</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             {featureHighlights.map(feature => (
@@ -247,14 +155,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
         <section className="space-y-6">
           <div className="flex items-baseline justify-between gap-4 flex-wrap">
             <div>
-              <p className="text-sm uppercase tracking-widest text-blue-200">Gefuehrter Ablauf</p>
-              <h2 className="text-3xl font-bold">Von Kauf bis Aktivierung in vier Schritten</h2>
+              <p className="text-sm uppercase tracking-widest text-blue-200">Guided flow</p>
+              <h2 className="text-3xl font-bold">From purchase to activation in four steps</h2>
             </div>
             <button
               onClick={onStartShop}
               className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold shadow shadow-emerald-900/30"
             >
-              Zugriff starten
+              Start access now
             </button>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
@@ -275,53 +183,53 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
         <section className="space-y-4">
           <div className="flex items-baseline justify-between gap-4 flex-wrap">
             <div>
-              <p className="text-sm uppercase tracking-widest text-blue-200">Standard-Koenigreich</p>
-              <h2 className="text-3xl font-bold">Demo-Datensatz erkunden</h2>
+              <p className="text-sm uppercase tracking-widest text-blue-200">Default Kingdom</p>
+              <h2 className="text-3xl font-bold">Explore the demo dataset</h2>
               <p className="text-gray-300 mt-2 max-w-3xl">
-                Oeffne das Standard-Koenigreich, um Rankings, Honor-Verlauf und Suche zu testen. Die Daten sind anonymisiert,
-                damit du einen echten Eindruck vom Ablauf bekommst - komplett ohne Login.
+                Open the default kingdom to try rankings, honor progress, and search. Everything is read-only and ready
+                to explore without login.
               </p>
             </div>
             <button
               onClick={onSeeDefault}
               className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold shadow shadow-blue-900/30"
             >
-              Standard-Koenigreich oeffnen
+              Open default kingdom
             </button>
           </div>
           <div className="bg-gray-900/70 border border-gray-800 rounded-2xl p-6 grid lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 space-y-3">
               <div className="flex items-center gap-3">
                 <span className="text-xs px-3 py-1 rounded-full bg-blue-500/10 text-blue-200 border border-blue-500/30">Public</span>
-                <p className="text-sm text-gray-300">Kein Login noetig - read-only Vorschau</p>
+                <p className="text-sm text-gray-300">No login required - read-only preview</p>
               </div>
-              <p className="text-lg font-semibold text-white">Was du siehst</p>
+              <p className="text-lg font-semibold text-white">What you see</p>
               <ul className="space-y-2 text-sm text-gray-300 list-disc list-inside">
-                <li>KvK-Rankings und Honor-Progress pro Event</li>
-                <li>Suche mit ID-, Name- und Allianz-Filter</li>
-                <li>Aktivitaets-Uploads mit Zeitstempeln und History</li>
-                <li>Beispielhafte DKP- und Dead-Goals</li>
+                <li>Live KvK rankings and honor progress per event</li>
+                <li>Player search with ID, name, and alliance filters</li>
+                <li>Activity uploads with timestamps and file history</li>
+                <li>Sample DKP and dead goals for transparency</li>
               </ul>
               <p className="text-xs text-gray-500">
-                Tipp: Speichere <code className="bg-gray-800 px-1 rounded">?slug=default-kingdom</code> fuer schnellen Zugriff.
+                Tip: bookmark <code className="bg-gray-800 px-1 rounded">?slug=default-kingdom</code> for quick access.
               </p>
             </div>
             <div className="bg-black/30 border border-gray-800 rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-white">Shop und Aktivierung</p>
+              <p className="text-sm font-semibold text-white">Shop and activation</p>
               <p className="text-sm text-gray-300 leading-relaxed">
-                Der Shop ist geschuetzt. Nach Login oder Registrierung startest du den Kauf, danach folgt die
-                Koenigreich-Einrichtung und die Code-Aktivierung.
+                The shop is protected. After login or registration, you start the purchase flow, then you are guided to
+                kingdom setup and code activation.
               </p>
               <div className="space-y-2 text-xs text-gray-400">
-                <p>Zugriffscode gekauft -&gt; Name waehlen -&gt; R5 gesetzt</p>
-                <p>Aktivierungsstatus sichtbar, Hinweise im Dashboard</p>
-                <p>Zusatzcodes fuer R5-Verlaengerungen</p>
+                <p>Access code purchased -&gt; choose name -&gt; R5 assigned</p>
+                <p>Activation status visible, reminders in the dashboard</p>
+                <p>Extra codes can be used for R5 extensions</p>
               </div>
               <button
                 onClick={onStartShop}
                 className="w-full px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold"
               >
-                Zugriffscode sichern
+                Secure access code
               </button>
             </div>
           </div>
@@ -329,11 +237,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
 
         <section className="bg-gradient-to-r from-blue-700/20 via-blue-600/10 to-emerald-600/10 border border-blue-700/40 rounded-3xl p-8 flex flex-col lg:flex-row items-center justify-between gap-6">
           <div className="space-y-2">
-            <p className="text-sm uppercase tracking-widest text-blue-200">Bereit?</p>
-            <h3 className="text-2xl font-bold">Starte jetzt, sichere deinen Code und werde sofort R5 deines Koenigreichs.</h3>
+            <p className="text-sm uppercase tracking-widest text-blue-200">Ready?</p>
+            <h3 className="text-2xl font-bold">Start now, secure your code, and become R5 of your kingdom instantly.</h3>
             <p className="text-gray-300 max-w-3xl">
-              Eine klare Demo, ein gefuehrter Checkout. Du siehst zuerst die Inhalte, sicherst dir den Code und wirst durch
-              Setup, Benennung und Aktivierung gefuehrt - ohne Umwege.
+              We combine demo transparency with a guided checkout. See the value first, grab the code, and move through
+              setup, naming, and activation without detours.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -341,13 +249,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
               onClick={onStartShop}
               className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold shadow-lg shadow-emerald-900/40"
             >
-              Zugriffscode starten
+              Start access code
             </button>
             <button
               onClick={onSeeDefault}
               className="px-5 py-3 rounded-xl bg-gray-900 border border-gray-700 hover:border-blue-500 text-sm font-semibold"
             >
-              Demo ansehen
+              View demo
             </button>
           </div>
         </section>
