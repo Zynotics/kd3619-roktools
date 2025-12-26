@@ -12,6 +12,7 @@ import SuperadminKingdomOverview from './components/SuperadminKingdomOverview';
 import R5CustomerAccess from './components/R5CustomerAccess';
 import R5CodeAdmin from './components/R5CodeAdmin';
 import ShopWidget from './components/ShopWidget';
+import LandingPage from './components/LandingPage';
 import { fetchShopVisibility } from './api';
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
@@ -266,6 +267,7 @@ const AppContent: React.FC = () => {
   );
 
   const activeViewStorageKey = publicSlug ? `kd-active-view:${publicSlug}` : 'kd-active-view';
+  const shouldShowLanding = !isLoading && !user && !publicSlug && !forceLogin && !isRegisterInvite;
 
   // Restore last visited view on load
   useEffect(() => {
@@ -283,6 +285,17 @@ const AppContent: React.FC = () => {
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.set('login', 'true');
     window.location.href = newUrl.toString();
+  };
+  const redirectToDefaultKingdom = () => {
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set('slug', 'default-kingdom');
+    newUrl.searchParams.delete('login');
+    newUrl.searchParams.delete('register');
+    window.location.href = newUrl.toString();
+  };
+  const startShopFlow = () => {
+    localStorage.setItem(activeViewStorageKey, 'shop');
+    redirectToLogin();
   };
   // 1. VIEW ROUTING & RESET
   useEffect(() => {
@@ -404,13 +417,22 @@ const AppContent: React.FC = () => {
         return;
       }
       if (isSuperAdmin) {
-        setHeaderTitle('Superadmin Dashboard');
-        return;
-      }
-      setHeaderTitle('Rise of Stats');
-    };
-    fetchTitle();
+            setHeaderTitle('Superadmin Dashboard');
+            return;
+          }
+          setHeaderTitle('Rise of Stats');
+        };
+        fetchTitle();
   }, [publicSlug, user, isSuperAdmin]);
+  if (shouldShowLanding) {
+    return (
+      <LandingPage
+        onSeeDefault={redirectToDefaultKingdom}
+        onStartShop={startShopFlow}
+        onOpenLogin={redirectToLogin}
+      />
+    );
+  }
   if (!showDashboardInterface && !isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-4">
