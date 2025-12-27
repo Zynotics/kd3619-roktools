@@ -6,189 +6,201 @@ type LandingPageProps = {
   onOpenLogin: () => void;
 };
 
-const featureHighlights = [
-  {
-    title: 'CH 25 Analytics',
-    description: 'Live kill and power deltas, matchup readiness, and quick rankings tailored to City Hall 25 players.',
-  },
-  {
-    title: 'Weekly Activity',
-    description: 'Uploads for overview, honor, and activity turn into clean week-over-week insights with visuals.',
-  },
-  {
-    title: 'KvK Management',
-    description: 'DKP and honor tracking in one place, with goal progress, alerts, and historical context.',
-  },
-  {
-    title: 'Access & Roles',
-    description: 'R5 automation, safe read-only links for users, and guided onboarding for R4/R5 and analysts.',
-  },
+const heroHighlights = [
+  'Instant CH25 performance deltas and readiness signals.',
+  'Weekly activity snapshots built from uploads in minutes.',
+  'KvK management with DKP, honor, and goal tracking.',
 ];
 
 const offeringRows = [
   {
-    name: 'CH 25 Analytics',
-    detail: 'Current kill/power deltas, KPIs by squad, and quick reads on matchup readiness.',
+    name: 'CH25 Analytics',
+    detail: 'Power, kill points, and delta trends that surface your sharpest pilots.',
   },
   {
     name: 'Weekly Activity',
-    detail: 'Clear weekly summaries from uploads: honor, activity, overview, and trend charts.',
+    detail: 'Honor, activity, and overview uploads distilled into week-over-week momentum.',
   },
   {
     name: 'KvK Management',
-    detail: 'DKP scoring, honor tracking, milestones, and roster accountability in one dashboard.',
+    detail: 'DKP + honor tracking, goal progress, and accountability dashboards.',
   },
   {
-    name: 'Uploads & History',
-    detail: 'Automatic parsing, history retention, and comparisons without manual spreadsheets.',
+    name: 'Roster Visibility',
+    detail: 'Public read-only links, search, and snapshots for fast briefings.',
   },
   {
-    name: 'Roles & Governance',
-    detail: 'R5/R4 controls, safe public read-only link, and invite management for analysts.',
+    name: 'Historical Comparisons',
+    detail: 'Side-by-side phase performance without manual spreadsheets.',
   },
   {
-    name: 'Shop & Codes',
-    detail: 'Protected checkout, flexible durations, and activation guidance after purchase.',
+    name: 'Access & Governance',
+    detail: 'R4/R5 workflows, controlled access, and quick onboarding.',
   },
 ];
 
 const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, onOpenLogin }) => {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black text-white">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-16">
-        <section className="grid lg:grid-cols-2 gap-12 items-center">
-          <div className="space-y-6">
-            <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/10 border border-blue-700/50 text-xs uppercase tracking-widest text-blue-200">
-              Rise of Stats | KvK Intelligence for Kingdom Leads
+    <div
+      className="min-h-screen text-white"
+      style={{ fontFamily: '"Space Grotesk", "Sora", "Trebuchet MS", sans-serif' }}
+    >
+      <style>{`
+        @keyframes heroGlow {
+          0%, 100% { transform: translateY(0); opacity: 0.6; }
+          50% { transform: translateY(-8px); opacity: 0.9; }
+        }
+        @keyframes fadeUp {
+          0% { opacity: 0; transform: translateY(16px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .hero-fade { animation: fadeUp 0.9s ease both; }
+      `}</style>
+
+      <div className="relative overflow-hidden bg-slate-950">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,116,144,0.25),_transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(251,146,60,0.15),_transparent_55%)]" />
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-16">
+          <section className="grid lg:grid-cols-[1.2fr_0.8fr] gap-12 items-center">
+            <div className="space-y-6 hero-fade">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-400/40 bg-emerald-400/10 text-xs uppercase tracking-[0.3em] text-emerald-200">
+                Rise of Stats
+              </div>
+              <div className="space-y-4">
+                <h1 className="text-4xl lg:text-5xl font-black leading-tight text-white">
+                  A crisp command deck for <span className="text-emerald-300">KvK leadership</span>
+                </h1>
+                <p className="text-lg text-slate-300 leading-relaxed">
+                  Rise of Stats turns your uploads into battle-ready insight: CH25 analytics, weekly activity, and
+                  complete KvK management in a single, clean view.
+                </p>
+              </div>
+              <div className="grid gap-3 text-sm text-slate-300">
+                {heroHighlights.map(item => (
+                  <div key={item} className="flex items-start gap-3">
+                    <span className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.6)]" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={onSeeDefault}
+                  className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 transition text-sm font-semibold shadow-lg shadow-emerald-900/40"
+                >
+                  Explore demo kingdom
+                </button>
+                <button
+                  onClick={onStartShop}
+                  className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 transition text-sm font-semibold shadow-lg shadow-amber-900/40 text-slate-950"
+                >
+                  Get access code
+                </button>
+                <button
+                  onClick={onOpenLogin}
+                  className="px-5 py-3 rounded-xl border border-slate-700 text-sm font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
+                >
+                  Log in
+                </button>
+              </div>
             </div>
+
+            <div className="relative hero-fade" style={{ animationDelay: '0.15s' }}>
+              <div
+                className="absolute -top-16 -right-10 h-56 w-56 rounded-full bg-emerald-500/20 blur-3xl"
+                style={{ animation: 'heroGlow 6s ease-in-out infinite' }}
+              />
+              <div className="relative bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 border border-slate-700 rounded-3xl p-8 shadow-2xl space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Demo Kingdom</p>
+                    <p className="text-2xl font-bold">Live Read-Only Preview</p>
+                  </div>
+                  <span className="text-xs px-3 py-1 rounded-full bg-amber-400/20 text-amber-200 border border-amber-300/40">
+                    Safe to browse
+                  </span>
+                </div>
+                <div className="grid gap-3 text-sm text-slate-300">
+                  <div className="flex items-center justify-between border border-slate-700/80 rounded-xl px-4 py-3">
+                    <span>CH25 performance pulse</span>
+                    <span className="text-emerald-300 font-semibold">Live</span>
+                  </div>
+                  <div className="flex items-center justify-between border border-slate-700/80 rounded-xl px-4 py-3">
+                    <span>Weekly activity rollup</span>
+                    <span className="text-amber-200 font-semibold">Updated</span>
+                  </div>
+                  <div className="flex items-center justify-between border border-slate-700/80 rounded-xl px-4 py-3">
+                    <span>KvK DKP + honor goals</span>
+                    <span className="text-slate-100 font-semibold">Tracked</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={onSeeDefault}
+                    className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-sm font-semibold shadow shadow-emerald-900/30"
+                  >
+                    Open demo
+                  </button>
+                  <button
+                    onClick={onStartShop}
+                    className="px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 hover:border-amber-400 text-sm font-semibold"
+                  >
+                    Activate your kingdom
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Browse the demo kingdom to understand the flow, then unlock uploads and leadership controls.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-6 hero-fade" style={{ animationDelay: '0.25s' }}>
+            <div>
+              <p className="text-sm uppercase tracking-[0.3em] text-emerald-200">Everything included</p>
+              <h2 className="text-3xl font-bold">A clear overview of what Rise of Stats delivers</h2>
+            </div>
+            <div className="bg-slate-900/70 border border-slate-800 rounded-2xl overflow-hidden">
+              <div className="grid md:grid-cols-[1fr_2fr] gap-4 px-5 py-4 border-b border-slate-800 text-xs uppercase tracking-[0.2em] text-slate-400">
+                <span>Capability</span>
+                <span>What you get</span>
+              </div>
+              <div className="divide-y divide-slate-800">
+                {offeringRows.map(row => (
+                  <div key={row.name} className="grid md:grid-cols-[1fr_2fr] gap-4 px-5 py-4">
+                    <p className="text-sm font-semibold text-white">{row.name}</p>
+                    <p className="text-sm text-slate-300 leading-relaxed">{row.detail}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="bg-gradient-to-r from-emerald-500/15 via-slate-900/40 to-amber-500/15 border border-emerald-400/30 rounded-3xl p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 hero-fade" style={{ animationDelay: '0.35s' }}>
             <div className="space-y-3">
-              <h1 className="text-4xl lg:text-5xl font-black leading-tight">
-                The control center <span className="text-blue-400">for modern KvK</span>
-              </h1>
-              <p className="text-lg text-gray-300 leading-relaxed">
-                Rise of Stats gives leaders a sharp snapshot of CH25 performance, weekly activity, and KvK goals without
-                spreadsheets. Explore the demo to see how uploads become actionable calls and clean comparisons.
+              <p className="text-sm uppercase tracking-[0.3em] text-emerald-200">See the demo</p>
+              <h3 className="text-2xl font-bold">Walk the demo kingdom before you activate yours.</h3>
+              <p className="text-slate-300 max-w-3xl">
+                Explore CH25 analytics, weekly activity, and full KvK management with DKP and honor tracking. Everything
+                is read-only, so you can review the flow with your council first.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={onSeeDefault}
-                className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 transition text-sm font-semibold shadow-lg shadow-blue-900/40"
+                className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-sm font-semibold shadow-lg shadow-emerald-900/40"
               >
-                View the default kingdom
+                Launch demo kingdom
               </button>
               <button
                 onClick={onStartShop}
-                className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 transition text-sm font-semibold shadow-lg shadow-emerald-900/40"
+                className="px-5 py-3 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400 text-sm font-semibold"
               >
-                Buy access code
-              </button>
-              <button
-                onClick={onOpenLogin}
-                className="px-5 py-3 rounded-xl border border-gray-700 text-sm font-semibold text-gray-200 hover:border-gray-500 hover:text-white transition"
-              >
-                Log in
+                Secure access
               </button>
             </div>
-            <div className="flex items-start gap-3 text-sm text-gray-400">
-              <div className="w-10 h-10 rounded-full bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-200 font-semibold">
-                Demo
-              </div>
-              <div>
-                <p className="text-gray-200 font-semibold">Default kingdom without login</p>
-                <p>Try rankings, honor curves, and search in a public read-only dataset.</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative">
-            <div className="absolute inset-0 bg-blue-500/10 blur-3xl rounded-full" aria-hidden />
-            <div className="relative bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700 rounded-3xl p-8 shadow-2xl space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-blue-200">KvK Radar</p>
-                  <p className="text-2xl font-bold">Live Demo Preview</p>
-                </div>
-                <span className="text-xs px-3 py-1 rounded-full bg-emerald-600/20 text-emerald-200 border border-emerald-500/40">
-                  R5 ready
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={onSeeDefault}
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold shadow shadow-blue-900/30"
-                >
-                  Open live demo
-                </button>
-                <button
-                  onClick={onStartShop}
-                  className="px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 hover:border-blue-500 text-sm font-semibold"
-                >
-                  Get access code
-                </button>
-              </div>
-              <p className="text-xs text-gray-500">
-                No risk: the demo is read-only. After activation you can use uploads, KvK management, and R5 tools.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-6">
-          <div>
-            <p className="text-sm uppercase tracking-widest text-blue-200">What to expect</p>
-            <h2 className="text-3xl font-bold">Everything included</h2>
-          </div>
-          <div className="grid md:grid-cols-2 gap-4">
-            {featureHighlights.map(feature => (
-              <div
-                key={feature.title}
-                className="bg-gray-900/80 border border-gray-800 rounded-2xl p-5 hover:border-blue-600/60 transition"
-              >
-                <p className="text-lg font-semibold mb-2">{feature.title}</p>
-                <p className="text-sm text-gray-300 leading-relaxed">{feature.description}</p>
-              </div>
-            ))}
-          </div>
-          <div className="bg-gray-950/60 border border-gray-800 rounded-2xl overflow-hidden">
-            <div className="bg-gray-900/70 px-5 py-3 text-sm font-semibold uppercase tracking-widest text-blue-200">
-              Detailed overview
-            </div>
-            <div className="divide-y divide-gray-800">
-              {offeringRows.map(row => (
-                <div key={row.name} className="grid md:grid-cols-3 items-start gap-4 px-5 py-4">
-                  <p className="text-sm font-semibold text-gray-100 md:col-span-1">{row.name}</p>
-                  <p className="text-sm text-gray-300 md:col-span-2 leading-relaxed">{row.detail}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="bg-gradient-to-r from-blue-700/20 via-blue-600/10 to-emerald-600/10 border border-blue-700/40 rounded-3xl p-8 flex flex-col lg:flex-row items-center justify-between gap-6">
-          <div className="space-y-2">
-            <p className="text-sm uppercase tracking-widest text-blue-200">See it in action</p>
-            <h3 className="text-2xl font-bold">Walk through the demo kingdom and preview your next KvK cycle.</h3>
-            <p className="text-gray-300 max-w-3xl">
-              Check weekly activity, CH25 analytics, and KvK management with DKP and honor tracking. The demo is
-              read-only, so you can explore safely before activating your own code.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={onSeeDefault}
-              className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-semibold shadow-lg shadow-blue-900/40"
-            >
-              Explore demo kingdom
-            </button>
-            <button
-              onClick={onStartShop}
-              className="px-5 py-3 rounded-xl bg-gray-900 border border-gray-700 hover:border-emerald-400 text-sm font-semibold"
-            >
-              Secure an access code
-            </button>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
     </div>
   );
