@@ -8,47 +8,47 @@ type LandingPageProps = {
 
 const featureHighlights = [
   {
-    title: 'Live KvK Insights',
-    description:
-      'Aggregated kill and power deltas, honor progress, and player search in one view - ready out of the box with no setup.',
+    title: 'CH 25 Analytics',
+    description: 'Live kill and power deltas, matchup readiness, and quick rankings tailored to City Hall 25 players.',
   },
   {
-    title: 'Activity & Uploads',
-    description:
-      'Automatic processing of overview, honor, and activity uploads with history and visuals for your team.',
+    title: 'Weekly Activity',
+    description: 'Uploads for overview, honor, and activity turn into clean week-over-week insights with visuals.',
   },
   {
-    title: 'Access Code & Shop',
-    description:
-      'Flexible shop with login protection. After purchase, the flow guides you safely through activation.',
+    title: 'KvK Management',
+    description: 'DKP and honor tracking in one place, with goal progress, alerts, and historical context.',
   },
   {
-    title: 'Roles & Onboarding',
-    description:
-      'R5 is assigned automatically, new kingdoms follow naming, and invites to R4/R5/raid leads are included.',
+    title: 'Access & Roles',
+    description: 'R5 automation, safe read-only links for users, and guided onboarding for R4/R5 and analysts.',
   },
 ];
 
-const flowSteps = [
+const offeringRows = [
   {
-    title: 'Secure your access code',
-    detail:
-      'Pick the right duration in the shop (1 day to 1 year). Checkout requires login or registration.',
+    name: 'CH 25 Analytics',
+    detail: 'Current kill/power deltas, KPIs by squad, and quick reads on matchup readiness.',
   },
   {
-    title: 'Create and name your kingdom',
-    detail:
-      'After purchase, go straight to setup. Choose a kingdom name, we create the profile, and set you as R5.',
+    name: 'Weekly Activity',
+    detail: 'Clear weekly summaries from uploads: honor, activity, overview, and trend charts.',
   },
   {
-    title: 'Activate the code',
-    detail:
-      'Activate your code to unlock uploads, KvK tracking, and analytics. The status is visible anytime.',
+    name: 'KvK Management',
+    detail: 'DKP scoring, honor tracking, milestones, and roster accountability in one dashboard.',
   },
   {
-    title: 'Onboard your team',
-    detail:
-      'Invite R4/R5 or analysts. Standard users can use the public link for a safe read-only view.',
+    name: 'Uploads & History',
+    detail: 'Automatic parsing, history retention, and comparisons without manual spreadsheets.',
+  },
+  {
+    name: 'Roles & Governance',
+    detail: 'R5/R4 controls, safe public read-only link, and invite management for analysts.',
+  },
+  {
+    name: 'Shop & Codes',
+    detail: 'Protected checkout, flexible durations, and activation guidance after purchase.',
   },
 ];
 
@@ -63,11 +63,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
             </div>
             <div className="space-y-3">
               <h1 className="text-4xl lg:text-5xl font-black leading-tight">
-                The new control center <span className="text-blue-400">for your kingdom</span>
+                The control center <span className="text-blue-400">for modern KvK</span>
               </h1>
               <p className="text-lg text-gray-300 leading-relaxed">
-                A clear look into KvK analytics, rankings, and honor progress. The demo shows how uploads, goals, and
-                comparisons work - concise, professional, and easy to evaluate.
+                Rise of Stats gives leaders a sharp snapshot of CH25 performance, weekly activity, and KvK goals without
+                spreadsheets. Explore the demo to see how uploads become actionable calls and clean comparisons.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -137,7 +137,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
         <section className="space-y-6">
           <div>
             <p className="text-sm uppercase tracking-widest text-blue-200">What to expect</p>
-            <h2 className="text-3xl font-bold">Platform highlights</h2>
+            <h2 className="text-3xl font-bold">Everything included</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             {featureHighlights.map(feature => (
@@ -150,29 +150,42 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
               </div>
             ))}
           </div>
+          <div className="bg-gray-950/60 border border-gray-800 rounded-2xl overflow-hidden">
+            <div className="bg-gray-900/70 px-5 py-3 text-sm font-semibold uppercase tracking-widest text-blue-200">
+              Detailed overview
+            </div>
+            <div className="divide-y divide-gray-800">
+              {offeringRows.map(row => (
+                <div key={row.name} className="grid md:grid-cols-3 items-start gap-4 px-5 py-4">
+                  <p className="text-sm font-semibold text-gray-100 md:col-span-1">{row.name}</p>
+                  <p className="text-sm text-gray-300 md:col-span-2 leading-relaxed">{row.detail}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
 
         <section className="bg-gradient-to-r from-blue-700/20 via-blue-600/10 to-emerald-600/10 border border-blue-700/40 rounded-3xl p-8 flex flex-col lg:flex-row items-center justify-between gap-6">
           <div className="space-y-2">
-            <p className="text-sm uppercase tracking-widest text-blue-200">Ready?</p>
-            <h3 className="text-2xl font-bold">Start now, secure your code, and become R5 of your kingdom instantly.</h3>
+            <p className="text-sm uppercase tracking-widest text-blue-200">See it in action</p>
+            <h3 className="text-2xl font-bold">Walk through the demo kingdom and preview your next KvK cycle.</h3>
             <p className="text-gray-300 max-w-3xl">
-              We combine demo transparency with a guided checkout. See the value first, grab the code, and move through
-              setup, naming, and activation without detours.
+              Check weekly activity, CH25 analytics, and KvK management with DKP and honor tracking. The demo is
+              read-only, so you can explore safely before activating your own code.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
             <button
-              onClick={onStartShop}
-              className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold shadow-lg shadow-emerald-900/40"
+              onClick={onSeeDefault}
+              className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-semibold shadow-lg shadow-blue-900/40"
             >
-              Start access code
+              Explore demo kingdom
             </button>
             <button
-              onClick={onSeeDefault}
-              className="px-5 py-3 rounded-xl bg-gray-900 border border-gray-700 hover:border-blue-500 text-sm font-semibold"
+              onClick={onStartShop}
+              className="px-5 py-3 rounded-xl bg-gray-900 border border-gray-700 hover:border-emerald-400 text-sm font-semibold"
             >
-              View demo
+              Secure an access code
             </button>
           </div>
         </section>
