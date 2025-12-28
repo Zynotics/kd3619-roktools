@@ -96,6 +96,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
 
   const hasKingdom = useMemo(() => !!kingdomInfo?.id, [kingdomInfo]);
+  const accountSlug = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('account');
+  }, []);
+  const isAccountPage = !!accountSlug;
 
   useEffect(() => {
     if (!user) return;
@@ -130,6 +135,36 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
     if (!kingdomInfo?.slug) return;
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.set('slug', kingdomInfo.slug);
+    newUrl.searchParams.delete('login');
+    newUrl.searchParams.delete('register');
+    newUrl.searchParams.delete('account');
+    window.location.href = newUrl.toString();
+  };
+
+  const slugify = (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+  const handleGoToAccount = () => {
+    if (!user) {
+      onOpenLogin();
+      return;
+    }
+    const nextSlug = slugify(user.username || 'account');
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set('account', nextSlug || 'account');
+    newUrl.searchParams.delete('slug');
+    newUrl.searchParams.delete('login');
+    newUrl.searchParams.delete('register');
+    window.location.href = newUrl.toString();
+  };
+
+  const handleBackToLanding = () => {
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.delete('account');
     newUrl.searchParams.delete('login');
     newUrl.searchParams.delete('register');
     window.location.href = newUrl.toString();
@@ -204,8 +239,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
       <div className="relative overflow-hidden bg-slate-950">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,116,144,0.25),_transparent_60%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(251,146,60,0.15),_transparent_55%)]" />
-      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 space-y-16">
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 space-y-12">
         <div className="flex justify-end hero-fade">
+          {isAccountPage && (
+            <button
+              onClick={handleBackToLanding}
+              className="mr-3 px-4 py-2 rounded-lg border border-slate-700 text-xs font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
+            >
+              Back to landing
+            </button>
+          )}
           {user ? (
             <button
               onClick={logout}
@@ -222,11 +265,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
             </button>
           )}
         </div>
-        <section className="grid gap-10 items-center">
+        {!isAccountPage && (
+          <section className="grid gap-10 items-center">
           <div className="flex justify-center hero-fade">
             <div className="inline-flex items-center px-4 py-2 rounded-full border border-emerald-400/50 bg-emerald-400/10 text-xs uppercase tracking-[0.4em] text-emerald-200">
-                RISE OF STATS
-              </div>
+              RISE OF STATS
+            </div>
             </div>
             <div className="space-y-6 hero-fade">
               <div className="space-y-4">
@@ -244,27 +288,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
                 >
                   Shop
                 </button>
-                {user ? (
-                  <button
-                    onClick={hasKingdom ? handleGoToDashboard : scrollToCreate}
-                    className="px-5 py-3 rounded-xl border border-slate-700 text-sm font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
-                  >
-                    {hasKingdom && kingdomInfo?.slug
-                      ? `Jump to ${kingdomInfo.slug}`
-                      : 'Create Kingdom'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={onOpenLogin}
-                    className="px-5 py-3 rounded-xl border border-slate-700 text-sm font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
-                  >
-                    Log in
-                  </button>
-                )}
+                <button
+                  onClick={handleGoToAccount}
+                  className="px-5 py-3 rounded-xl border border-slate-700 text-sm font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
+                >
+                  {user ? 'My Account' : 'Log in / Register new account'}
+                </button>
               </div>
             </div>
           </section>
+        )}
 
+        {!isAccountPage && (
           <section className="space-y-6 hero-fade" style={{ animationDelay: '0.25s' }}>
             <div>
               <p className="text-sm uppercase tracking-[0.3em] text-emerald-200">Overview</p>
@@ -289,10 +324,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
               </div>
             </div>
           </section>
+        )}
 
-          <section className="space-y-6 hero-fade" style={{ animationDelay: '0.3s' }}>
+        {isAccountPage && (
+          <section className="space-y-6 hero-fade" style={{ animationDelay: '0.15s' }}>
             <div>
-              <p className="text-sm uppercase tracking-[0.3em] text-emerald-200">Account</p>
+              <p className="text-sm uppercase tracking-[0.3em] text-emerald-200">My Account</p>
               <h2 className="text-3xl font-bold">Access and manage your codes</h2>
             </div>
             <div className="grid gap-6 lg:grid-cols-2">
@@ -442,7 +479,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
               </div>
             </div>
           </section>
+        )}
 
+        {!isAccountPage && (
           <section
             className="bg-gradient-to-r from-emerald-500/15 via-slate-900/40 to-amber-500/15 border border-emerald-400/30 rounded-3xl p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 hero-fade"
             style={{ animationDelay: '0.35s' }}
@@ -470,6 +509,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
               </button>
             </div>
           </section>
+        )}
         </div>
       </div>
     </div>
