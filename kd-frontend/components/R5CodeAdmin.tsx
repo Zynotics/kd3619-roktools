@@ -65,10 +65,10 @@ const R5CodeAdmin: React.FC = () => {
   const [isAssigning, setIsAssigning] = useState(false);
   const [codeActionLoading, setCodeActionLoading] = useState<string | null>(null);
   const [activateNow, setActivateNow] = useState(false);
-  const [activationForm, setActivationForm] = useState<{ code: string; userId: string; kingdomId: string }>({
+  const [activationForm, setActivationForm] = useState<{ code: string; userId: string; kingdomId?: string | null }>({
     code: '',
     userId: '',
-    kingdomId: '',
+    kingdomId: null,
   });
   const [statusFilter, setStatusFilter] = useState<'all' | 'unused' | 'active' | 'expired'>('all');
   const [sortBy, setSortBy] = useState<'createdDesc' | 'createdAsc' | 'expiresDesc' | 'expiresAsc' | 'durationDesc' | 'durationAsc'>('createdDesc');
@@ -210,8 +210,12 @@ const R5CodeAdmin: React.FC = () => {
 
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activationForm.code || !activationForm.userId || !activationForm.kingdomId) {
-      setAssignError('Code, user, and kingdom are required.');
+    if (!activationForm.code || !activationForm.userId) {
+      setAssignError('Code and user are required.');
+      return;
+    }
+    if (!activationForm.kingdomId) {
+      setAssignError('Selected user has no kingdom.');
       return;
     }
     setAssignError(null);
@@ -221,7 +225,7 @@ const R5CodeAdmin: React.FC = () => {
       const updated = await fetchAdminR5Codes();
       setCodes(updated);
       setSuccessMessage(activateNow ? 'Code assigned and activated.' : 'Code assigned (not activated).');
-      setActivationForm({ code: '', userId: '', kingdomId: '' });
+      setActivationForm({ code: '', userId: '', kingdomId: null });
       setActivateNow(false);
     } catch (err: any) {
       setAssignError(err.message || 'Assignment failed.');
@@ -313,7 +317,7 @@ const R5CodeAdmin: React.FC = () => {
 
         <Card className="lg:col-span-2 border-gray-700">
           <h3 className="text-lg font-semibold text-white mb-3">Assign code to user</h3>
-          <form onSubmit={handleAssign} className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <form onSubmit={handleAssign} className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="flex flex-col">
               <label className="text-xs text-gray-400 mb-1">Code</label>
               <input
@@ -328,28 +332,21 @@ const R5CodeAdmin: React.FC = () => {
               <label className="text-xs text-gray-400 mb-1">User</label>
               <select
                 value={activationForm.userId}
-                onChange={(e) => setActivationForm((prev) => ({ ...prev, userId: e.target.value }))}
+                onChange={(e) => {
+                  const nextUserId = e.target.value;
+                  const selectedUser = users.find((entry) => entry.id === nextUserId);
+                  setActivationForm((prev) => ({
+                    ...prev,
+                    userId: nextUserId,
+                    kingdomId: selectedUser?.kingdomId || null,
+                  }));
+                }}
                 className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="">Select...</option>
                 {users.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.username} ({u.role})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col">
-              <label className="text-xs text-gray-400 mb-1">Kingdom</label>
-              <select
-                value={activationForm.kingdomId}
-                onChange={(e) => setActivationForm((prev) => ({ ...prev, kingdomId: e.target.value }))}
-                className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">Select...</option>
-                {kingdoms.map((k) => (
-                  <option key={k.id} value={k.id}>
-                    {k.displayName} ({k.slug})
                   </option>
                 ))}
               </select>
@@ -530,4 +527,3 @@ const R5CodeAdmin: React.FC = () => {
 };
 
 export default R5CodeAdmin;
-
