@@ -7,7 +7,6 @@ import LoginPrompt from './LoginPrompt';
 type LandingPageProps = {
   onSeeDefault: () => void;
   onStartShop: () => void;
-  onOpenLogin: () => void;
 };
 
 type KingdomInfo = {
@@ -80,7 +79,7 @@ const statusLabel = (code: R5Code) => {
   return 'Active';
 };
 
-const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, onOpenLogin }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) => {
   const { user, refreshUser, logout } = useAuth();
   const [kingdomInfo, setKingdomInfo] = useState<KingdomInfo | null>(null);
   const [codes, setCodes] = useState<R5Code[]>([]);
@@ -149,11 +148,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
       .replace(/^-+|-+$/g, '');
 
   const handleGoToAccount = () => {
-    if (!user) {
-      onOpenLogin();
-      return;
-    }
-    const nextSlug = slugify(user.username || 'account');
+    const nextSlug = slugify(user?.username || 'account');
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.set('account', nextSlug || 'account');
     newUrl.searchParams.delete('slug');
@@ -258,7 +253,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
             </button>
           ) : (
             <button
-              onClick={onOpenLogin}
+              onClick={handleGoToAccount}
               className="px-4 py-2 rounded-lg border border-slate-700 text-xs font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
             >
               Log in
