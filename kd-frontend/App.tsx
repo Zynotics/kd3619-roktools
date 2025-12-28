@@ -159,7 +159,10 @@ const AppContent: React.FC = () => {
             setActiveView={setActiveView}
             label="Shop"
             icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18l-2 10H5L3 7zm2 0 1-3h12l1 3M9 11h6" /></svg>}
-            onNavigate={onNavigate}
+            onNavigate={() => {
+              redirectToShopPage();
+              if (onNavigate) onNavigate();
+            }}
           />
         )}
       </>
@@ -293,9 +296,18 @@ const AppContent: React.FC = () => {
     newUrl.searchParams.delete('register');
     window.location.href = newUrl.toString();
   };
+  const redirectToShopPage = () => {
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set('shop', 'true');
+    newUrl.searchParams.delete('slug');
+    newUrl.searchParams.delete('login');
+    newUrl.searchParams.delete('register');
+    newUrl.searchParams.delete('account');
+    window.location.href = newUrl.toString();
+  };
   const startShopFlow = () => {
     localStorage.setItem(activeViewStorageKey, 'shop');
-    redirectToLogin();
+    redirectToShopPage();
   };
   // 1. VIEW ROUTING & RESET
   useEffect(() => {
