@@ -242,15 +242,29 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,116,144,0.25),_transparent_60%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(251,146,60,0.15),_transparent_55%)]" />
       <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 space-y-12">
-        <div className="flex justify-end hero-fade">
+        <div className="flex flex-wrap justify-end gap-2 hero-fade">
           {(isAccountPage || isShopPage) && (
             <button
               onClick={handleBackToLanding}
-              className="mr-3 px-4 py-2 rounded-lg border border-slate-700 text-xs font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
+              className="px-4 py-2 rounded-lg border border-slate-700 text-xs font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
             >
               Back to landing
             </button>
           )}
+          {user && hasKingdom && kingdomInfo?.slug && (
+            <button
+              onClick={handleGoToDashboard}
+              className="px-4 py-2 rounded-lg border border-emerald-400/60 text-xs font-semibold text-emerald-100 hover:border-emerald-300 hover:text-white transition"
+            >
+              Jump to {kingdomInfo.slug}
+            </button>
+          )}
+          <button
+            onClick={handleGoToAccount}
+            className="px-4 py-2 rounded-lg border border-slate-700 text-xs font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
+          >
+            My Account
+          </button>
           {user ? (
             <button
               onClick={logout}
