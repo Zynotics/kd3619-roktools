@@ -12,7 +12,7 @@ import SuperadminKingdomOverview from './components/SuperadminKingdomOverview';
 import R5CustomerAccess from './components/R5CustomerAccess';
 import R5CodeAdmin from './components/R5CodeAdmin';
 import ShopWidget from './components/ShopWidget';
-import LandingPage from './components/LandingPage';
+import LandingPage from './pages/LandingPage';
 import { fetchShopVisibility } from './api';
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
@@ -79,6 +79,7 @@ const AppContent: React.FC = () => {
   const publicSlug = queryParams.get('slug');
   const forceLogin = queryParams.get('login') === 'true';
   const isRegisterInvite = queryParams.get('register') === 'true';
+  const hasStoredToken = !!localStorage.getItem('authToken');
   const isSuperAdmin = user?.role === 'admin';
   const isR5 = user?.role === 'r5';
   const isR4 = user?.role === 'r4';
@@ -267,7 +268,8 @@ const AppContent: React.FC = () => {
   );
 
   const activeViewStorageKey = publicSlug ? `kd-active-view:${publicSlug}` : 'kd-active-view';
-  const shouldShowLanding = !isLoading && !user && !publicSlug && !forceLogin && !isRegisterInvite;
+  const shouldShowLanding =
+    !isLoading && (!user || !hasStoredToken) && !publicSlug && !forceLogin && !isRegisterInvite;
 
   // Restore last visited view on load
   useEffect(() => {
