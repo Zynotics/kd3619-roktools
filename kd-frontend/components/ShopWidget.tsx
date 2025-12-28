@@ -84,9 +84,9 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
 
   return (
     <div className="text-white space-y-6">
-      <div className="bg-gray-900 border border-blue-700 rounded-2xl shadow-xl overflow-hidden">
-        <div className="px-6 py-4 bg-blue-700/20 border-b border-blue-700">
-          <p className="text-xs uppercase tracking-widest text-blue-200">KD Shop</p>
+      <div className="bg-slate-900/70 border border-slate-800 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden">
+        <div className="px-6 py-4 bg-gradient-to-r from-emerald-500/20 via-slate-900/40 to-amber-500/20 border-b border-slate-800">
+          <p className="text-xs uppercase tracking-widest text-emerald-200">KD Shop</p>
           <p className="text-lg font-semibold text-white">Choose your access duration</p>
         </div>
         <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -94,16 +94,16 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
             {PRODUCTS.map(product => (
               <div
                 key={product.id}
-                className="bg-gray-800/80 border border-gray-700 rounded-xl p-4 flex items-start justify-between gap-4"
+                className="bg-slate-900/60 border border-white/5 rounded-xl p-4 flex items-start justify-between gap-4"
               >
                 <div>
                   <p className="text-sm font-semibold text-white">{product.label}</p>
-                  <p className="text-xs text-gray-400">{product.description}</p>
+                  <p className="text-xs text-slate-400">{product.description}</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-lg font-bold text-blue-300">${product.price}</div>
+                  <div className="text-lg font-bold text-emerald-200">${product.price}</div>
                   <button
-                    className="mt-2 text-xs px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 transition"
+                    className="mt-2 text-xs px-3 py-1 rounded-lg bg-emerald-500/90 hover:bg-emerald-400 transition text-slate-950 font-semibold"
                     onClick={() => addToCart(product)}
                   >
                     Add to cart
@@ -113,12 +113,12 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
             ))}
           </div>
 
-          <div className="bg-black/30 border border-gray-700 rounded-xl p-4 space-y-3">
+          <div className="bg-slate-900/60 border border-white/5 rounded-xl p-4 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold">Cart</p>
               <button
                 onClick={clearCart}
-                className="text-xs text-gray-400 hover:text-white"
+                className="text-xs text-slate-400 hover:text-white"
                 disabled={cart.length === 0}
               >
                 Clear
@@ -126,33 +126,33 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
             </div>
 
             {cart.length === 0 ? (
-              <p className="text-xs text-gray-500">No items added.</p>
+              <p className="text-xs text-slate-500">No items added.</p>
             ) : (
               <div className="space-y-2">
                 {cart.map(item => (
                   <div key={item.id} className="flex items-center justify-between text-sm">
                     <div>
                       <p className="font-medium">{item.label}</p>
-                      <p className="text-xs text-gray-500">${item.price} per license</p>
+                      <p className="text-xs text-slate-500">${item.price} per license</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => updateQuantity(item.id, -1)}
-                        className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 text-center"
+                        className="w-6 h-6 rounded-full bg-slate-800 hover:bg-slate-700 text-center"
                       >
                         -
                       </button>
                       <span className="min-w-[24px] text-center font-mono">{item.quantity}</span>
                       <button
                         onClick={() => updateQuantity(item.id, 1)}
-                        className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 text-center"
+                        className="w-6 h-6 rounded-full bg-slate-800 hover:bg-slate-700 text-center"
                       >
                         +
                       </button>
                     </div>
                   </div>
                 ))}
-                <div className="flex items-center justify-between border-t border-gray-700 pt-2 text-sm font-semibold">
+                <div className="flex items-center justify-between border-t border-slate-800 pt-2 text-sm font-semibold">
                   <span>Total</span>
                   <span>${total.toFixed(2)}</span>
                 </div>
@@ -161,12 +161,12 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
 
             <div className="space-y-2">
               {!user && (
-                <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-600 rounded-lg p-2">
+                <div className="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/40 rounded-lg p-2">
                   Please log in or register to complete checkout.
                 </div>
               )}
               {checkoutMessage && (
-                <div className="text-xs text-green-300 bg-green-500/10 border border-green-700 rounded-lg p-2">
+                <div className="text-xs text-emerald-200 bg-emerald-500/10 border border-emerald-500/40 rounded-lg p-2">
                   {checkoutMessage}
                 </div>
               )}
@@ -175,10 +175,10 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
                 disabled={cart.length === 0}
                 className={`w-full py-2 rounded-lg text-sm font-semibold transition ${
                   cart.length === 0
-                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                     : user
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                      : 'bg-blue-700 hover:bg-blue-600 text-white'
+                      ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+                      : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
                 }`}
               >
                 {user ? 'Proceed to checkout' : 'Start login/registration'}
