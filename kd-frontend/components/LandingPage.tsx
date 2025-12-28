@@ -7,35 +7,59 @@ type LandingPageProps = {
 };
 
 const heroHighlights = [
-  'Instant CH25 performance deltas and readiness signals.',
-  'Weekly activity snapshots built from uploads in minutes.',
-  'KvK management with DKP, honor, and goal tracking.',
+  'Monitor CH25 performance and kingdom readiness in real time.',
+  'Track weekly activity: donations, tech, and building momentum.',
+  'Manage KvK goals with DKP calculations and honor overviews.',
 ];
 
-const offeringRows = [
+const overviewItems = [
   {
-    name: 'CH25 Analytics',
-    detail: 'Power, kill points, and delta trends that surface your sharpest pilots.',
+    name: 'CH 25 Analytics',
+    detail: 'Monitor your KD with power, KP, and readiness snapshots.',
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6 text-emerald-300" aria-hidden="true">
+        <path
+          d="M4 13h4v7H4v-7zm6-6h4v13h-4V7zm6 3h4v10h-4V10z"
+          fill="currentColor"
+        />
+      </svg>
+    ),
   },
   {
     name: 'Weekly Activity',
-    detail: 'Honor, activity, and overview uploads distilled into week-over-week momentum.',
+    detail: 'Donations, tech, and building progress at a glance.',
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6 text-amber-300" aria-hidden="true">
+        <path
+          d="M12 3l2.4 4.8 5.3.8-3.8 3.7.9 5.4L12 15.8 7.2 17.7l.9-5.4-3.8-3.7 5.3-.8L12 3z"
+          fill="currentColor"
+        />
+      </svg>
+    ),
   },
   {
     name: 'KvK Management',
-    detail: 'DKP + honor tracking, goal progress, and accountability dashboards.',
+    detail: 'DKP calculations and honor overview in one hub.',
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6 text-sky-300" aria-hidden="true">
+        <path
+          d="M12 2l7 4v6c0 5-3.3 9.6-7 10-3.7-.4-7-5-7-10V6l7-4zm0 4l-4 2v4c0 3.5 2.2 6.7 4 7.2 1.8-.5 4-3.7 4-7.2V8l-4-2z"
+          fill="currentColor"
+        />
+      </svg>
+    ),
   },
   {
-    name: 'Roster Visibility',
-    detail: 'Public read-only links, search, and snapshots for fast briefings.',
-  },
-  {
-    name: 'Historical Comparisons',
-    detail: 'Side-by-side phase performance without manual spreadsheets.',
-  },
-  {
-    name: 'Access & Governance',
-    detail: 'R4/R5 workflows, controlled access, and quick onboarding.',
+    name: 'Share Data',
+    detail: 'Share dashboards with all members safely.',
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6 text-fuchsia-300" aria-hidden="true">
+        <path
+          d="M7 12a3 3 0 105.2 2H15a3 3 0 103 3 3 3 0 00-2.2-2.9l-3.6-2a3 3 0 000-2.2l3.6-2A3 3 0 0018 6a3 3 0 10-3 3h-2.8a3 3 0 00-5.2 2 3 3 0 000 2H7z"
+          fill="currentColor"
+        />
+      </svg>
+    ),
   },
 ];
 
@@ -68,11 +92,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
               </div>
               <div className="space-y-4">
                 <h1 className="text-4xl lg:text-5xl font-black leading-tight text-white">
-                  A crisp command deck for <span className="text-emerald-300">KvK leadership</span>
+                  ROK Kingdom &amp; KVK Management Tool
                 </h1>
                 <p className="text-lg text-slate-300 leading-relaxed">
-                  Rise of Stats turns your uploads into battle-ready insight: CH25 analytics, weekly activity, and
-                  complete KvK management in a single, clean view.
+                  The tool for kings, leaders and council members that keeps track of everything in you kingdom.
                 </p>
               </div>
               <div className="grid gap-3 text-sm text-slate-300">
@@ -157,19 +180,23 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
 
           <section className="space-y-6 hero-fade" style={{ animationDelay: '0.25s' }}>
             <div>
-              <p className="text-sm uppercase tracking-[0.3em] text-emerald-200">Everything included</p>
-              <h2 className="text-3xl font-bold">A clear overview of what Rise of Stats delivers</h2>
+              <p className="text-sm uppercase tracking-[0.3em] text-emerald-200">Overview</p>
+              <h2 className="text-3xl font-bold">Everything you need in one place</h2>
             </div>
             <div className="bg-slate-900/70 border border-slate-800 rounded-2xl overflow-hidden">
-              <div className="grid md:grid-cols-[1fr_2fr] gap-4 px-5 py-4 border-b border-slate-800 text-xs uppercase tracking-[0.2em] text-slate-400">
-                <span>Capability</span>
-                <span>What you get</span>
+              <div className="grid md:grid-cols-[auto_1fr_2fr] gap-4 px-5 py-4 border-b border-slate-800 text-xs uppercase tracking-[0.2em] text-slate-400">
+                <span />
+                <span>Module</span>
+                <span>Focus</span>
               </div>
               <div className="divide-y divide-slate-800">
-                {offeringRows.map(row => (
-                  <div key={row.name} className="grid md:grid-cols-[1fr_2fr] gap-4 px-5 py-4">
-                    <p className="text-sm font-semibold text-white">{row.name}</p>
-                    <p className="text-sm text-slate-300 leading-relaxed">{row.detail}</p>
+                {overviewItems.map(item => (
+                  <div key={item.name} className="grid md:grid-cols-[auto_1fr_2fr] gap-4 px-5 py-4 items-start">
+                    <div className="h-10 w-10 rounded-xl bg-slate-800/70 border border-slate-700 flex items-center justify-center">
+                      {item.icon}
+                    </div>
+                    <p className="text-sm font-semibold text-white">{item.name}</p>
+                    <p className="text-sm text-slate-300 leading-relaxed">{item.detail}</p>
                   </div>
                 ))}
               </div>
