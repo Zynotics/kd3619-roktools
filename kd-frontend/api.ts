@@ -304,3 +304,31 @@ export async function deactivateAdminR5Code(code: string): Promise<R5Code> {
 
   return res.json();
 }
+
+export async function fetchMyKingdom(): Promise<{ kingdom: { id: string; displayName: string; slug: string; status?: string; plan?: string } | null }> {
+  const res = await fetch(`${API_BASE_URL}/api/me/kingdom`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to load kingdom info');
+  }
+
+  return res.json();
+}
+
+export async function createKingdomWithCode(payload: { displayName: string; code: string }): Promise<{ kingdom: { id: string; displayName: string; slug: string } }> {
+  const res = await fetch(`${API_BASE_URL}/api/r5-codes/create-kingdom`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to create kingdom');
+  }
+
+  return res.json();
+}

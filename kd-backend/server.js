@@ -189,6 +189,24 @@ async function findKingdomBySlug(slug) {
   }
 }
 
+function slugify(input) {
+  return String(input || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+async function generateUniqueSlug(base) {
+  let slug = base;
+  let counter = 1;
+  while (slug && (await findKingdomBySlug(slug))) {
+    counter += 1;
+    slug = `${base}-${counter}`;
+  }
+  return slug;
+}
+
 // Prüft, ob übergebene Datei-IDs zum angegebenen Königreich gehören
 async function ensureFilesBelongToKingdom(fileIds = [], kingdomId) {
   if (!kingdomId) throw new Error('Kein Königreich angegeben');
@@ -1023,6 +1041,100 @@ app.post('/api/r5-codes/activate-self', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error self-activating R5 code:', error);
     return res.status(400).json({ error: error.message || 'Aktivierung fehlgeschlagen' });
+  }
+});
+
+// Kunden-Endpunkt: Eigenes Kingdom anzeigen
+app.get('/api/me/kingdom', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.kingdomId) return res.json({ kingdom: null });
+    const kingdom = await get(
+      'SELECT id, display_name, slug, status, plan FROM kingdoms WHERE id = $1',
+      [req.user.kingdomId]
+    );
+    if (!kingdom) return res.json({ kingdom: null });
+    return res.json({
+      kingdom: {
+        id: kingdom.id,
+        displayName: kingdom.display_name,
+        slug: kingdom.slug,
+        status: kingdom.status,
+        plan: kingdom.plan,
+      },
+    });
+  } catch (error) {
+    console.error('Error loading own kingdom:', error);
+    return res.status(500).json({ error: 'Fehler beim Laden des Königreichs' });
+  }
+});
+
+// Kunden-Endpunkt: Kingdom selbst erstellen + R5 Code aktivieren
+app.post('/api/r5-codes/create-kingdom', authenticateToken, async (req, res) => {
+  let createdKingdomId = null;
+  try {
+    const { displayName, code } = req.body;
+    if (!displayName || !String(displayName).trim()) {
+      return res.status(400).json({ error: 'Display Name wird benötigt.' });
+    }
+    if (!code || !String(code).trim()) {
+      return res.status(400).json({ error: 'Access Code wird benötigt.' });
+    }
+    if (req.user.kingdomId) {
+      return res.status(400).json({ error: 'Du bist bereits einem Königreich zugeordnet.' });
+    }
+
+    const existingName = await get(
+      'SELECT id FROM kingdoms WHERE LOWER(display_name) = $1 LIMIT 1',
+      [String(displayName).trim().toLowerCase()]
+    );
+    if (existingName) {
+      return res.status(400).json({ error: 'Display Name ist bereits vergeben.' });
+    }
+
+    const baseSlug = slugify(displayName);
+    if (!baseSlug) {
+      return res.status(400).json({ error: 'Ungültiger Display Name für Slug-Erstellung.' });
+    }
+
+    const targetCode = await getR5Code(String(code).trim().toUpperCase());
+    if (!targetCode) return res.status(404).json({ error: 'Code nicht gefunden.' });
+    if (targetCode.is_active) return res.status(400).json({ error: 'Code wurde bereits aktiviert.' });
+    if (targetCode.used_by_user_id && targetCode.used_by_user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Code ist einem anderen Benutzer zugeordnet.' });
+    }
+    if (Number(targetCode.duration_days) === 0) {
+      return res.status(403).json({ error: 'Lifetime Codes koennen nur vom Superadmin vergeben werden.' });
+    }
+
+    const slug = await generateUniqueSlug(baseSlug);
+    const kingdomId = 'kdm-' + Date.now();
+    createdKingdomId = kingdomId;
+
+    await query(
+      `INSERT INTO kingdoms (id, display_name, slug, rok_identifier) VALUES ($1,$2,$3,$4)`,
+      [kingdomId, String(displayName).trim(), slug, null]
+    );
+
+    const activation = await activateR5Code(String(code).trim().toUpperCase(), req.user.id, kingdomId);
+    await assignR5(req.user.id, kingdomId);
+    await query('UPDATE users SET is_approved = TRUE WHERE id = $1', [req.user.id]);
+
+    return res.json({
+      success: true,
+      kingdom: { id: kingdomId, displayName: String(displayName).trim(), slug },
+      activatedAt: activation.activated_at,
+      durationDays: activation.duration_days,
+    });
+  } catch (error) {
+    console.error('Error creating kingdom with code:', error);
+    if (createdKingdomId) {
+      try {
+        await deleteKingdom(createdKingdomId);
+      } catch (cleanupError) {
+        console.error('Cleanup failed for kingdom:', cleanupError);
+      }
+    }
+    return res.status(400).json({ error: error.message || 'Kingdom-Erstellung fehlgeschlagen' });
   }
 });
 

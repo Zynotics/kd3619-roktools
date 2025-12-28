@@ -267,7 +267,7 @@ const AppContent: React.FC = () => {
   );
 
   const activeViewStorageKey = publicSlug ? `kd-active-view:${publicSlug}` : 'kd-active-view';
-  const shouldShowLanding = !isLoading && !user && !publicSlug && !forceLogin && !isRegisterInvite;
+  const shouldShowLanding = !isLoading && !publicSlug && !forceLogin && !isRegisterInvite;
 
   // Restore last visited view on load
   useEffect(() => {
@@ -369,6 +369,7 @@ const AppContent: React.FC = () => {
   // 2. R5/R4 REDIRECT
   useEffect(() => {
     const redirectToSlug = async () => {
+        if (shouldShowLanding) return;
         if (user && user.kingdomId && !publicSlug && !isSuperAdmin) {
             try {
                 const token = localStorage.getItem('authToken');
@@ -390,7 +391,7 @@ const AppContent: React.FC = () => {
         }
     };
     if (!isLoading) redirectToSlug();
-  }, [user, isLoading, publicSlug, isSuperAdmin]);
+  }, [user, isLoading, publicSlug, isSuperAdmin, shouldShowLanding]);
   // 3. DYNAMISCHER HEADER TITEL
   useEffect(() => {
     const fetchTitle = async () => {
