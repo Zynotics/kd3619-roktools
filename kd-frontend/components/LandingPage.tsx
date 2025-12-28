@@ -199,7 +199,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
               </div>
               <div className="rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
                 <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Time saved</p>
-                <p className="text-base font-semibold text-white">Uploads -> Insights</p>
+                <p className="text-base font-semibold text-white">Uploads → Insights</p>
               </div>
               <div className="rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
                 <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Roles</p>
