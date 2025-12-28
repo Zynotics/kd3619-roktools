@@ -430,7 +430,6 @@ const AppContent: React.FC = () => {
       <LandingPage
         onSeeDefault={redirectToDefaultKingdom}
         onStartShop={startShopFlow}
-        onOpenLogin={redirectToLogin}
       />
     );
   }
