@@ -81,7 +81,7 @@ const statusLabel = (code: R5Code) => {
 };
 
 const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, onOpenLogin }) => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
   const [kingdomInfo, setKingdomInfo] = useState<KingdomInfo | null>(null);
   const [codes, setCodes] = useState<R5Code[]>([]);
   const [codesError, setCodesError] = useState<string | null>(null);
@@ -204,10 +204,27 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
       <div className="relative overflow-hidden bg-slate-950">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,116,144,0.25),_transparent_60%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(251,146,60,0.15),_transparent_55%)]" />
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-16">
-          <section className="grid gap-10 items-center">
-            <div className="flex justify-center hero-fade">
-              <div className="inline-flex items-center px-4 py-2 rounded-full border border-emerald-400/50 bg-emerald-400/10 text-xs uppercase tracking-[0.4em] text-emerald-200">
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 space-y-16">
+        <div className="flex justify-end hero-fade">
+          {user ? (
+            <button
+              onClick={logout}
+              className="px-4 py-2 rounded-lg border border-slate-700 text-xs font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
+            >
+              Log out
+            </button>
+          ) : (
+            <button
+              onClick={onOpenLogin}
+              className="px-4 py-2 rounded-lg border border-slate-700 text-xs font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
+            >
+              Log in
+            </button>
+          )}
+        </div>
+        <section className="grid gap-10 items-center">
+          <div className="flex justify-center hero-fade">
+            <div className="inline-flex items-center px-4 py-2 rounded-full border border-emerald-400/50 bg-emerald-400/10 text-xs uppercase tracking-[0.4em] text-emerald-200">
                 RISE OF STATS
               </div>
             </div>
@@ -227,12 +244,23 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
                 >
                   Shop
                 </button>
-                <button
-                  onClick={onOpenLogin}
-                  className="px-5 py-3 rounded-xl border border-slate-700 text-sm font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
-                >
-                  Log in
-                </button>
+                {user ? (
+                  <button
+                    onClick={hasKingdom ? handleGoToDashboard : scrollToCreate}
+                    className="px-5 py-3 rounded-xl border border-slate-700 text-sm font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
+                  >
+                    {hasKingdom && kingdomInfo?.slug
+                      ? `Jump to ${kingdomInfo.slug}`
+                      : 'Create Kingdom'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={onOpenLogin}
+                    className="px-5 py-3 rounded-xl border border-slate-700 text-sm font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
+                  >
+                    Log in
+                  </button>
+                )}
               </div>
             </div>
           </section>
