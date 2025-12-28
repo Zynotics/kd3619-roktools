@@ -79,11 +79,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,116,144,0.25),_transparent_60%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(251,146,60,0.15),_transparent_55%)]" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-16">
-          <section className="grid gap-12 items-center">
-            <div className="space-y-6 hero-fade">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-400/40 bg-emerald-400/10 text-xs uppercase tracking-[0.3em] text-emerald-200">
-                Rise of Stats
+          <section className="grid gap-10 items-center">
+            <div className="flex justify-center hero-fade">
+              <div className="inline-flex items-center px-4 py-2 rounded-full border border-emerald-400/50 bg-emerald-400/10 text-xs uppercase tracking-[0.4em] text-emerald-200">
+                RISE OF STATS
               </div>
+            </div>
+            <div className="space-y-6 hero-fade">
               <div className="space-y-4">
                 <h1 className="text-4xl lg:text-5xl font-black leading-tight text-white">
                   ROK Kingdom &amp; KVK Management Tool
@@ -93,12 +95,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={onSeeDefault}
-                  className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 transition text-sm font-semibold shadow-lg shadow-emerald-900/40"
-                >
-                  Explore demo kingdom
-                </button>
                 <button
                   onClick={onStartShop}
                   className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 transition text-sm font-semibold shadow-lg shadow-amber-900/40 text-slate-950"
