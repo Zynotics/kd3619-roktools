@@ -62,8 +62,11 @@ const ShopWidget: React.FC<ShopWidgetProps> = ({ kingdomSlug }) => {
 
   const redirectToLogin = () => {
     const newUrl = new URL(window.location.href);
-    newUrl.searchParams.set('login', 'true');
-    if (kingdomSlug) newUrl.searchParams.set('slug', kingdomSlug);
+    newUrl.searchParams.set('account', 'shop');
+    newUrl.searchParams.delete('login');
+    newUrl.searchParams.delete('register');
+    newUrl.searchParams.delete('slug');
+    newUrl.searchParams.delete('shop');
     window.location.href = newUrl.toString();
   };
 

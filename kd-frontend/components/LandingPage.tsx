@@ -3,6 +3,7 @@ import { activateSelfR5Code, createKingdomWithCode, fetchMyKingdom, fetchMyR5Cod
 import { R5Code } from '../types';
 import { useAuth } from './AuthContext';
 import LoginPrompt from './LoginPrompt';
+import ShopWidget from './ShopWidget';
 
 type LandingPageProps = {
   onSeeDefault: () => void;
@@ -99,7 +100,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
     const params = new URLSearchParams(window.location.search);
     return params.get('account');
   }, []);
+  const isShopPage = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('shop') === 'true';
+  }, []);
   const isAccountPage = !!accountSlug;
+  const showShopPage = isShopPage && !isAccountPage;
 
   useEffect(() => {
     if (!user) return;
@@ -160,6 +166,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
   const handleBackToLanding = () => {
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.delete('account');
+    newUrl.searchParams.delete('shop');
     newUrl.searchParams.delete('login');
     newUrl.searchParams.delete('register');
     window.location.href = newUrl.toString();
@@ -236,7 +243,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(251,146,60,0.15),_transparent_55%)]" />
       <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 space-y-12">
         <div className="flex justify-end hero-fade">
-          {isAccountPage && (
+          {(isAccountPage || isShopPage) && (
             <button
               onClick={handleBackToLanding}
               className="mr-3 px-4 py-2 rounded-lg border border-slate-700 text-xs font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
@@ -260,7 +267,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
             </button>
           )}
         </div>
-        {!isAccountPage && (
+        {!isAccountPage && !showShopPage && (
           <section className="grid gap-10 items-center">
           <div className="flex justify-center hero-fade">
             <div className="inline-flex items-center px-4 py-2 rounded-full border border-emerald-400/50 bg-emerald-400/10 text-xs uppercase tracking-[0.4em] text-emerald-200">
@@ -294,7 +301,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
           </section>
         )}
 
-        {!isAccountPage && (
+        {!isAccountPage && !showShopPage && (
           <section className="space-y-6 hero-fade" style={{ animationDelay: '0.25s' }}>
             <div>
               <p className="text-sm uppercase tracking-[0.3em] text-emerald-200">Overview</p>
@@ -476,7 +483,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
           </section>
         )}
 
-        {!isAccountPage && (
+        {showShopPage && (
+          <section className="space-y-6 hero-fade" style={{ animationDelay: '0.15s' }}>
+            <div>
+              <p className="text-sm uppercase tracking-[0.3em] text-emerald-200">Shop</p>
+              <h2 className="text-3xl font-bold">Choose your access</h2>
+            </div>
+            <ShopWidget kingdomSlug={kingdomInfo?.slug || undefined} />
+          </section>
+        )}
+
+        {!isAccountPage && !showShopPage && (
           <section
             className="bg-gradient-to-r from-emerald-500/15 via-slate-900/40 to-amber-500/15 border border-emerald-400/30 rounded-3xl p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 hero-fade"
             style={{ animationDelay: '0.35s' }}
