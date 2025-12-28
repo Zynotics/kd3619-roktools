@@ -6,12 +6,6 @@ type LandingPageProps = {
   onOpenLogin: () => void;
 };
 
-const heroHighlights = [
-  'Monitor CH25 performance and kingdom readiness in real time.',
-  'Track weekly activity: donations, tech, and building momentum.',
-  'Manage KvK goals with DKP calculations and honor overviews.',
-];
-
 const overviewItems = [
   {
     name: 'CH 25 Analytics',
@@ -85,7 +79,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,116,144,0.25),_transparent_60%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(251,146,60,0.15),_transparent_55%)]" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-16">
-          <section className="grid lg:grid-cols-[1.2fr_0.8fr] gap-12 items-center">
+          <section className="grid gap-12 items-center">
             <div className="space-y-6 hero-fade">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-400/40 bg-emerald-400/10 text-xs uppercase tracking-[0.3em] text-emerald-200">
                 Rise of Stats
@@ -97,14 +91,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
                 <p className="text-lg text-slate-300 leading-relaxed">
                   The tool for kings, leaders and council members that keeps track of everything in you kingdom.
                 </p>
-              </div>
-              <div className="grid gap-3 text-sm text-slate-300">
-                {heroHighlights.map(item => (
-                  <div key={item} className="flex items-start gap-3">
-                    <span className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.6)]" />
-                    <span>{item}</span>
-                  </div>
-                ))}
               </div>
               <div className="flex flex-wrap gap-3">
                 <button
@@ -125,55 +111,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
                 >
                   Log in
                 </button>
-              </div>
-            </div>
-
-            <div className="relative hero-fade" style={{ animationDelay: '0.15s' }}>
-              <div
-                className="absolute -top-16 -right-10 h-56 w-56 rounded-full bg-emerald-500/20 blur-3xl"
-                style={{ animation: 'heroGlow 6s ease-in-out infinite' }}
-              />
-              <div className="relative bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 border border-slate-700 rounded-3xl p-8 shadow-2xl space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Demo Kingdom</p>
-                    <p className="text-2xl font-bold">Live Read-Only Preview</p>
-                  </div>
-                  <span className="text-xs px-3 py-1 rounded-full bg-amber-400/20 text-amber-200 border border-amber-300/40">
-                    Safe to browse
-                  </span>
-                </div>
-                <div className="grid gap-3 text-sm text-slate-300">
-                  <div className="flex items-center justify-between border border-slate-700/80 rounded-xl px-4 py-3">
-                    <span>CH25 performance pulse</span>
-                    <span className="text-emerald-300 font-semibold">Live</span>
-                  </div>
-                  <div className="flex items-center justify-between border border-slate-700/80 rounded-xl px-4 py-3">
-                    <span>Weekly activity rollup</span>
-                    <span className="text-amber-200 font-semibold">Updated</span>
-                  </div>
-                  <div className="flex items-center justify-between border border-slate-700/80 rounded-xl px-4 py-3">
-                    <span>KvK DKP + honor goals</span>
-                    <span className="text-slate-100 font-semibold">Tracked</span>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={onSeeDefault}
-                    className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-sm font-semibold shadow shadow-emerald-900/30"
-                  >
-                    Open demo
-                  </button>
-                  <button
-                    onClick={onStartShop}
-                    className="px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 hover:border-amber-400 text-sm font-semibold"
-                  >
-                    Activate your kingdom
-                  </button>
-                </div>
-                <p className="text-xs text-slate-500">
-                  Browse the demo kingdom to understand the flow, then unlock uploads and leadership controls.
-                </p>
               </div>
             </div>
           </section>
