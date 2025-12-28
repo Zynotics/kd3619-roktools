@@ -898,18 +898,24 @@ app.post('/api/admin/r5-codes/activate', authenticateToken, requireAdmin, async 
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
     try {
         const { code, userId, kingdomId, assignOnly } = req.body;
-        if (!code || !userId || !kingdomId) {
-            return res.status(400).json({ error: 'Code, Benutzer und Königreich werden benötigt.' });
+        if (!code || !userId) {
+            return res.status(400).json({ error: 'Code und Benutzer werden benoetigt.' });
         }
 
         const user = await get('SELECT id FROM users WHERE id = $1', [userId]);
         if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
 
-        const kingdom = await get('SELECT id FROM kingdoms WHERE id = $1', [kingdomId]);
-        if (!kingdom) return res.status(404).json({ error: 'Königreich nicht gefunden' });
+        const userKingdom = await get('SELECT kingdom_id FROM users WHERE id = $1', [userId]);
+        const targetKingdomId = kingdomId || userKingdom?.kingdom_id;
+        if (!targetKingdomId) {
+            return res.status(400).json({ error: 'Benutzer hat kein Koenigreich.' });
+        }
+
+        const kingdom = await get('SELECT id FROM kingdoms WHERE id = $1', [targetKingdomId]);
+        if (!kingdom) return res.status(404).json({ error: 'Koenigreich nicht gefunden' });
 
         if (assignOnly) {
-            const assigned = await assignR5Code(code, userId, kingdomId);
+            const assigned = await assignR5Code(code, userId, targetKingdomId);
             return res.json({
                 success: true,
                 assignedOnly: true,
@@ -920,8 +926,8 @@ app.post('/api/admin/r5-codes/activate', authenticateToken, requireAdmin, async 
             });
         }
 
-        const activation = await activateR5Code(code, userId, kingdomId);
-        await assignR5(userId, kingdomId);
+        const activation = await activateR5Code(code, userId, targetKingdomId);
+        await assignR5(userId, targetKingdomId);
         await query('UPDATE users SET is_approved = TRUE WHERE id = $1', [userId]);
 
         res.json({
