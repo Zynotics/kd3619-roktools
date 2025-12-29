@@ -256,6 +256,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
               Home
             </button>
           )}
+          {user?.role === 'admin' && (
+            <button
+              onClick={handleGoToDashboard}
+              className="px-4 py-2 rounded-lg border border-amber-400/60 text-xs font-semibold text-amber-100 hover:border-amber-300 hover:text-white transition"
+            >
+              Superadmin dashboard
+            </button>
+          )}
           {user && hasKingdom && kingdomInfo?.slug && (
             <button
               onClick={handleGoToDashboard}
