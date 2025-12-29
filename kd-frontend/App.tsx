@@ -274,6 +274,14 @@ const AppContent: React.FC = () => {
   const activeViewStorageKey = publicSlug ? `kd-active-view:${publicSlug}` : 'kd-active-view';
   const shouldShowLanding = !publicSlug && !forceLogin && !isRegisterInvite && (!isLoading || !!accountSlug || isShopPage);
 
+  if (isLoading && !publicSlug && !forceLogin && !isRegisterInvite) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+        <div className="text-sm uppercase tracking-[0.3em] text-emerald-200">Loading...</div>
+      </div>
+    );
+  }
+
   // Restore last visited view on load
   useEffect(() => {
     const savedView = localStorage.getItem(activeViewStorageKey) as ActiveView | null;
@@ -440,13 +448,6 @@ const AppContent: React.FC = () => {
         fetchTitle();
   }, [publicSlug, user, isSuperAdmin]);
   if (shouldShowLanding) {
-    if (isLoading && (accountSlug || isShopPage)) {
-      return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
-          <div className="text-sm uppercase tracking-[0.3em] text-emerald-200">Loading...</div>
-        </div>
-      );
-    }
     return (
       <LandingPage
         onSeeDefault={redirectToDefaultKingdom}
