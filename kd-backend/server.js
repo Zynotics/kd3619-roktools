@@ -1095,8 +1095,12 @@ app.post('/api/r5-codes/create-kingdom', authenticateToken, async (req, res) => 
   let createdKingdomId = null;
   try {
     const { displayName, code } = req.body;
-    if (!displayName || !String(displayName).trim()) {
+    const normalizedDisplayName = String(displayName || '').trim();
+    if (!normalizedDisplayName) {
       return res.status(400).json({ error: 'Display Name wird benötigt.' });
+    }
+    if (normalizedDisplayName.length < 3 || normalizedDisplayName.length > 40) {
+      return res.status(400).json({ error: 'Display Name muss zwischen 3 und 40 Zeichen lang sein.' });
     }
     if (!code || !String(code).trim()) {
       return res.status(400).json({ error: 'Access Code wird benötigt.' });
@@ -1107,15 +1111,18 @@ app.post('/api/r5-codes/create-kingdom', authenticateToken, async (req, res) => 
 
     const existingName = await get(
       'SELECT id FROM kingdoms WHERE LOWER(display_name) = $1 LIMIT 1',
-      [String(displayName).trim().toLowerCase()]
+      [normalizedDisplayName.toLowerCase()]
     );
     if (existingName) {
       return res.status(400).json({ error: 'Display Name ist bereits vergeben.' });
     }
 
-    const baseSlug = slugify(displayName);
+    let baseSlug = slugify(normalizedDisplayName);
     if (!baseSlug) {
       return res.status(400).json({ error: 'Ungültiger Display Name für Slug-Erstellung.' });
+    }
+    if (baseSlug.length > 40) {
+      baseSlug = baseSlug.slice(0, 40).replace(/-+$/g, '');
     }
 
     const targetCode = await getR5Code(String(code).trim().toUpperCase());
@@ -1134,7 +1141,7 @@ app.post('/api/r5-codes/create-kingdom', authenticateToken, async (req, res) => 
 
     await query(
       `INSERT INTO kingdoms (id, display_name, slug, rok_identifier) VALUES ($1,$2,$3,$4)`,
-      [kingdomId, String(displayName).trim(), slug, null]
+      [kingdomId, normalizedDisplayName, slug, null]
     );
 
     const activation = await activateR5Code(String(code).trim().toUpperCase(), req.user.id, kingdomId);
@@ -1143,7 +1150,7 @@ app.post('/api/r5-codes/create-kingdom', authenticateToken, async (req, res) => 
 
     return res.json({
       success: true,
-      kingdom: { id: kingdomId, displayName: String(displayName).trim(), slug },
+      kingdom: { id: kingdomId, displayName: normalizedDisplayName, slug },
       activatedAt: activation.activated_at,
       durationDays: activation.duration_days,
     });

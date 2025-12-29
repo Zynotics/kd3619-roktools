@@ -369,9 +369,12 @@ const AdminUserManagement: React.FC = () => {
 
   const deleteUser = async (userId: string) => {
     setUserError(null);
+    const isR5 = currentUser?.role === 'r5';
     if (
       !window.confirm(
-        'Are you sure you want to delete this user? This cannot be undone.'
+        isR5
+          ? 'Remove this user from your kingdom? Their account will stay active.'
+          : 'Are you sure you want to delete this user? This cannot be undone.'
       )
     ) {
       return;
@@ -394,8 +397,13 @@ const AdminUserManagement: React.FC = () => {
         throw new Error(errorJson.error || 'Failed to delete user');
       }
 
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
-      showSuccessMessage('User successfully deleted.');
+      if (isR5) {
+        await fetchUsers();
+        showSuccessMessage('User removed from your kingdom.');
+      } else {
+        setUsers((prev) => prev.filter((u) => u.id !== userId));
+        showSuccessMessage('User successfully deleted.');
+      }
     } catch (err) {
       console.error('Error deleting user:', err);
     }
@@ -1157,7 +1165,7 @@ const AdminUserManagement: React.FC = () => {
                               onClick={() => deleteUser(user.id)}
                               className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 transition-colors text-sm"
                             >
-                              Delete
+                              {currentUser?.role === 'r5' ? 'Remove from kingdom' : 'Delete'}
                             </button>
                           </div>
                         ) : (
