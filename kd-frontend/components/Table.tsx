@@ -10,11 +10,11 @@ interface TableProps {
 export const Table: React.FC<TableProps> = ({ children, className = '', maxHeight = 'auto' }) => {
   return (
     <div
-      className={`overflow-x-auto relative border border-gray-700 rounded-lg ${
+      className={`overflow-x-auto relative border border-white/5 rounded-lg ${
         maxHeight !== 'auto' ? `max-h-${maxHeight}` : ''
       }`}
     >
-      <table className={`w-full text-sm text-left text-gray-400 ${className}`}>
+      <table className={`w-full text-sm text-left text-slate-300 ${className}`}>
         {children}
       </table>
     </div>
@@ -29,7 +29,7 @@ interface TableHeaderProps {
 export const TableHeader: React.FC<TableHeaderProps> = ({ children, sticky = true }) => {
   return (
     <thead
-      className={`text-xs text-gray-400 uppercase bg-gray-700 ${
+      className={`text-xs text-slate-400 uppercase bg-slate-900/80 ${
         sticky ? 'sticky top-0' : ''
       }`}
     >
@@ -49,9 +49,9 @@ export const TableRow: React.FC<TableRowProps> = ({
   hover = true,
   className = '',
 }) => {
-  const hoverClass = hover ? 'hover:bg-gray-600 transition-colors duration-200' : '';
+  const hoverClass = hover ? 'hover:bg-white/5 transition-colors duration-200' : '';
   return (
-    <tr className={`border-b border-gray-700 bg-gray-800 ${hoverClass} ${className}`}>
+    <tr className={`border-b border-white/5 bg-slate-900/70 ${hoverClass} ${className}`}>
       {children}
     </tr>
   );

@@ -15,7 +15,7 @@ export const Card: React.FC<CardProps> = ({
   gradient = false,
   padding = 'md'
 }) => {
-  const baseClasses = "rounded-xl shadow-lg border border-gray-700";
+  const baseClasses = "rounded-xl shadow-xl border border-white/5";
   
   const paddingClasses = {
     sm: "p-4",
@@ -24,11 +24,11 @@ export const Card: React.FC<CardProps> = ({
   };
 
   const gradientClasses = gradient 
-    ? "bg-gradient-to-br from-gray-800 to-gray-900" 
-    : "bg-gray-800";
+    ? "bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900" 
+    : "bg-slate-900/70";
     
   const hoverClasses = hover 
-    ? "transition-all duration-300 hover:shadow-xl hover:border-gray-600 hover:scale-[1.02] cursor-pointer" 
+    ? "transition-all duration-300 hover:shadow-2xl hover:border-white/10 hover:-translate-y-0.5 cursor-pointer" 
     : "";
 
   return (
