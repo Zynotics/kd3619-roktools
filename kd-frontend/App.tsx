@@ -79,7 +79,8 @@ const AppContent: React.FC = () => {
   const publicSlug = queryParams.get('slug');
   const accountSlug = queryParams.get('account');
   const isShopPage = queryParams.get('shop') === 'true';
-  const forceLogin = queryParams.get('login') === 'true';
+  const forceLoginRaw = queryParams.get('login') === 'true';
+  const forceLogin = forceLoginRaw && !accountSlug && !isShopPage;
   const isRegisterInvite = queryParams.get('register') === 'true';
   const isSuperAdmin = user?.role === 'admin';
   const isR5 = user?.role === 'r5';
