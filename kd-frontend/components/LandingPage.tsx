@@ -243,12 +243,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(251,146,60,0.15),_transparent_55%)]" />
       <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 space-y-12">
         <div className="flex flex-wrap justify-end gap-2 hero-fade">
+          {user && (
+            <div className="flex items-center px-3 py-2 rounded-lg border border-slate-800 text-xs font-semibold text-slate-300">
+              Signed in as <span className="ml-1 text-white">{user.username}</span>
+            </div>
+          )}
           {(isAccountPage || isShopPage) && (
             <button
               onClick={handleBackToLanding}
               className="px-4 py-2 rounded-lg border border-slate-700 text-xs font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
             >
-              Back to landing
+              Home
             </button>
           )}
           {user && hasKingdom && kingdomInfo?.slug && (
@@ -366,19 +371,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
                         <p className="font-semibold text-white">{kingdomInfo?.slug || 'Not linked'}</p>
                       </div>
                     </div>
-                    {hasKingdom ? (
+                    {hasKingdom && (
                       <button
                         onClick={handleGoToDashboard}
                         className="w-full px-4 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-sm font-semibold text-slate-950 transition"
                       >
                         Go to {kingdomInfo?.slug} dashboard
-                      </button>
-                    ) : (
-                      <button
-                        onClick={scrollToCreate}
-                        className="w-full px-4 py-3 rounded-xl border border-amber-400/70 text-sm font-semibold text-amber-100 hover:border-amber-300 hover:text-white transition"
-                      >
-                        Create Kingdom
                       </button>
                     )}
                   </div>
@@ -491,6 +489,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
                   <div className="text-xs text-slate-400 border-t border-slate-800 pt-4">
                     You already belong to {kingdomInfo?.displayName || kingdomInfo?.slug}.
                   </div>
+                )}
+
+                {user && (
+                  <button
+                    onClick={onStartShop}
+                    className="w-full px-4 py-3 rounded-xl border border-amber-400/70 text-sm font-semibold text-amber-100 hover:border-amber-300 hover:text-white transition"
+                  >
+                    Shop
+                  </button>
                 )}
               </div>
             </div>
