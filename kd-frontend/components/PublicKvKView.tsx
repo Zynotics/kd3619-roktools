@@ -719,50 +719,50 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             )}
 
             {viewMode === 'stats' && rankingAvailable && (
-              <div className="bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-700">
-                <div className="p-4 bg-gray-800 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="rounded-3xl border border-white/5 bg-slate-900/70 shadow-2xl shadow-black/40 overflow-hidden">
+                <div className="p-5 bg-slate-900/80 border-b border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                        <h2 className="text-lg font-semibold text-blue-200">DKP Ranking</h2>
-                      </div>
-                      <p className="text-xs text-gray-400">
-                          Aggregated stats based on the selected battle phase.
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
-                          <span className="flex items-center gap-1">
-                              <span className="w-3 h-3 rounded-full bg-emerald-500/50 border border-emerald-400" />
-                              DKP goal reached
-                          </span>
-                          <span className="flex items-center gap-1">
-                              <span className="w-3 h-3 rounded-full bg-amber-400/40 border border-amber-300" />
-                              In progress
-                          </span>
-                      </div>
+                      <h2 className="text-lg font-semibold text-emerald-200">DKP Ranking</h2>
+                    </div>
+                    <p className="text-xs text-slate-300">
+                      Aggregated stats based on the selected battle phase.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 rounded-full bg-emerald-400/20 border border-emerald-300/60" />
+                        DKP goal reached
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 rounded-full bg-amber-400/20 border border-amber-300/60" />
+                        In progress
+                      </span>
+                    </div>
                   </div>
                   {activeEvent?.fights?.length ? (
-                    <div className="flex flex-col items-start text-xs text-gray-300 gap-1">
-                      <span className="uppercase tracking-wide text-gray-400 text-[10px]">Fight Selection</span>
+                    <div className="flex flex-col items-start text-xs text-slate-300 gap-1">
+                      <span className="uppercase tracking-wide text-slate-400 text-[10px]">Fight selection</span>
                       <select
-                        className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="bg-slate-950 border border-white/10 rounded px-3 py-1 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
                         value={selectedFightId}
                         onChange={e => setSelectedFightId(e.target.value)}
                       >
-                        <option value="all">All Fights (Cumulative)</option>
+                        <option value="all">All fights (cumulative)</option>
                         {activeEvent.fights.map(f => (
                           <option key={f.id} value={f.id}>{f.name}</option>
                         ))}
                       </select>
                     </div>
                   ) : null}
-                  <div className="text-xs text-gray-500 italic">
-                      Top {statsData.length} Players
+                  <div className="text-xs text-slate-400 italic">
+                    Top {statsData.length} Players
                   </div>
                 </div>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
+                      <tr className="bg-slate-950/80 text-slate-400 text-xs uppercase tracking-wider">
                         <th className="p-3 text-center w-10">#</th>
                         <th className="p-3">
                           <button type="button" className="flex items-center gap-1" onClick={() => toggleSort('id')}>
@@ -780,7 +780,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                           </button>
                         </th>
 
-                        <th className="p-3 text-right text-amber-300">
+                        <th className="p-3 text-right text-emerald-200">
                           <button
                             type="button"
                             className="flex items-center gap-1 justify-end w-full"
@@ -789,7 +789,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             DKP Score {renderSortIndicator('dkpPercent')}
                           </button>
                         </th>
-                        <th className="p-3 text-right text-red-200">
+                        <th className="p-3 text-right text-rose-200">
                           <button
                             type="button"
                             className="flex items-center gap-1 justify-end w-full"
@@ -799,7 +799,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                           </button>
                         </th>
 
-                        <th className="p-3 text-right text-yellow-500">
+                        <th className="p-3 text-right text-sky-200">
                           <button
                             type="button"
                             className="flex items-center gap-1 justify-end w-full"
@@ -808,7 +808,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             Power Details {renderSortIndicator('powerDiff')}
                           </button>
                         </th>
-                        <th className="p-3 text-right text-orange-300">
+                        <th className="p-3 text-right text-amber-200">
                           <button
                             type="button"
                             className="flex items-center gap-1 justify-end w-full"
@@ -817,7 +817,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             Kill Points {renderSortIndicator('killPointsDiff')}
                           </button>
                         </th>
-                        <th className="p-3 text-right text-red-300">
+                        <th className="p-3 text-right text-slate-300">
                           <button
                             type="button"
                             className="flex items-center gap-1 justify-end w-full"
@@ -826,7 +826,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             T4 Kills {renderSortIndicator('t4KillsDiff')}
                           </button>
                         </th>
-                        <th className="p-3 text-right text-red-400">
+                        <th className="p-3 text-right text-slate-300">
                           <button
                             type="button"
                             className="flex items-center gap-1 justify-end w-full"
@@ -835,7 +835,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                             T5 Kills {renderSortIndicator('t5KillsDiff')}
                           </button>
                         </th>
-                        <th className="p-3 text-right text-red-500 font-bold bg-gray-800/50">
+                        <th className="p-3 text-right text-emerald-200 font-bold bg-emerald-500/10">
                           <button
                             type="button"
                             className="flex items-center gap-1 justify-end w-full"
@@ -846,60 +846,60 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-700 text-sm">
+                    <tbody className="divide-y divide-white/5 text-sm">
                       {sortedStats.map((row, idx) => (
                         <tr
                           key={row.id}
-                          className={`hover:bg-gray-750 transition-colors ${
+                          className={`hover:bg-white/5 transition-colors ${
                             idx === 0
-                              ? 'bg-blue-900/20'
+                              ? 'bg-emerald-500/10'
                               : idx === 1
-                                ? 'bg-blue-900/10'
+                                ? 'bg-emerald-500/10'
                                 : idx === 2
-                                  ? 'bg-blue-900/5'
+                                  ? 'bg-emerald-500/5'
                                   : ''
                           }`}
                         >
-                          <td className="p-3 text-gray-500 font-mono text-center">{idx + 1}</td>
-                          <td className="p-3 text-gray-400 font-mono text-xs">{row.id}</td>
-                          <td className="p-3 font-medium text-white truncate max-w-[150px]">{row.name}</td>
-                          <td className="p-3 text-gray-300">[{row.alliance}]</td>
+                          <td className="p-3 text-slate-500 font-mono text-center">{idx + 1}</td>
+                          <td className="p-3 text-slate-400 font-mono text-xs">{row.id}</td>
+                          <td className="p-3 font-medium text-slate-100 truncate max-w-[150px]">{row.name}</td>
+                          <td className="p-3 text-slate-300">[{row.alliance}]</td>
 
                           <td className="p-3 text-right">
                               {row.dkpPercent !== undefined ? (
                                   <div className="flex flex-col items-end gap-1">
                                       <div className="flex items-center gap-2">
-                                          <span className={`font-bold text-sm ${row.dkpPercent >= 100 ? 'text-green-400' : 'text-amber-200'}`}>
+                                          <span className={`font-bold text-sm ${row.dkpPercent >= 100 ? 'text-emerald-300' : 'text-amber-200'}`}>
                                               {row.dkpPercent.toFixed(1)}%
                                           </span>
-                                          <span className="text-[11px] text-gray-400 bg-gray-900 px-2 py-0.5 rounded border border-gray-700 font-mono">
+                                          <span className="text-[11px] text-slate-300 bg-slate-950/60 px-2 py-0.5 rounded border border-white/10 font-mono">
                                               {formatNumber(row.dkpScore || 0)} / {formatNumber(row.dkpGoal || 0)}
                                           </span>
                                       </div>
-                                      <div className="w-36 h-2 bg-gray-900 rounded-full overflow-hidden border border-gray-700">
+                                      <div className="w-36 h-2 bg-slate-950/70 rounded-full overflow-hidden border border-white/10">
                                           <div
-                                              className={`${row.dkpPercent >= 100 ? 'bg-green-400/80' : 'bg-amber-300/80'} h-full transition-all duration-500`}
+                                              className={`${row.dkpPercent >= 100 ? 'bg-emerald-400/80' : 'bg-amber-300/80'} h-full transition-all duration-500`}
                                               style={{ width: `${Math.min(Math.max(row.dkpPercent, 0), 130)}%` }}
                                           />
                                       </div>
                                   </div>
                               ) : (
-                                  <span className="text-gray-500 text-sm italic">N/A</span>
+                                  <span className="text-slate-500 text-sm italic">N/A</span>
                               )}
                           </td>
 
                           <td className="p-3 text-right">
                               {row.deadPercent !== undefined ? (
                                   <div className="flex flex-col items-end">
-                                      <span className={`font-bold ${row.deadPercent >= 100 ? 'text-green-400' : 'text-red-200'}`}>
+                                      <span className={`font-bold ${row.deadPercent >= 100 ? 'text-emerald-300' : 'text-rose-200'}`}>
                                           {row.deadPercent.toFixed(1)}%
                                       </span>
-                                      <span className="text-[11px] text-gray-500">
+                                      <span className="text-[11px] text-slate-400">
                                           Dead: {formatNumber(row.deadDiff)} / {formatNumber(row.deadGoal || 0)}
                                       </span>
                                   </div>
                               ) : (
-                                  <div className="flex flex-col items-end text-xs text-gray-500 italic">
+                                  <div className="flex flex-col items-end text-xs text-slate-500 italic">
                                       <span>No dead goal</span>
                                   </div>
                               )}
@@ -908,25 +908,25 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
                           {/* Power Column: Base + Diff */}
                           <td className="p-3 text-right">
                               <div className="flex flex-col items-end">
-                                  <span className={`font-mono font-bold ${row.powerDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  <span className={`font-mono font-bold ${row.powerDiff >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                                       {row.powerDiff > 0 ? '+' : ''}{formatNumber(row.powerDiff)}
                                   </span>
-                                  <span className="text-xs text-gray-500">Base: {formatNumber(row.basePower)}</span>
+                                  <span className="text-xs text-slate-400">Base: {formatNumber(row.basePower)}</span>
                               </div>
                           </td>
 
-                          <td className="p-3 text-right font-mono text-orange-200">+{formatNumber(row.killPointsDiff)}</td>
+                          <td className="p-3 text-right font-mono text-amber-200">+{formatNumber(row.killPointsDiff)}</td>
 
-                          <td className="p-3 text-right font-mono text-gray-300">+{formatNumber(row.t4KillsDiff)}</td>
-                          <td className="p-3 text-right font-mono text-gray-300">+{formatNumber(row.t5KillsDiff)}</td>
+                          <td className="p-3 text-right font-mono text-slate-300">+{formatNumber(row.t4KillsDiff)}</td>
+                          <td className="p-3 text-right font-mono text-slate-300">+{formatNumber(row.t5KillsDiff)}</td>
                           
-                          <td className="p-3 text-right font-mono font-bold text-yellow-400 bg-yellow-900/10 border-l border-r border-gray-700">
+                          <td className="p-3 text-right font-mono font-bold text-emerald-200 bg-emerald-500/10 border-l border-r border-white/10">
                               +{formatNumber(row.t4t5KillsDiff)}
                           </td>
                         </tr>
                       ))}
                       {statsData.length === 0 && (
-                        <tr><td colSpan={11} className="p-12 text-center text-gray-500 italic">
+                        <tr><td colSpan={11} className="p-12 text-center text-slate-500 italic">
                             No data available yet.
                         </td></tr>
                       )}
