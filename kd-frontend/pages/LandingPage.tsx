@@ -8,8 +8,8 @@ type LandingPageProps = {
 
 const benefits = [
   {
-    title: 'Sofortige Auswertung',
-    description: 'Uploads verarbeiten, KPIs berechnen und für Rat & R4/R5 sofort verständlich visualisieren.',
+    title: 'Instant Insights',
+    description: 'Process uploads, calculate KPIs, and visualize results clearly for council and R4/R5.',
     icon: (
       <svg viewBox="0 0 24 24" className="h-6 w-6 text-emerald-300" aria-hidden="true">
         <path
@@ -20,8 +20,8 @@ const benefits = [
     ),
   },
   {
-    title: 'Leadership-Entscheidungen',
-    description: 'Trends, Honor & Activity in einem Blick, damit Kriegs- und Belohnungsentscheidungen sitzen.',
+    title: 'Leadership Decisions',
+    description: 'See trends, honor, and activity at a glance to drive rewards and war decisions.',
     icon: (
       <svg viewBox="0 0 24 24" className="h-6 w-6 text-sky-300" aria-hidden="true">
         <path
@@ -32,8 +32,8 @@ const benefits = [
     ),
   },
   {
-    title: 'Rollen & Zugriffssteuerung',
-    description: 'R4, R5, Admin: getrennte Zugriffe, Public-Shares für sichere Einsicht ohne Risiko.',
+    title: 'Roles and Access Control',
+    description: 'R4, R5, Admin: separated access with public shares for safe read-only views.',
     icon: (
       <svg viewBox="0 0 24 24" className="h-6 w-6 text-amber-300" aria-hidden="true">
         <path
@@ -44,8 +44,8 @@ const benefits = [
     ),
   },
   {
-    title: 'Historie & Reports',
-    description: 'Versionierte Uploads, Vergleiche pro Spieler/KD und Export-Optionen für Meetings.',
+    title: 'History and Reports',
+    description: 'Versioned uploads, player comparisons, and export options for meetings.',
     icon: (
       <svg viewBox="0 0 24 24" className="h-6 w-6 text-fuchsia-300" aria-hidden="true">
         <path
@@ -58,44 +58,44 @@ const benefits = [
 ];
 
 const steps = [
-  { title: 'Upload', detail: 'CSV/Exports hochladen, KD & Player-Daten in Sekunden einlesen.', accent: 'Daten rein' },
-  { title: 'Analyse', detail: 'Dashboards, Rankings, Honor & Activity prüfen – mobil & Desktop.', accent: 'Insights' },
-  { title: 'Entscheidung', detail: 'Belohnungen steuern, Rollen zuweisen, Prioritäten klar kommunizieren.', accent: 'Go live' },
+  { title: 'Upload', detail: 'Upload CSV exports and ingest KD and player data in seconds.', accent: 'Data in' },
+  { title: 'Analyze', detail: 'Review dashboards, rankings, honor, and activity on mobile and desktop.', accent: 'Insights' },
+  { title: 'Decide', detail: 'Steer rewards, assign roles, and communicate priorities clearly.', accent: 'Go live' },
 ];
 
 const features = [
-  'Honor Dashboard & Ranking mit Public-KvK-Ansichten',
-  'Overview Dashboard für KPIs & Fortschritt',
-  'Player Analytics: Vergleiche, Trends, Engagement',
-  'Datei-Uploads mit Historie und Rollenrechten',
-  'Rollen: R4 / R5 / Admin mit sicherem Sharing',
-  'Kingdom Management & Slug-basierte Links',
+  'Honor dashboard and ranking with public KvK views',
+  'Overview dashboard for KPIs and progress',
+  'Player analytics: comparisons, trends, engagement',
+  'File uploads with history and role permissions',
+  'Roles: R4 / R5 / Admin with secure sharing',
+  'Kingdom management and slug-based links',
 ];
 
 const pricingPlans = [
   {
     name: 'Starter',
-    tagline: 'Für kleine Kingdoms & erste KvK-Vorbereitung.',
-    priceHint: 'ab •• / Monat',
-    points: ['Basis-Dashboards', 'Geführter Upload', 'E-Mail Support (Async)', 'Öffentliche KvK-Ansicht'],
-    action: 'Demo ansehen',
+    tagline: 'For small kingdoms and first KvK preparation.',
+    priceHint: 'from -- / month',
+    points: ['Core dashboards', 'Guided upload', 'Email support (async)', 'Public KvK view'],
+    action: 'View demo',
     onAction: (handlers: LandingHandlers) => handlers.onSeeDefault(),
   },
   {
     name: 'Pro',
-    tagline: 'Für aktive R4/R5, die schneller entscheiden müssen.',
-    priceHint: 'ab •• / Monat',
-    highlight: 'Beliebt',
-    points: ['Alle Dashboards & Player Analytics', 'Rollen & Public Sharing', 'Report-Exports & Trends', 'Priorisierter Support'],
-    action: 'Jetzt starten',
+    tagline: 'For active R4/R5 who need faster decisions.',
+    priceHint: 'from -- / month',
+    highlight: 'Popular',
+    points: ['All dashboards and player analytics', 'Roles and public sharing', 'Report exports and trends', 'Priority support'],
+    action: 'Get started',
     onAction: (handlers: LandingHandlers) => handlers.onStartShop(),
   },
   {
     name: 'Enterprise',
-    tagline: 'Für Imperiums-Teams & Mehr-Kingdom-Setups.',
-    priceHint: 'ab •• / Monat',
-    points: ['Multi-Kingdom Management', 'Onboarding für Council', 'Eigene SLAs & Datenschutz', 'Direkter Ansprechpartner'],
-    action: 'Kontakt aufnehmen',
+    tagline: 'For multi-kingdom teams and council setups.',
+    priceHint: 'from -- / month',
+    points: ['Multi-kingdom management', 'Council onboarding', 'Custom SLAs and privacy', 'Dedicated contact'],
+    action: 'Contact us',
     onAction: (_handlers: LandingHandlers) => {
       window.open('mailto:contact@rise-of-stats.com', '_blank');
     },
@@ -104,24 +104,24 @@ const pricingPlans = [
 
 const faqs = [
   {
-    question: 'Wie steht es um Datenschutz & Sicherheit?',
-    answer: 'Alle Uploads bleiben in eurem Account, Public-Links sind lesend. Rollen sorgen dafür, dass nur freigeschaltete Personen Änderungen sehen.',
+    question: 'How do you handle privacy and security?',
+    answer: 'Uploads stay in your account and public links are read-only. Roles ensure only approved people can see changes.',
   },
   {
-    question: 'Welche Dateien werden benötigt?',
-    answer: 'Standard-Exports aus Rise of Kingdoms genügen. Upload-Assistenten zeigen, welche Felder gebraucht werden.',
+    question: 'Which files are required?',
+    answer: 'Standard exports from Rise of Kingdoms are enough. Upload assistants show required fields.',
   },
   {
-    question: 'Wer hat Zugriff?',
-    answer: 'Rollen für R4, R5, Admin sowie schreibgeschützte Public-Ansichten. Rechte lassen sich jederzeit entziehen.',
+    question: 'Who has access?',
+    answer: 'Roles for R4, R5, and Admin plus read-only public views. Access can be revoked anytime.',
   },
   {
-    question: 'Wie schnell ist das Setup?',
-    answer: 'Erste Dashboards in wenigen Minuten. Demo-Kingdom dient als Blaupause, damit ihr sofort loslegt.',
+    question: 'How fast is setup?',
+    answer: 'First dashboards in minutes. The demo kingdom provides a blueprint to start immediately.',
   },
   {
-    question: 'Gibt es Support?',
-    answer: 'Ja. Von E-Mail bis persönlichem Onboarding je nach Plan. Feedback fließt direkt in neue Releases ein.',
+    question: 'Is support available?',
+    answer: 'Yes. From email support to onboarding depending on the plan. Feedback goes directly into releases.',
   },
 ];
 
@@ -165,11 +165,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
             </div>
             <div className="space-y-3">
               <h1 className="text-4xl md:text-5xl font-extrabold leading-tight text-white">
-                Rise of Stats – Kingdom Analytics
+                Rise of Stats - Kingdom Analytics
               </h1>
               <p className="text-lg text-slate-300 leading-relaxed">
-                Die zentrale Schaltstelle für R4/R5: Uploads, Dashboards, KvK-Insights und Rollenverwaltung in einem
-                klaren, schnellen Interface. Weniger Chaos, mehr Entscheidungen.
+                The command center for R4/R5: uploads, dashboards, KvK insights, and role management in one fast,
+                clear interface. Less chaos, better decisions.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -177,19 +177,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
                 onClick={onSeeDefault}
                 className="rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-900/40 transition hover:bg-emerald-400"
               >
-                Demo ansehen
+                View demo
               </button>
               <button
                 onClick={onStartShop}
                 className="rounded-xl border border-amber-400/60 bg-amber-400/10 px-5 py-3 text-sm font-semibold text-amber-100 transition hover:border-amber-300 hover:bg-amber-400/20"
               >
-                Jetzt starten
+                Get started
               </button>
               <button
                 onClick={onOpenLogin}
                 className="rounded-xl border border-slate-700 px-5 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:text-white"
               >
-                Login / Kontakt
+                Login / Contact
               </button>
             </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 text-sm text-slate-300">
@@ -198,11 +198,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
                 <p className="text-base font-semibold text-white">Honor, Overview, Player</p>
               </div>
               <div className="rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Zeitersparnis</p>
-                <p className="text-base font-semibold text-white">Uploads → Insights</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Time saved</p>
+                <p className="text-base font-semibold text-white">Uploads to insights</p>
               </div>
               <div className="rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Rollen</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Roles</p>
                 <p className="text-base font-semibold text-white">R4 / R5 / Admin</p>
               </div>
             </div>
@@ -212,27 +212,26 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
             <div className="relative p-8 space-y-6">
               <div className="flex items-center gap-3 rounded-full border border-white/5 bg-white/5 px-4 py-2 text-xs text-slate-200">
                 <span className="h-2 w-2 rounded-full bg-emerald-300" />
-                Live-Auswertung für Council & Leads
+                Live reporting for council and leads
               </div>
               <div className="space-y-4">
                 <p className="text-sm uppercase tracking-[0.25em] text-emerald-200">KVK FLOW</p>
                 <p className="text-2xl font-bold text-white leading-snug">
-                  Honor, Rankings, Activity und Upload-Historie in einer Oberfläche. Ohne zusätzliche Tools oder
-                  komplizierte Exporte.
+                  Honor, rankings, activity, and upload history in one surface. No extra tools or complex exports.
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.2em] text-sky-200">Public KvK</p>
-                  <p className="text-base font-semibold text-white">Teilbar per Slug, lesend & sicher</p>
+                  <p className="text-base font-semibold text-white">Shareable by slug, read-only and safe</p>
                 </div>
                 <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-sky-200">Upload-Historie</p>
-                  <p className="text-base font-semibold text-white">Versionen & Vergleiche pro Spieler</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-sky-200">Upload history</p>
+                  <p className="text-base font-semibold text-white">Versions and player comparisons</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 text-xs text-slate-200">
-                {['Auditierbar', 'Rollenbasiert', 'Mobilfähig', 'Dark-Mode optimiert'].map(label => (
+                {['Auditable', 'Role based', 'Mobile ready', 'Dark mode optimized'].map(label => (
                   <span key={label} className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
                     {label}
                   </span>
@@ -244,9 +243,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
 
         <section className="space-y-8">
           <SectionHeader
-            label="Nutzen"
-            title="Warum Kingdoms auf Rise of Stats setzen"
-            subtitle="Schnelle Entscheidungen, weniger manuelle Arbeit und klare Daten für Kriege, Belohnungen und Diplomatie."
+            label="Benefits"
+            title="Why kingdoms rely on Rise of Stats"
+            subtitle="Faster decisions, less manual work, and clear data for wars, rewards, and diplomacy."
           />
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {benefits.map(benefit => (
@@ -266,9 +265,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
 
         <section className="space-y-8">
           <SectionHeader
-            label="So funktioniert’s"
-            title="Drei Schritte von Upload bis Entscheidung"
-            subtitle="Weniger Meetings, mehr Klarheit. Die App bleibt Vite + React und ist leicht anpassbar."
+            label="How it works"
+            title="Three steps from upload to decision"
+            subtitle="Fewer meetings, more clarity. The app remains Vite + React and is easy to adapt."
           />
           <div className="grid gap-6 md:grid-cols-3">
             {steps.map((step, index) => (
@@ -292,8 +291,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
         <section className="space-y-8">
           <SectionHeader
             label="Features"
-            title="Was du bekommst"
-            subtitle="Alle wichtigen Module gebündelt. Kein zusätzliches Tooling, keine unnötigen Klicks."
+            title="What you get"
+            subtitle="All critical modules bundled. No extra tools, no unnecessary clicks."
           />
           <div className="grid gap-4 sm:grid-cols-2">
             {features.map(feature => (
@@ -308,14 +307,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
           </div>
           <div className="rounded-3xl border border-emerald-400/20 bg-gradient-to-r from-emerald-500/10 via-slate-900/60 to-sky-500/10 p-6 sm:p-8 flex flex-col lg:flex-row items-start lg:items-center gap-6">
             <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.3em] text-emerald-200">Social Proof</p>
-              <h3 className="text-2xl font-bold text-white">Genutzt von Kingdoms aus EU, NA und APAC</h3>
+              <p className="text-xs uppercase tracking-[0.3em] text-emerald-200">Social proof</p>
+              <h3 className="text-2xl font-bold text-white">Used by kingdoms across EU, NA, and APAC</h3>
               <p className="text-slate-300">
-                Neutraler Platzhalter für Logos und Referenzen. Ideal für Trust-Elemente in Sales-Gesprächen.
+                Neutral placeholder for logos and references. Ideal for trust elements in sales conversations.
               </p>
             </div>
             <div className="flex flex-wrap gap-3 text-xs text-slate-200">
-              {['Kingdom 123', 'Imperium 999', 'Coalition Alpha', 'Council Beta'].map(label => (
+              {['Kingdom 123', 'Empire 999', 'Coalition Alpha', 'Council Beta'].map(label => (
                 <span key={label} className="rounded-full border border-white/10 bg-white/5 px-3 py-2">
                   {label}
                 </span>
@@ -326,9 +325,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
 
         <section className="space-y-8">
           <SectionHeader
-            label="Preise"
-            title="Pläne ohne Risiko"
-            subtitle="Keine Zahlungsintegration eingebaut. Preisangaben sind Platzhalter und können im Vertrieb geklärt werden."
+            label="Pricing"
+            title="Plans without risk"
+            subtitle="No payment integration. Pricing placeholders can be handled during sales."
           />
           <div className="grid gap-6 md:grid-cols-3">
             {pricingPlans.map(plan => (
@@ -368,7 +367,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
         </section>
 
         <section className="space-y-6">
-          <SectionHeader label="FAQ" title="Die häufigsten Fragen" />
+          <SectionHeader label="FAQ" title="Most common questions" />
           <div className="grid gap-4 md:grid-cols-2">
             {faqs.map(item => (
               <div
@@ -385,13 +384,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
         <section className="overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-r from-slate-900 via-emerald-900/40 to-slate-900 p-8 shadow-2xl shadow-black/60">
           <div className="grid gap-8 lg:grid-cols-[1.4fr_0.8fr] items-center">
             <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.3em] text-emerald-200">Bereit?</p>
+              <p className="text-xs uppercase tracking-[0.3em] text-emerald-200">Ready?</p>
               <h3 className="text-3xl font-bold text-white leading-tight">
-                Starte mit der Demo, lade eure Daten hoch und aktiviere das Council in wenigen Minuten.
+                Start with the demo, upload your data, and activate the council in minutes.
               </h3>
               <p className="text-slate-300">
-                Keine Zahlungsintegration, keine versteckten Schritte. Du steuerst über lokale Tokens, bis deine eigene
-                Auth-Lösung steht.
+                No payment integration, no hidden steps. You control access with local tokens until your auth is ready.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -399,19 +397,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
                 onClick={onSeeDefault}
                 className="rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-900/40 transition hover:bg-emerald-400"
               >
-                Demo ansehen
+                View demo
               </button>
               <button
                 onClick={onStartShop}
                 className="rounded-xl border border-amber-400/60 bg-amber-400/10 px-5 py-3 text-sm font-semibold text-amber-100 transition hover:border-amber-300 hover:bg-amber-400/20"
               >
-                Jetzt starten
+                Get started
               </button>
               <button
                 onClick={() => window.open('mailto:contact@rise-of-stats.com', '_blank')}
                 className="rounded-xl border border-slate-700 px-5 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:text-white"
               >
-                Kontakt
+                Contact
               </button>
             </div>
           </div>
@@ -420,21 +418,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop, on
         <footer className="border-t border-white/5 pt-8 text-sm text-slate-300">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-base font-semibold text-white">Rise of Stats – KD Analytics</p>
-              <p className="text-slate-400">Daten, Rollen und Insights für Kingdom-Leads.</p>
+              <p className="text-base font-semibold text-white">Rise of Stats - KD Analytics</p>
+              <p className="text-slate-400">Data, roles, and insights for kingdom leads.</p>
             </div>
             <div className="flex flex-wrap gap-4">
-              <a className="text-slate-400 hover:text-white transition" href="#" aria-label="Impressum Platzhalter">
-                Impressum
+              <a className="text-slate-400 hover:text-white transition" href="#" aria-label="Imprint placeholder">
+                Imprint
               </a>
-              <a className="text-slate-400 hover:text-white transition" href="#" aria-label="Datenschutz Platzhalter">
-                Datenschutz
+              <a className="text-slate-400 hover:text-white transition" href="#" aria-label="Privacy placeholder">
+                Privacy
               </a>
               <button
                 onClick={onOpenLogin}
                 className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white transition hover:border-emerald-300/50 hover:text-emerald-100"
               >
-                Login öffnen
+                Open login
               </button>
             </div>
           </div>

@@ -73,7 +73,7 @@ const AdminUserManagement: React.FC = () => {
   const [editingKingdomId, setEditingKingdomId] = useState<string | null>(null);
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editSlug, setEditSlug] = useState('');
-  // 📝 NEU: State für Edit Kingdom Fehler
+  // 📝 NEU: State für Edit Kingdom Error
   const [editKingdomError, setEditKingdomError] = useState<string | null>(null);
 
   // 👑 NEU: R5 Assign State (Bestehend)
@@ -246,7 +246,7 @@ const AdminUserManagement: React.FC = () => {
     }
   };
   
-  // 📝 NEU: Helper, ob aktueller Benutzer Datei-/KVK-Rechte ändern darf
+  // 📝 NEU: Helper, ob aktueller User Datei-/KVK-Rechte ändern darf
   const canManageFileAccess = (targetUser: User) => {
     if (!currentUser) return false;
     if (currentUser.role === 'admin') {
@@ -615,7 +615,7 @@ const AdminUserManagement: React.FC = () => {
     }
   };
 
-  // 👑 NEU: R5 Zuweisung (auch für Owner Change)
+  // 👑 NEU: R5 Assignment (auch für Owner Change)
   const handleAssignR5 = async (e: React.FormEvent) => {
     e.preventDefault();
     setAssignR5Error(null);
@@ -653,7 +653,7 @@ const AdminUserManagement: React.FC = () => {
     }
   };
   
-  // 📝 NEU: R4 Zuweisung
+  // 📝 NEU: R4 Assignment
   const handleAssignR4 = async (e: React.FormEvent) => {
     e.preventDefault();
     setAssignR4Error(null);
@@ -718,7 +718,7 @@ const AdminUserManagement: React.FC = () => {
         const json = await res.json();
         if (!res.ok) {
             const msg = json.error || `Failed to set status to ${newStatus}.`;
-            // Bei Fehler: ursprünglichen Status wiederherstellen und Fehler anzeigen
+            // Bei Error: ursprünglichen Status wiederherstellen und Error anzeigen
             setKingdoms(currentKingdoms => currentKingdoms.map(k => k.id === kingdomId ? { ...k, status: currentStatus } : k));
             setKingdomError(msg); 
             throw new Error(msg);
@@ -756,13 +756,13 @@ const AdminUserManagement: React.FC = () => {
         const json = await res.json();
         if (!res.ok) {
             const msg = json.error || `Failed to delete kingdom ${kingdomName}.`;
-            // Bei Fehler: Kingdoms neu laden und Fehler anzeigen
+            // Bei Error: Kingdoms neu laden und Error anzeigen
             fetchKingdoms(); 
             setKingdomError(msg); 
             throw new Error(msg);
         }
         
-        // Benutzerliste neu laden, da Benutzer-Zuordnung zurückgesetzt wurde
+        // Userliste neu laden, da User-Zuordnung zurückgesetzt wurde
         fetchUsers(); 
 
         showSuccessMessage(`Kingdom ${kingdomName} successfully deleted.`);
@@ -771,7 +771,7 @@ const AdminUserManagement: React.FC = () => {
     }
   };
   
-  // 🆕 NEU: Funktion zum Kopieren des Registrierungslinks
+  // 🆕 NEU: Funktion zum Kopieren des Registrationslinks
   const handleCopyInviteLink = () => {
     if (inviteLink) {
       // Nutzt das native Clipboard API
@@ -803,7 +803,7 @@ const AdminUserManagement: React.FC = () => {
   const isSuperAdmin = currentUser?.role === 'admin';
   const canManageKingdoms = isSuperAdmin;
 
-  // 🚩 NEU: Bestimme, welche Rollen der aktuelle Benutzer vergeben darf
+  // 🚩 NEU: Bestimme, welche Roles der aktuelle User vergeben darf
   const allowedRoles = isSuperAdmin ? ['user', 'r4', 'r5'] : ['user', 'r4'];
   const canAssignR5 = isSuperAdmin || currentUser?.role === 'r5';
   
@@ -811,9 +811,9 @@ const AdminUserManagement: React.FC = () => {
   const showInviteLinkCard = canManageUsers && !!inviteLink && !isSuperAdmin;
   const showPublicLinkCard = canManageUsers && !!publicLink && !isSuperAdmin; // 📝 Public Link Card zeigen
   
-  // Filtere Benutzer, die bereits Admin oder R5 sind, um sie nicht erneut zuzuweisen
+  // Filtere User, die bereits Admin oder R5 sind, um sie nicht erneut zuzuweisen
   const assignableUsersR5 = users.filter(u => u.role !== 'admin' && u.role !== 'r5' && u.id !== currentUser?.id);
-  // Filtere Benutzer, die bereits Admin oder R4/R5 sind, um sie nicht erneut zuzuweisen (R4 zu R4 Zuweisung ist redundant)
+  // Filtere User, die bereits Admin oder R4/R5 sind, um sie nicht erneut zuzuweisen (R4 zu R4 Assignment ist redundant)
   const assignableUsersR4 = users.filter(u => u.role !== 'admin' && u.role !== 'r5' && u.role !== 'r4' && u.id !== currentUser?.id);
   
   // --- Hilfslogik für die Tabellenzellen ---
@@ -1017,7 +1017,7 @@ const AdminUserManagement: React.FC = () => {
                   const isAdminUser = user.role === 'admin';
                   const userKingdom = kingdoms.find(k => k.id === user.kingdomId);
 
-                  // R5/R4 darf keine Admin/Superadmin-Benutzer verwalten
+                  // R5/R4 darf keine Admin/Superadmin-User verwalten
                   const isManagementRestricted = isSelf || isAdminUser || (currentUser?.role === 'r5' && user.role === 'r5');
                   
                   const canManageRights = getCanManageRights(user);
@@ -1065,7 +1065,7 @@ const AdminUserManagement: React.FC = () => {
                           >
                             <option value="user">User</option>
                             <option value="r4">R4</option>
-                            {/* R5 kann Rolle selbst nur zuweisen, wenn Kingdom zugewiesen */}
+                            {/* R5 kann Role selbst nur zuweisen, wenn Kingdom zugewiesen */}
                             {canAssignR5 && <option value="r5">R5</option>} 
                           </select>
                         )}
@@ -1438,7 +1438,7 @@ const AdminUserManagement: React.FC = () => {
                           )}
                         </TableCell>
 
-                        {/* 🌐 NEU: Public Link Anzeige */}
+                        {/* 🌐 NEU: Public Link View */}
                         {isSuperAdmin && (
                           <TableCell align="left">
                               <a
@@ -1472,7 +1472,7 @@ const AdminUserManagement: React.FC = () => {
                             <>
                               {isEditing ? (
                                   <>
-                                    {/* 📝 NEU: Anzeige des Bearbeitungsfehlers */}
+                                    {/* 📝 NEU: View des Bearbeitungsfehlers */}
                                     {editKingdomError && (
                                         <p className="text-xs text-red-400 mb-1 p-1 rounded bg-red-900/30">
                                             {editKingdomError}

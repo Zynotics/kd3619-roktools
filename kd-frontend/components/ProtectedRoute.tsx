@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
   accessType?: 'overview' | 'honor' | 'analytics' | 'admin' | 'activity';
 }
 
-// Eine einfache Komponente für den Fall, dass die Freigabe aussteht
+// Eine einfache Komponente für den Fall, dass die Approval aussteht
 const ApprovalPending: React.FC = () => (
     <div className="text-center p-8 text-yellow-400 bg-gray-800 rounded-xl">
         <p className="text-xl font-bold mb-2">Approval Pending</p>
@@ -40,7 +40,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, accessType })
   // 2. Check for Dashboard Access based on Role/Feature Flags
   const role = user.role;
   
-  // 📝 R4, R5 und Admin erhalten pauschal Dashboard-Zugriff (Upload/Löschen/Vollansicht)
+  // 📝 R4, R5 und Admin erhalten pauschal Dashboard-Access (Upload/Löschen/Vollansicht)
   const hasGlobalDashboardAccess = role === 'admin' || role === 'r5' || role === 'r4'; 
 
   // --- Spezifische Prüfung für Admin Panel ---
@@ -55,9 +55,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, accessType })
     }
   }
 
-  // --- Dashboard Zugriffsprüfung ---
+  // --- Dashboard Accesssprüfung ---
   if (!hasGlobalDashboardAccess) {
-      // Nur für normale 'user' Rollen wird anhand der expliziten Flags geprüft
+      // Nur für normale 'user' Roles wird anhand der expliziten Flags geprüft
       if (accessType === 'overview' && !user.canAccessOverview) {
         return (
             <div className="text-center p-8 text-red-400 bg-gray-800 rounded-xl">
@@ -88,7 +88,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, accessType })
       }
   }
 
-  // Fallback, wenn der Benutzer ein normaler 'user' ist, aber keine Features freigeschaltet sind
+  // Fallback, wenn der User ein normaler 'user' ist, aber keine Features freigeschaltet sind
   if (role === 'user' && accessType !== 'admin' && 
       !user.canAccessOverview && 
       !user.canAccessHonor && 

@@ -297,7 +297,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
         </div>
       )}
 
-      {/* Daten-Anzeige */}
+      {/* Daten-View */}
       <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 min-h-[500px]">
         
         {/* Controls Toolbar */}

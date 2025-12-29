@@ -38,7 +38,7 @@ const HonorPlayerSearchResult: React.FC<HonorPlayerSearchResultProps> = ({ resul
         const ctx = chartRef.current.getContext('2d');
         if (!ctx) return;
         
-        // @ts-ignore - Ignoriere TS-Fehler für Chart-Initialisierung, falls Typen strikt sind
+        // @ts-ignore - Ignoriere TS-Error für Chart-Initialisierung, falls Typen strikt sind
         chartInstanceRef.current = new Chart(ctx, {
             type: 'line',
             data: chartData,

@@ -36,7 +36,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete, uploadUrl, ch
       }).then(async response => {
         if (!response.ok) {
           const errData = await response.json().catch(() => ({ message: 'Upload failed.' }));
-          // Spezifische Fehlermeldung für 401/403
+          // Spezifische Errormeldung für 401/403
           if (response.status === 401 || response.status === 403) {
               return Promise.reject(`Permission denied for file "${file.name}". Are you logged in?`);
           }
