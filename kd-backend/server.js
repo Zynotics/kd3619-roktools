@@ -924,11 +924,11 @@ app.post('/api/admin/r5-codes/activate', authenticateToken, requireAdmin, async 
         const userKingdom = await get('SELECT kingdom_id FROM users WHERE id = $1', [userId]);
         const targetKingdomId = kingdomId || userKingdom?.kingdom_id;
         if (!targetKingdomId) {
-            return res.status(400).json({ error: 'Benutzer hat kein Koenigreich.' });
+            return res.status(400).json({ error: 'User has no kingdom.' });
         }
 
         const kingdom = await get('SELECT id FROM kingdoms WHERE id = $1', [targetKingdomId]);
-        if (!kingdom) return res.status(404).json({ error: 'Koenigreich nicht gefunden' });
+        if (!kingdom) return res.status(404).json({ error: 'Kingdom not found' });
 
         if (assignOnly) {
             const assigned = await assignR5Code(code, userId, targetKingdomId);
@@ -1097,13 +1097,13 @@ app.post('/api/r5-codes/create-kingdom', authenticateToken, async (req, res) => 
     const { displayName, code } = req.body;
     const normalizedDisplayName = String(displayName || '').trim();
     if (!normalizedDisplayName) {
-      return res.status(400).json({ error: 'Display Name wird benötigt.' });
+      return res.status(400).json({ error: 'Display name is required.' });
     }
     if (normalizedDisplayName.length < 3 || normalizedDisplayName.length > 40) {
-      return res.status(400).json({ error: 'Display Name muss zwischen 3 und 40 Zeichen lang sein.' });
+      return res.status(400).json({ error: 'Display name must be between 3 and 40 characters.' });
     }
     if (!code || !String(code).trim()) {
-      return res.status(400).json({ error: 'Access Code wird benötigt.' });
+      return res.status(400).json({ error: 'Access code is required.' });
     }
     if (req.user.kingdomId) {
       return res.status(400).json({ error: 'Du bist bereits einem Königreich zugeordnet.' });
@@ -1114,25 +1114,25 @@ app.post('/api/r5-codes/create-kingdom', authenticateToken, async (req, res) => 
       [normalizedDisplayName.toLowerCase()]
     );
     if (existingName) {
-      return res.status(400).json({ error: 'Display Name ist bereits vergeben.' });
+      return res.status(400).json({ error: 'Display name is already taken.' });
     }
 
     let baseSlug = slugify(normalizedDisplayName);
     if (!baseSlug) {
-      return res.status(400).json({ error: 'Ungültiger Display Name für Slug-Erstellung.' });
+      return res.status(400).json({ error: 'Display name is invalid for slug generation.' });
     }
     if (baseSlug.length > 40) {
       baseSlug = baseSlug.slice(0, 40).replace(/-+$/g, '');
     }
 
     const targetCode = await getR5Code(String(code).trim().toUpperCase());
-    if (!targetCode) return res.status(404).json({ error: 'Code nicht gefunden.' });
-    if (targetCode.is_active) return res.status(400).json({ error: 'Code wurde bereits aktiviert.' });
+    if (!targetCode) return res.status(404).json({ error: 'Code not found.' });
+    if (targetCode.is_active) return res.status(400).json({ error: 'Code has already been activated.' });
     if (targetCode.used_by_user_id && targetCode.used_by_user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Code ist einem anderen Benutzer zugeordnet.' });
+      return res.status(403).json({ error: 'Code is assigned to another user.' });
     }
     if (Number(targetCode.duration_days) === 0) {
-      return res.status(403).json({ error: 'Lifetime Codes koennen nur vom Superadmin vergeben werden.' });
+      return res.status(403).json({ error: 'Lifetime codes can only be assigned by the superadmin.' });
     }
 
     const slug = await generateUniqueSlug(baseSlug);
@@ -1163,7 +1163,7 @@ app.post('/api/r5-codes/create-kingdom', authenticateToken, async (req, res) => 
         console.error('Cleanup failed for kingdom:', cleanupError);
       }
     }
-    return res.status(400).json({ error: error.message || 'Kingdom-Erstellung fehlgeschlagen' });
+    return res.status(400).json({ error: error.message || 'Kingdom creation failed.' });
   }
 });
 
