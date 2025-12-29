@@ -290,6 +290,8 @@ const AppContent: React.FC = () => {
   const redirectToLogin = () => {
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.set('login', 'true');
+    newUrl.searchParams.delete('register');
+    newUrl.searchParams.delete('slug');
     window.location.href = newUrl.toString();
   };
   const redirectToDefaultKingdom = () => {
