@@ -104,10 +104,11 @@ const AppContent: React.FC = () => {
     user && (isSuperAdmin || (!shouldForcePublicForForeignKingdom && (isR5 || isR4)));
   // User-Rolle soll dieselbe Ansicht wie der Public-Link sehen kÃ¶nnen
   const isUserPublicView = !!publicSlug && user?.role === 'user';
+  const isUnassignedUserPublicView = !!publicSlug && !!user && !user.kingdomId;
   const isPublicView = !!publicSlug && !user && !isRegisterInvite;
   const isRegistrationInviteView = !!publicSlug && !user && isRegisterInvite;
   const isAdminOverrideView = isSuperAdmin && !!publicSlug;
-  const effectivePublicView = isPublicView || isUserPublicView || shouldForcePublicForForeignKingdom;
+  const effectivePublicView = isPublicView || isUserPublicView || isUnassignedUserPublicView || shouldForcePublicForForeignKingdom;
   const isSuperAdminWithoutSlug = isSuperAdmin && !publicSlug;
   const hideStandardNavigation = isSuperAdminWithoutSlug;
   const hasAdminAccess = isAdmin && !shouldForcePublicForForeignKingdom;
