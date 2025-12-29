@@ -35,7 +35,7 @@ const LoginPrompt: React.FC = () => {
       const forceLogin = searchParams.get('login') === 'true';
       if (slug) {
           setInviteSlug(slug);
-          // Wenn Slug da ist, vermutlich eher Registrierung gewünscht – es sei denn, Login wird erzwungen
+          // Wenn Slug da ist, vermutlich eher Registration gewünscht – es sei denn, Login wird erzwungen
           setIsLogin(forceLogin ? true : false);
           return;
       }
@@ -70,7 +70,7 @@ const LoginPrompt: React.FC = () => {
         throw new Error(data.error || 'Server error during ID validation');
       }
 
-      // Wenn isTaken true ist, ist die ID bereits vergeben -> Fehler
+      // Wenn isTaken true ist, ist die ID bereits vergeben -> Error
       if (data.isTaken) {
         setGovIdStatus('invalid');
         setGovIdMessage('This Governor ID is already registered by another user.');
@@ -109,13 +109,13 @@ const LoginPrompt: React.FC = () => {
         const result = await register(email, username, password, governorId, inviteSlug);
         setSuccessMessage(result.message);
         
-        // 2. Auto-Login nach erfolgreicher Registrierung
+        // 2. Auto-Login nach erfolgreicher Registration
         await login(username, password);
 
-        // 3. 📝 NEU: User-Status nach Registrierung/Login erneut abrufen, um sofortige Freigabe durch Admin zu berücksichtigen.
+        // 3. 📝 NEU: User-Status nach Registration/Login erneut abrufen, um sofortige Approval durch Admin zu berücksichtigen.
         await refreshUser();
         
-        // 4. 📝 NEU: Bei Registrierung über Einladungslink zur Kingdom-Seite weiterleiten
+        // 4. 📝 NEU: Bei Registration über Invite link zur Kingdom-Seite weiterleiten
         if (inviteSlug) {
              const targetUrl = `/?slug=${inviteSlug}`;
              window.location.href = targetUrl;
@@ -152,7 +152,7 @@ const LoginPrompt: React.FC = () => {
         {isLogin ? 'Sign in to your KD' : 'Register New Account'}
       </h2>
       
-      {/* 🆕 Invite Hinweis */}
+      {/* 🆕 Invite Note */}
       {!isLogin && inviteSlug && (
           <div className="mb-6 p-3 bg-blue-900/30 border border-blue-700 rounded text-center">
               <p className="text-sm text-blue-300 mb-1">INVITED TO KINGDOM:</p>

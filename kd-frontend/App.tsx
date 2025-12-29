@@ -185,7 +185,7 @@ const AppContent: React.FC = () => {
             view="kingdoms-overview"
             currentActiveView={activeView}
             setActiveView={setActiveView}
-            label="Königreiche"
+            label="Kingdoms"
             icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.326 0 2.402-1.105 2.402-2.468S13.326 6.064 12 6.064s-2.402 1.105-2.402 2.468S10.674 11 12 11z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.732 19.5a6.27 6.27 0 0112.536 0M4.5 7.5h15M4.5 12h15" /></svg>}
             onNavigate={onNavigate}
           />
@@ -518,7 +518,7 @@ const AppContent: React.FC = () => {
              <button
                onClick={() => setIsMobileNavOpen(true)}
                className="text-gray-300 hover:text-white focus:outline-none"
-               aria-label="Hauptmenü öffnen"
+               aria-label="Open main menu"
                aria-expanded={isMobileNavOpen}
              >
                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -558,7 +558,7 @@ const AppContent: React.FC = () => {
                 <button
                   onClick={() => setIsMobileNavOpen(false)}
                   className="text-gray-400 hover:text-white"
-                  aria-label="Menü schließen"
+                  aria-label="Close menu"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>

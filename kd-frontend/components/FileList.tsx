@@ -9,7 +9,7 @@ interface FileListProps {
 
 /**
  * Zeigt eine Liste der hochgeladenen Dateien.
- * - Wird NUR im Dashboard gerendert, wenn die Rolle das darf (R4/R5/Admin).
+ * - Wird NUR im Dashboard gerendert, wenn die Role das darf (R4/R5/Admin).
  * - Drag & Drop Reorder funktioniert, wenn `onReorder` übergeben wird.
  * - Löschen funktioniert, wenn `onDeleteFile` übergeben wird.
  */

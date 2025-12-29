@@ -4,7 +4,7 @@ const { Pool } = require('pg');
 
 // Warnung, falls keine DB-URL gesetzt ist (für lokale Tests ohne Env)
 if (!process.env.DATABASE_URL) {
-  console.warn('⚠️  WARNUNG: DATABASE_URL ist nicht gesetzt. DB-Operationen werden fehlschlagen.');
+  console.warn('WARNING: DATABASE_URL is not set. DB operations will fail.');
 }
 
 const pool = new Pool({
@@ -121,9 +121,9 @@ async function getR5Code(code) {
 
 async function activateR5Code(code, userId, kingdomId) {
   const existing = await getR5Code(code);
-  if (!existing) throw new Error('Code nicht gefunden.');
+  if (!existing) throw new Error('Code not found.');
   if (existing.used_by_user_id && existing.used_by_user_id !== userId) {
-    throw new Error('Code ist einem anderen Benutzer zugeordnet.');
+    throw new Error('Code is assigned to another user.');
   }
   if (existing.is_active) throw new Error('Code wurde bereits aktiviert.');
 
@@ -155,7 +155,7 @@ async function activateR5Code(code, userId, kingdomId) {
     [userId, kingdomId, expiresAt, code]
   );
 
-  if (res.rowCount === 0) throw new Error('Aktivierung fehlgeschlagen.');
+  if (res.rowCount === 0) throw new Error('Activation failed.');
   return res.rows[0];
 }
 
@@ -175,16 +175,16 @@ async function getActiveR5Access(userId) {
 
 async function assignR5Code(code, userId, kingdomId) {
   const existing = await getR5Code(code);
-  if (!existing) throw new Error('Code nicht gefunden.');
+  if (!existing) throw new Error('Code not found.');
   if (existing.is_active) throw new Error('Code wurde bereits aktiviert.');
   if (existing.used_by_user_id && existing.used_by_user_id !== userId) {
-    throw new Error('Code ist einem anderen Benutzer zugeordnet.');
+    throw new Error('Code is assigned to another user.');
   }
   const res = await query(
     `UPDATE r5_codes SET used_by_user_id = $1, kingdom_id = $2 WHERE code = $3 RETURNING code, duration_days, created_at, used_by_user_id, kingdom_id, activated_at, expires_at, is_active`,
     [userId, kingdomId || existing.kingdom_id, code]
   );
-  if (res.rowCount === 0) throw new Error('Zuweisung fehlgeschlagen.');
+  if (res.rowCount === 0) throw new Error('Assignment failed.');
   return res.rows[0];
 }
 
@@ -207,7 +207,7 @@ async function deactivateR5Code(code, { clearAssignment = true } = {}) {
     [code]
   );
 
-  if (res.rowCount === 0) throw new Error('Deaktivierung fehlgeschlagen.');
+  if (res.rowCount === 0) throw new Error('Deactivation failed.');
   return res.rows[0];
 }
 
@@ -224,9 +224,9 @@ async function initAppSettingsTable() {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    console.log("✅ Postgres: app_settings Tabelle geprüft/aktualisiert.");
+    console.log('Postgres: app_settings table checked/updated.');
   } catch (e) {
-    console.error("❌ Fehler beim Initialisieren der app_settings Tabelle:", e.message);
+    console.error("Error initializing app_settings table:", e.message);
   }
 }
 
@@ -312,9 +312,9 @@ async function initKvkTable() {
       END$$;
     `);
 
-    console.log("✅ Postgres: kvk_events Tabelle geprüft/aktualisiert.");
+    console.log('Postgres: kvk_events table checked/updated.');
   } catch (e) {
-    console.error("⚠️  Fehler beim Initialisieren der kvk_events Tabelle:", e.message);
+    console.error("Error initializing kvk_events table:", e.message);
   }
 }
 
@@ -332,9 +332,9 @@ async function initR5CodesTable() {
         is_active BOOLEAN DEFAULT FALSE
       )
     `);
-    console.log("✅ Postgres: r5_codes Tabelle geprüft/aktualisiert.");
+    console.log('Postgres: r5_codes table checked/updated.');
   } catch (e) {
-    console.error("⚠️  Fehler beim Initialisieren der r5_codes Tabelle:", e.message);
+    console.error("Error initializing r5_codes table:", e.message);
   }
 }
 
@@ -379,9 +379,9 @@ async function initUsersColumns() {
         END IF;
       END$$;
     `);
-    console.log("ƒo. Postgres: users Spalten geprÇ¬ft/aktualisiert.");
+    console.log('Postgres: users columns checked/updated.');
   } catch (e) {
-    console.error("ƒ?O Fehler beim Initialisieren der users Spalten:", e.message);
+    console.error("Error initializing users columns:", e.message);
   }
 }
 

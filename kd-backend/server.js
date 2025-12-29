@@ -209,7 +209,7 @@ async function generateUniqueSlug(base) {
 
 // Prüft, ob übergebene Datei-IDs zum angegebenen Königreich gehören
 async function ensureFilesBelongToKingdom(fileIds = [], kingdomId) {
-  if (!kingdomId) throw new Error('Kein Königreich angegeben');
+  if (!kingdomId) throw new Error('No kingdom specified');
 
   for (const fileId of fileIds.filter(Boolean)) {
     const table = fileId.startsWith('ov-')
@@ -220,12 +220,12 @@ async function ensureFilesBelongToKingdom(fileIds = [], kingdomId) {
           ? 'activity_files'
           : null;
 
-    if (!table) throw new Error(`Unbekannter Dateityp für ${fileId}`);
+    if (!table) throw new Error(`Unknown file type for ${fileId}`);
 
     const record = await get(`SELECT kingdom_id FROM ${table} WHERE id = $1`, [fileId]);
-    if (!record) throw new Error(`Datei ${fileId} wurde nicht gefunden.`);
+    if (!record) throw new Error(`File ${fileId} was not found.`);
     if (record.kingdom_id !== kingdomId) {
-      throw new Error(`Datei ${fileId} gehört nicht zu diesem Königreich.`);
+      throw new Error(`File ${fileId} does not belong to this kingdom.`);
     }
   }
 }
@@ -237,11 +237,11 @@ async function resolveKingdomIdFromRequest(req, { allowDefaultForAdmin = false }
 
   if (req.query && req.query.slug) {
     const k = await findKingdomBySlug(req.query.slug);
-    if (!k) throw new Error('Ungültiger Kingdom-Slug');
+    if (!k) throw new Error('Invalid kingdom slug');
 
-    // Nur Admins dürfen beliebige Slugs ansteuern. R4/R5 müssen im eigenen Kingdom bleiben.
+    // Only admins can access any slug. R4/R5 must stay in their own kingdom.
     if (role !== 'admin' && kingdomId && kingdomId !== k.id) {
-      throw new Error('Kein Zugriff auf dieses Königreich. Bitte die öffentliche Ansicht verwenden.');
+      throw new Error('No access to this kingdom. Please use the public view.');
     }
 
     targetKingdomId = k.id;
@@ -252,7 +252,7 @@ async function resolveKingdomIdFromRequest(req, { allowDefaultForAdmin = false }
   }
 
   if (!targetKingdomId) {
-    throw new Error('Kein Kingdom-Kontext gefunden');
+    throw new Error('No kingdom context found');
   }
 
   return targetKingdomId;
@@ -276,7 +276,7 @@ const overviewUpload = multer({
   storage: overviewStorage,
   fileFilter: (req, file, cb) => {
     if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
-    else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
+    else cb(new Error('Only Excel and CSV files are allowed'), false);
   },
   limits: { fileSize: 50 * 1024 * 1024 }, // Erhöht
 });
@@ -284,7 +284,7 @@ const honorUpload = multer({
   storage: honorStorage,
   fileFilter: (req, file, cb) => {
     if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
-    else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
+    else cb(new Error('Only Excel and CSV files are allowed'), false);
   },
   limits: { fileSize: 50 * 1024 * 1024 },
 });
@@ -292,7 +292,7 @@ const activityUpload = multer({
   storage: activityStorage,
   fileFilter: (req, file, cb) => {
     if (['.xlsx', '.xls', '.csv'].includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
-    else cb(new Error('Nur Excel und CSV Dateien sind erlaubt'), false);
+    else cb(new Error('Only Excel and CSV files are allowed'), false);
   },
   limits: { fileSize: 50 * 1024 * 1024 },
 });
@@ -308,13 +308,13 @@ function authenticateToken(req, res, next) {
   const header = req.headers['authorization'];
   const token = header && header.split(' ')[1];
 
-  if (!token) return res.status(401).json({ error: 'Kein Token vorhanden' });
+  if (!token) return res.status(401).json({ error: 'No token provided' });
 
   jwt.verify(token, JWT_SECRET, async (err, user) => {
-    if (err) return res.status(403).json({ error: 'Ungültiger Token' });
+    if (err) return res.status(403).json({ error: 'Invalid token' });
     
     const dbUser = await get('SELECT role, kingdom_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager FROM users WHERE id = $1', [user.id]);
-    if (!dbUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    if (!dbUser) return res.status(404).json({ error: 'User not found' });
 
     let activeR5Access = null;
     if (dbUser.role === 'r5') {
@@ -367,51 +367,51 @@ function isActiveR5(req) {
 }
 
 function ensureActiveR5OrDeny(res) {
-  return res.status(403).json({ error: 'R5 Zugang abgelaufen oder nicht freigeschaltet.' });
+  return res.status(403).json({ error: 'R5 access expired or not activated.' });
 }
 
 function requireReadAccess(req, res, next) {
-    if (!req.user) return res.status(401).json({ error: 'Nicht authentifiziert' });
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
     const role = req.user.role;
     if (role !== 'admin' && role !== 'r5' && role !== 'r4') {
-        return res.status(403).json({ error: 'Admin, R5 oder R4 Rechte erforderlich' });
+        return res.status(403).json({ error: 'Admin, R5 or R4 rights required' });
     }
     if (role === 'r5' && !isActiveR5(req)) {
         return ensureActiveR5OrDeny(res);
     }
     if ((role === 'r5' || role === 'r4') && !req.user.kingdomId) {
-        return res.status(403).json({ error: `${role.toUpperCase()}-Benutzer ist keinem Königreich zugewiesen.` });
+        return res.status(403).json({ error: `${role.toUpperCase()} user is not assigned to a kingdom.` });
     }
     next();
 }
 
 async function requireAdmin(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: 'Nicht authentifiziert' });
+  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
   const role = req.user.role;
-  if (role !== 'admin' && role !== 'r5') return res.status(403).json({ error: 'Admin oder R5 Rechte erforderlich' });
+  if (role !== 'admin' && role !== 'r5') return res.status(403).json({ error: 'Admin or R5 rights required' });
   if (role === 'r5' && !isActiveR5(req)) return ensureActiveR5OrDeny(res);
-  if (role === 'r5' && !req.user.kingdomId) return res.status(403).json({ error: 'R5-Benutzer ist keinem Königreich zugewiesen.' });
+  if (role === 'r5' && !req.user.kingdomId) return res.status(403).json({ error: 'R5 user is not assigned to a kingdom.' });
   next();
 }
 
 function requireKvkManager(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: 'Nicht authentifiziert' });
+  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
   const { role, kingdomId, canAccessKvkManager } = req.user;
 
   if (role === 'admin') return next();
 
   if (role === 'r5') {
     if (!isActiveR5(req)) return ensureActiveR5OrDeny(res);
-    if (!kingdomId) return res.status(403).json({ error: 'R5-Benutzer ist keinem Königreich zugewiesen.' });
+    if (!kingdomId) return res.status(403).json({ error: 'R5 user is not assigned to a kingdom.' });
     return next();
   }
 
   if (role === 'r4' && canAccessKvkManager) {
-    if (!kingdomId) return res.status(403).json({ error: 'R4-Benutzer ist keinem Königreich zugewiesen.' });
+    if (!kingdomId) return res.status(403).json({ error: 'R4 user is not assigned to a kingdom.' });
     return next();
   }
 
-  return res.status(403).json({ error: 'Admin, R5 oder KvK Manager Rechte erforderlich' });
+  return res.status(403).json({ error: 'Admin, R5 or KvK Manager rights required' });
 }
 
 function hasFileManagementAccess(req, type) {
@@ -445,7 +445,7 @@ app.post('/api/auth/check-gov-id', async (req, res) => {
   try {
     const { governorId } = req.body;
     if (!governorId || !String(governorId).trim()) {
-      return res.status(400).json({ exists: false, error: 'Gov ID wird benötigt' });
+      return res.status(400).json({ exists: false, error: 'Gov ID is required' });
     }
     const isTaken = await userGovIdExists(governorId);
     res.json({ isTaken });
@@ -460,20 +460,20 @@ app.post('/api/auth/register', async (req, res) => {
     const { email, username, password, governorId, slug } = req.body;
 
     if (!email || !username || !password || !governorId) {
-      return res.status(400).json({ error: 'Alle Felder werden benötigt' });
+      return res.status(400).json({ error: 'All fields are required' });
     }
     if (password.length < 6) {
-      return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
     }
     const normalizedGovId = String(governorId).trim();
 
     if (await userGovIdExists(normalizedGovId)) {
-      return res.status(400).json({ error: 'Für diese Gov ID existiert bereits ein Account.' });
+      return res.status(400).json({ error: 'An account already exists for this Gov ID.' });
     }
 
     const existingUser = await get('SELECT id FROM users WHERE email = $1 OR username = $2 LIMIT 1', [email, username]);
     if (existingUser) {
-      return res.status(400).json({ error: 'Email oder Benutzername ist bereits vergeben' });
+      return res.status(400).json({ error: 'Email or username is already taken' });
     }
 
     let assignedKingdomId = null;
@@ -493,7 +493,7 @@ app.post('/api/auth/register', async (req, res) => {
     );
 
     return res.json({
-      message: 'Registrierung erfolgreich.',
+      message: 'Registration successful.',
       user: { 
           id: userId, 
           email, 
@@ -511,21 +511,21 @@ app.post('/api/auth/register', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error during registration:', error);
-    return res.status(500).json({ error: 'Registrierung fehlgeschlagen' });
+    return res.status(500).json({ error: 'Registration failed' });
   }
 });
 
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Benutzername und Passwort benötigt' });
+    if (!username || !password) return res.status(400).json({ error: 'Username and password are required' });
 
     const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager FROM users WHERE username = $1', [username]);
-    if (!user) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
     const activeR5Access = user.role === 'r5' ? await getActiveR5Access(user.id) : null;
     const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+    if (!validPassword) return res.status(401).json({ error: 'Invalid credentials' });
 
     const tokenPayload = {
       id: user.id,
@@ -553,14 +553,14 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Login fehlgeschlagen' });
+    res.status(500).json({ error: 'Login failed' });
   }
 });
 
 app.get('/api/auth/validate', authenticateToken, async (req, res) => {
   try {
     const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager FROM users WHERE id = $1', [req.user.id]);
-    if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
     const activeR5Access = user.role === 'r5' ? await getActiveR5Access(user.id) : null;
 
@@ -584,7 +584,7 @@ app.get('/api/auth/validate', authenticateToken, async (req, res) => {
       r5AccessExpiresAt: activeR5Access ? activeR5Access.expires_at : null
     });
   } catch (err) {
-    res.status(500).json({ error: 'Token-Validierung fehlgeschlagen' });
+    res.status(500).json({ error: 'Token validation failed' });
   }
 });
 
@@ -639,7 +639,7 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
         canAccessKvkManager: !!user.can_access_kvk_manager
     })));
   } catch (error) {
-    res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
+    res.status(500).json({ error: 'Failed to load users' });
   }
 });
 
@@ -648,18 +648,18 @@ app.post('/api/admin/users/approve', authenticateToken, requireAdmin, async (req
     const { userId, approved } = req.body;
     const currentUserKingdomId = getKingdomId(req);
 
-    if (!userId || typeof approved !== 'boolean') return res.status(400).json({ error: 'Ungültige Eingabe' });
+    if (!userId || typeof approved !== 'boolean') return res.status(400).json({ error: 'Invalid input' });
     
     if (currentUserKingdomId) {
         const target = await get('SELECT kingdom_id, role FROM users WHERE id = $1', [userId]);
-        if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Zugriff verweigert' });
-        if (target.role === 'admin') return res.status(403).json({ error: 'Kein Zugriff auf Admin' });
+        if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Access denied' });
+        if (target.role === 'admin') return res.status(403).json({ error: 'No access to admin' });
     }
 
     await query('UPDATE users SET is_approved = $1 WHERE id = $2', [approved, userId]);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Interner Server Fehler' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -670,7 +670,7 @@ app.post('/api/admin/users/access', authenticateToken, requireAdmin, async (req,
       
       if (currentUserKingdomId) {
         const target = await get('SELECT kingdom_id, role FROM users WHERE id = $1', [userId]);
-        if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Zugriff verweigert' });
+        if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Access denied' });
       }
       
       await query(`UPDATE users SET can_access_honor=$1, can_access_analytics=$2, can_access_overview=$3 WHERE id=$4`, [!!canAccessHonor, !!canAccessAnalytics, !!canAccessOverview, userId]);
@@ -683,17 +683,17 @@ app.post('/api/admin/users/access-files', authenticateToken, requireAdmin, async
       const { userId, canManageActivityFiles, canManageAnalyticsFiles, canAccessKvkManager } = req.body;
       const currentUserKingdomId = getKingdomId(req);
 
-      if (!userId) return res.status(400).json({ error: 'Benutzer ID wird benötigt' });
+      if (!userId) return res.status(400).json({ error: 'User ID is required' });
 
       const targetUser = await get('SELECT role, kingdom_id FROM users WHERE id = $1', [userId]);
-      if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+      if (!targetUser) return res.status(404).json({ error: 'User not found' });
       if (targetUser.role === 'admin' || userId === req.user.id) {
-          return res.status(403).json({ error: 'Kein Zugriff, um diese Benutzerrechte zu ändern.' });
+          return res.status(403).json({ error: 'No access to change these user rights.' });
       }
 
       if (currentUserKingdomId) {
         if (!targetUser.kingdom_id || targetUser.kingdom_id !== currentUserKingdomId) {
-          return res.status(403).json({ error: 'Zugriff verweigert' });
+          return res.status(403).json({ error: 'Access denied' });
         }
       }
 
@@ -719,23 +719,23 @@ app.post('/api/admin/users/role', authenticateToken, requireAdmin, async (req, r
       const currentUserKingdomId = getKingdomId(req);
 
       if (currentUserRole === 'r5' && !['user', 'r4', 'r5'].includes(role)) {
-          return res.status(403).json({ error: 'R5 darf nur user/r4/r5 vergeben.' });
+          return res.status(403).json({ error: 'R5 can only assign user/r4/r5.' });
       }
 
       if (currentUserKingdomId) {
           const target = await get('SELECT kingdom_id, role FROM users WHERE id = $1', [userId]);
-          if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Zugriff verweigert' });
-          if (currentUserRole === 'r5' && target.role === 'admin') return res.status(403).json({ error: 'Kein Zugriff auf Admin.' });
+          if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Access denied' });
+          if (currentUserRole === 'r5' && target.role === 'admin') return res.status(403).json({ error: 'No access to admin.' });
       }
 
       if (role === 'r5') {
           if (currentUserRole !== 'admin') return res.status(403).json({ error: 'R5 roles can only be assigned by the superadmin.' });
 
           const targetK = requestedKingdomId || currentUserKingdomId || (await get('SELECT kingdom_id FROM users WHERE id = $1', [userId]))?.kingdom_id;
-          if (!targetK) return res.status(400).json({ error: 'Königreich für R5 wird benötigt.' });
+          if (!targetK) return res.status(400).json({ error: 'A kingdom is required for R5.' });
 
           const kingdom = await get('SELECT id FROM kingdoms WHERE id = $1', [targetK]);
-          if (!kingdom) return res.status(404).json({ error: 'Königreich nicht gefunden' });
+          if (!kingdom) return res.status(404).json({ error: 'Kingdom not found' });
 
           if (accessCode) {
               const activation = await activateR5Code(accessCode, userId, targetK);
@@ -772,8 +772,8 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
 
         if (currentUserKingdomId) {
             const target = await get('SELECT kingdom_id, role FROM users WHERE id = $1', [userId]);
-            if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Zugriff verweigert' });
-            if (req.user.role === 'r5' && (target.role === 'r5' || target.role === 'admin')) return res.status(403).json({ error: 'Kein Zugriff' });
+            if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Access denied' });
+            if (req.user.role === 'r5' && (target.role === 'r5' || target.role === 'admin')) return res.status(403).json({ error: 'No access' });
         }
         if (currentUserRole === 'admin') {
             await query('DELETE FROM users WHERE id = $1', [userId]);
@@ -782,8 +782,8 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
 
         if (currentUserRole === 'r5') {
             const target = await get('SELECT kingdom_id, role FROM users WHERE id = $1', [userId]);
-            if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Zugriff verweigert' });
-            if (target.role === 'r5' || target.role === 'admin') return res.status(403).json({ error: 'Kein Zugriff' });
+            if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Access denied' });
+            if (target.role === 'r5' || target.role === 'admin') return res.status(403).json({ error: 'No access' });
             await query(
                 'UPDATE users SET role = $1, kingdom_id = NULL, is_approved = FALSE, can_access_honor = FALSE, can_access_analytics = FALSE, can_access_overview = FALSE, can_manage_overview_files = FALSE, can_manage_honor_files = FALSE, can_manage_activity_files = FALSE, can_manage_analytics_files = FALSE, can_access_kvk_manager = FALSE WHERE id = $2',
                 ['user', userId]
@@ -791,33 +791,33 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
             return res.json({ success: true, removedFromKingdom: true });
         }
 
-        res.status(403).json({ error: 'Kein Zugriff' });
+        res.status(403).json({ error: 'No access' });
     } catch(e) { res.status(500).json({error: 'Error'}); }
 });
 
 app.post('/api/admin/users/assign-r4', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
 
     try {
         const { userId, kingdomId } = req.body;
         
         if (!userId || !kingdomId) {
-            return res.status(400).json({ error: 'Benutzer ID und Königreich ID sind erforderlich.' });
+            return res.status(400).json({ error: 'User ID and kingdom ID are required.' });
         }
         
         const targetUser = await get('SELECT role FROM users WHERE id = $1', [userId]);
-        if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        if (!targetUser) return res.status(404).json({ error: 'User not found' });
         if (targetUser.role === 'admin' || targetUser.role === 'r5') {
-             return res.status(403).json({ error: 'Kann Admin/R5 Rollen nicht über diesen Endpoint zuweisen.' });
+             return res.status(403).json({ error: 'Cannot assign Admin/R5 roles via this endpoint.' });
         }
         
         await query('UPDATE users SET role = $1, kingdom_id = $2, is_approved = true, can_manage_overview_files = false, can_manage_honor_files = false, can_manage_activity_files = false WHERE id = $3', ['r4', kingdomId, userId]);
         
-        return res.json({ success: true, message: `Benutzer ${userId} wurde Rolle R4 und Königreich ${kingdomId} zugewiesen.` });
+        return res.json({ success: true, message: `User ${userId} was assigned role R4 and kingdom ${kingdomId}.` });
         
     } catch (error) {
         console.error('❌ Error during assign-r4:', error);
-        return res.status(500).json({ error: 'R4 Zuweisung fehlgeschlagen' });
+        return res.status(500).json({ error: 'R4 assignment failed' });
     }
 });
 
@@ -830,7 +830,7 @@ app.get('/api/shop-visibility', async (req, res) => {
         res.json({ enabled });
     } catch (error) {
         console.error('Error loading shop visibility:', error);
-        res.status(500).json({ error: 'Fehler beim Laden der Shop-Einstellung' });
+        res.status(500).json({ error: 'Failed to load shop settings' });
     }
 });
 
@@ -840,38 +840,38 @@ app.get('/api/r5-shop-visibility', authenticateToken, requireAdmin, async (req, 
         res.json({ enabled });
     } catch (error) {
         console.error('Error loading R5 shop visibility:', error);
-        res.status(500).json({ error: 'Fehler beim Laden der Shop-Einstellung' });
+        res.status(500).json({ error: 'Failed to load shop settings' });
     }
 });
 
 app.get('/api/admin/r5-shop-visibility', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
     try {
         const enabled = await getR5ShopVisibilitySetting();
         res.json({ enabled });
     } catch (error) {
         console.error('Error loading R5 shop visibility:', error);
-        res.status(500).json({ error: 'Fehler beim Laden der Shop-Einstellung' });
+        res.status(500).json({ error: 'Failed to load shop settings' });
     }
 });
 
 app.put('/api/admin/r5-shop-visibility', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
     try {
         const { enabled } = req.body;
         if (typeof enabled !== 'boolean') {
-            return res.status(400).json({ error: 'enabled muss boolean sein' });
+            return res.status(400).json({ error: 'enabled must be boolean' });
         }
         await setR5ShopVisibilitySetting(enabled);
         res.json({ success: true, enabled });
     } catch (error) {
         console.error('Error saving R5 shop visibility:', error);
-        res.status(500).json({ error: 'Fehler beim Speichern der Shop-Einstellung' });
+        res.status(500).json({ error: 'Failed to save shop settings' });
     }
 });
 
 app.get('/api/admin/r5-codes', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
     try {
         const codes = await getR5Codes();
         res.json(codes.map(c => ({
@@ -886,16 +886,16 @@ app.get('/api/admin/r5-codes', authenticateToken, requireAdmin, async (req, res)
         })));
     } catch (error) {
         console.error('Error loading R5 codes:', error);
-        res.status(500).json({ error: 'Fehler beim Laden der R5 Codes' });
+        res.status(500).json({ error: 'Failed to load R5 codes' });
     }
 });
 
 app.post('/api/admin/r5-codes', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
     try {
         const { durationDays } = req.body;
         if (!R5_CODE_DURATIONS.includes(Number(durationDays))) {
-            return res.status(400).json({ error: `Ungültige Laufzeit. Erlaubt sind ${R5_CODE_DURATIONS.join(', ')} Tage.` });
+            return res.status(400).json({ error: `Invalid duration. Allowed values are ${R5_CODE_DURATIONS.join(', ')} days.` });
         }
         const code = uuidv4().replace(/-/g, '').slice(0, 16).toUpperCase();
         const created = await generateR5Code(Number(durationDays), code);
@@ -906,20 +906,20 @@ app.post('/api/admin/r5-codes', authenticateToken, requireAdmin, async (req, res
         });
     } catch (error) {
         console.error('Error creating R5 code:', error);
-        res.status(500).json({ error: 'R5 Code konnte nicht erstellt werden' });
+        res.status(500).json({ error: 'R5 code could not be created' });
     }
 });
 
 app.post('/api/admin/r5-codes/activate', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
     try {
         const { code, userId, kingdomId, assignOnly } = req.body;
         if (!code || !userId) {
-            return res.status(400).json({ error: 'Code und Benutzer werden benoetigt.' });
+            return res.status(400).json({ error: 'Code and user are required.' });
         }
 
         const user = await get('SELECT id FROM users WHERE id = $1', [userId]);
-        if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        if (!user) return res.status(404).json({ error: 'User not found' });
 
         const userKingdom = await get('SELECT kingdom_id FROM users WHERE id = $1', [userId]);
         const targetKingdomId = kingdomId || userKingdom?.kingdom_id;
@@ -953,17 +953,17 @@ app.post('/api/admin/r5-codes/activate', authenticateToken, requireAdmin, async 
         });
     } catch (error) {
         console.error('Error activating R5 code:', error);
-        res.status(400).json({ error: error.message || 'Aktivierung fehlgeschlagen' });
+        res.status(400).json({ error: error.message || 'Activation failed' });
     }
 });
 
 // Admin: Code deaktivieren oder Zuweisung entfernen
 app.post('/api/admin/r5-codes/:code/deactivate', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
     try {
         const code = req.params.code;
         const existing = await getR5Code(code);
-        if (!existing) return res.status(404).json({ error: 'Code nicht gefunden' });
+        if (!existing) return res.status(404).json({ error: 'Code not found' });
 
         const cleared = await deactivateR5Code(code, { clearAssignment: true });
         return res.json({
@@ -979,17 +979,17 @@ app.post('/api/admin/r5-codes/:code/deactivate', authenticateToken, requireAdmin
         });
     } catch (error) {
         console.error('Error deactivating R5 code:', error);
-        res.status(500).json({ error: 'Code konnte nicht deaktiviert werden' });
+        res.status(500).json({ error: 'Code could not be deactivated' });
     }
 });
 
 // Admin: Code löschen (auch wenn zugewiesen/aktiviert)
 app.delete('/api/admin/r5-codes/:code', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
     try {
         const code = req.params.code;
         const existing = await getR5Code(code);
-        if (!existing) return res.status(404).json({ error: 'Code nicht gefunden' });
+        if (!existing) return res.status(404).json({ error: 'Code not found' });
 
         if (existing.used_by_user_id || existing.is_active) {
             await deactivateR5Code(code, { clearAssignment: true });
@@ -998,7 +998,7 @@ app.delete('/api/admin/r5-codes/:code', authenticateToken, requireAdmin, async (
         res.json({ success: true });
     } catch (error) {
         console.error('Error deleting R5 code:', error);
-        res.status(500).json({ error: 'Code konnte nicht gelöscht werden' });
+        res.status(500).json({ error: 'Code could not be deleted' });
     }
 });
 
@@ -1026,7 +1026,7 @@ app.get('/api/r5-codes/my', authenticateToken, async (req, res) => {
     );
   } catch (error) {
     console.error('Error loading own R5 codes:', error);
-    return res.status(500).json({ error: 'Fehler beim Laden deiner R5 Codes' });
+    return res.status(500).json({ error: 'Failed to load your R5 codes' });
   }
 });
 
@@ -1047,7 +1047,7 @@ app.post('/api/r5-codes/activate-self', authenticateToken, async (req, res) => {
 
     const targetCode = await getR5Code(code);
     if (targetCode && Number(targetCode.duration_days) === 0) {
-      return res.status(403).json({ error: 'Lifetime Codes koennen nur vom Superadmin vergeben werden.' });
+      return res.status(403).json({ error: 'Lifetime codes can only be assigned by the superadmin.' });
     }
 
     const activation = await activateR5Code(code, req.user.id, targetKingdomId);
@@ -1062,7 +1062,7 @@ app.post('/api/r5-codes/activate-self', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error self-activating R5 code:', error);
-    return res.status(400).json({ error: error.message || 'Aktivierung fehlgeschlagen' });
+    return res.status(400).json({ error: error.message || 'Activation failed' });
   }
 });
 
@@ -1086,7 +1086,7 @@ app.get('/api/me/kingdom', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error loading own kingdom:', error);
-    return res.status(500).json({ error: 'Fehler beim Laden des Königreichs' });
+    return res.status(500).json({ error: 'Failed to load kingdom' });
   }
 });
 
@@ -1106,7 +1106,7 @@ app.post('/api/r5-codes/create-kingdom', authenticateToken, async (req, res) => 
       return res.status(400).json({ error: 'Access code is required.' });
     }
     if (req.user.kingdomId) {
-      return res.status(400).json({ error: 'Du bist bereits einem Königreich zugeordnet.' });
+      return res.status(400).json({ error: 'You are already assigned to a kingdom.' });
     }
 
     const existingName = await get(
@@ -1189,7 +1189,7 @@ app.get('/api/admin/kingdoms', authenticateToken, requireReadAccess, async (req,
 });
 
 app.post('/api/admin/kingdoms', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
     try {
         const { displayName, slug, rokIdentifier } = req.body;
         const id = 'kdm-' + Date.now();
@@ -1197,7 +1197,7 @@ app.post('/api/admin/kingdoms', authenticateToken, requireAdmin, async (req, res
         
         const existingBySlug = await findKingdomBySlug(nSlug);
         if (existingBySlug) {
-             return res.status(400).json({ error: `Slug '${nSlug}' ist bereits für das Königreich '${existingBySlug.display_name}' vergeben.` });
+             return res.status(400).json({ error: `Slug '${nSlug}' is already assigned to kingdom '${existingBySlug.display_name}'` });
         }
         
         await query(`INSERT INTO kingdoms (id, display_name, slug, rok_identifier) VALUES ($1,$2,$3,$4)`, [id, displayName, nSlug, rokIdentifier]);
@@ -1206,7 +1206,7 @@ app.post('/api/admin/kingdoms', authenticateToken, requireAdmin, async (req, res
 });
 
 app.put('/api/admin/kingdoms/:id', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
     try {
         const { displayName, slug } = req.body;
         if (!displayName || !slug) return res.status(400).json({ error: 'Display Name and Slug required' });
@@ -1215,7 +1215,7 @@ app.put('/api/admin/kingdoms/:id', authenticateToken, requireAdmin, async (req, 
 
         const existingBySlug = await get('SELECT id, display_name FROM kingdoms WHERE LOWER(slug) = $1 AND id != $2 LIMIT 1', [normalizedSlug, req.params.id]);
         if (existingBySlug) {
-             return res.status(400).json({ error: `Slug '${normalizedSlug}' ist bereits für das Königreich '${existingBySlug.display_name}' vergeben.` });
+             return res.status(400).json({ error: `Slug '${normalizedSlug}' is already assigned to kingdom '${existingBySlug.display_name}'` });
         }
 
         await query(
@@ -1250,16 +1250,16 @@ app.put('/api/admin/kingdoms/:id', authenticateToken, requireAdmin, async (req, 
 });
 
 app.post('/api/admin/kingdoms/:id/assign-r5', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
     try {
         const { r5UserId, accessCode } = req.body;
-        if (!r5UserId) return res.status(400).json({ error: 'R5 Benutzer ist erforderlich.' });
+        if (!r5UserId) return res.status(400).json({ error: 'R5 user is required.' });
 
         const targetUser = await get('SELECT id FROM users WHERE id = $1', [r5UserId]);
-        if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        if (!targetUser) return res.status(404).json({ error: 'User not found' });
 
         const kingdom = await get('SELECT id FROM kingdoms WHERE id = $1', [req.params.id]);
-        if (!kingdom) return res.status(404).json({ error: 'Königreich nicht gefunden' });
+        if (!kingdom) return res.status(404).json({ error: 'Kingdom not found' });
 
         let expiresAt = null;
         if (accessCode) {
@@ -1270,12 +1270,12 @@ app.post('/api/admin/kingdoms/:id/assign-r5', authenticateToken, requireAdmin, a
         await assignR5(r5UserId, req.params.id);
         await query('UPDATE users SET is_approved = TRUE WHERE id = $1', [r5UserId]);
 
-        res.json({ success: true, message: `R5 zugewiesen.`, expiresAt });
+        res.json({ success: true, message: `R5 assigned.`, expiresAt });
     } catch(e) { res.status(500).json({error: e.message}); }
 });
 
 app.post('/api/admin/kingdoms/:id/status', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
     try {
         await updateKingdomStatus(req.params.id, req.body.status);
         res.json({ success: true });
@@ -1283,7 +1283,7 @@ app.post('/api/admin/kingdoms/:id/status', authenticateToken, requireAdmin, asyn
 });
 
 app.delete('/api/admin/kingdoms/:id', authenticateToken, requireAdmin, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Superadmin' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
     try {
         const k = await get('SELECT slug FROM kingdoms WHERE id=$1', [req.params.id]);
         if (k && k.slug === 'default-kingdom') return res.status(400).json({ error: 'Protected' });
@@ -1303,7 +1303,7 @@ app.get('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (re
 
     if (!kingdomId && isAdmin && req.query.slug) {
       const kingdom = await findKingdomBySlug(req.query.slug);
-      if (!kingdom) return res.status(400).json({ error: 'Ungültiger Kingdom-Slug' });
+      if (!kingdom) return res.status(400).json({ error: 'Invalid kingdom slug' });
       kingdomId = kingdom.id;
     }
 
@@ -1312,14 +1312,14 @@ app.get('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (re
         const events = await getAllKvkEvents();
         return res.json(events);
       }
-      return res.status(400).json({ error: 'Kingdom ID erforderlich' });
+      return res.status(400).json({ error: 'Kingdom ID is required' });
     }
 
     const events = await getKvkEvents(kingdomId);
     res.json(events);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Fehler beim Laden der KvK Events' });
+    res.status(500).json({ error: 'Failed to load KvK events' });
   }
 });
 
@@ -1349,17 +1349,17 @@ app.post('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (r
         targetKingdomId = bodyKingdomId;
       } else if (req.query.slug) {
         const slugKingdom = await findKingdomBySlug(req.query.slug);
-        if (!slugKingdom) return res.status(400).json({ error: 'Ungültiger Kingdom-Slug' });
+        if (!slugKingdom) return res.status(400).json({ error: 'Invalid kingdom slug' });
         targetKingdomId = slugKingdom.id;
       }
     }
 
     if (!targetKingdomId) {
-      return res.status(400).json({ error: 'Kein Königreich zugewiesen.' });
+      return res.status(400).json({ error: 'No kingdom assigned.' });
     }
 
     if (!name) {
-      return res.status(400).json({ error: 'Name ist erforderlich.' });
+      return res.status(400).json({ error: 'Name is required.' });
     }
 
     try {
@@ -1392,7 +1392,7 @@ app.post('/api/admin/kvk/events', authenticateToken, requireKvkManager, async (r
     res.json(created);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Fehler beim Erstellen des KvK Events' });
+    res.status(500).json({ error: 'Failed to create KvK event' });
   }
 });
 
@@ -1417,10 +1417,10 @@ app.put('/api/admin/kvk/events/:id', authenticateToken, requireKvkManager, async
 
     // Check ownership
     const existing = await getKvkEventById(eventId);
-    if (!existing) return res.status(404).json({ error: 'Event nicht gefunden' });
+    if (!existing) return res.status(404).json({ error: 'Event not found' });
 
     if (req.user.role !== 'admin' && existing.kingdomId !== req.user.kingdomId) {
-      return res.status(403).json({ error: 'Zugriff verweigert' });
+      return res.status(403).json({ error: 'Access denied' });
     }
 
     try {
@@ -1447,7 +1447,7 @@ app.put('/api/admin/kvk/events/:id', authenticateToken, requireKvkManager, async
     res.json(updated);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Fehler beim Aktualisieren des KvK Events' });
+    res.status(500).json({ error: 'Failed to update KvK event' });
   }
 });
 
@@ -1456,14 +1456,14 @@ app.delete('/api/admin/kvk/events/:id', authenticateToken, requireKvkManager, as
   try {
     const eventId = req.params.id;
     const existing = await getKvkEventById(eventId);
-    if (!existing) return res.status(404).json({ error: 'Event nicht gefunden' });
-    if (req.user.role !== 'admin' && existing.kingdomId !== req.user.kingdomId) return res.status(403).json({ error: 'Zugriff verweigert' });
+    if (!existing) return res.status(404).json({ error: 'Event not found' });
+    if (req.user.role !== 'admin' && existing.kingdomId !== req.user.kingdomId) return res.status(403).json({ error: 'Access denied' });
 
     await deleteKvkEvent(eventId);
     res.json({ success: true });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Fehler beim Löschen des KvK Events' });
+    res.status(500).json({ error: 'Failed to delete KvK event' });
   }
 });
 
@@ -1671,7 +1671,7 @@ app.post('/honor/files/reorder', authenticateToken, async (req, res) => {
 
 // 3. ACTIVITY (R4/R5 Only)
 app.get('/activity/files-data', authenticateToken, async (req, res) => {
-    if (!['admin', 'r5', 'r4'].includes(req.user.role)) return res.status(403).json({ error: 'Kein Zugriff' });
+    if (!['admin', 'r5', 'r4'].includes(req.user.role)) return res.status(403).json({ error: 'No access' });
 
     try {
         const kId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
@@ -1745,7 +1745,7 @@ app.post('/activity/files/reorder', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/health', (req, res) => res.json({ status: 'Backend läuft', time: new Date() }));
+app.get('/health', (req, res) => res.json({ status: 'Backend running', time: new Date() }));
 
 app.get('/', (req, res) => {
   res.json({ message: 'KD3619 Backend API', version: '2.6.0-KVK-MANAGER' });
