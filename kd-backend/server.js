@@ -729,7 +729,7 @@ app.post('/api/admin/users/role', authenticateToken, requireAdmin, async (req, r
       }
 
       if (role === 'r5') {
-          if (currentUserRole !== 'admin') return res.status(403).json({ error: 'R5 Rollen können nur vom Superadmin vergeben werden.' });
+          if (currentUserRole !== 'admin') return res.status(403).json({ error: 'R5 roles can only be assigned by the superadmin.' });
 
           const targetK = requestedKingdomId || currentUserKingdomId || (await get('SELECT kingdom_id FROM users WHERE id = $1', [userId]))?.kingdom_id;
           if (!targetK) return res.status(400).json({ error: 'Königreich für R5 wird benötigt.' });
