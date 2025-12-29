@@ -77,6 +77,8 @@ const AppContent: React.FC = () => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
+  const accountSlug = queryParams.get('account');
+  const isShopPage = queryParams.get('shop') === 'true';
   const forceLogin = queryParams.get('login') === 'true';
   const isRegisterInvite = queryParams.get('register') === 'true';
   const isSuperAdmin = user?.role === 'admin';
@@ -270,7 +272,7 @@ const AppContent: React.FC = () => {
   );
 
   const activeViewStorageKey = publicSlug ? `kd-active-view:${publicSlug}` : 'kd-active-view';
-  const shouldShowLanding = !isLoading && !publicSlug && !forceLogin && !isRegisterInvite;
+  const shouldShowLanding = !publicSlug && !forceLogin && !isRegisterInvite && (!isLoading || !!accountSlug || isShopPage);
 
   // Restore last visited view on load
   useEffect(() => {
@@ -438,6 +440,13 @@ const AppContent: React.FC = () => {
         fetchTitle();
   }, [publicSlug, user, isSuperAdmin]);
   if (shouldShowLanding) {
+    if (isLoading && (accountSlug || isShopPage)) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+          <div className="text-sm uppercase tracking-[0.3em] text-emerald-200">Loading...</div>
+        </div>
+      );
+    }
     return (
       <LandingPage
         onSeeDefault={redirectToDefaultKingdom}
