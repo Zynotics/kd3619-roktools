@@ -86,7 +86,7 @@ const AppContent: React.FC = () => {
   const isR4 = user?.role === 'r4';
   const isR4OrR5 = isR5 || isR4;
   const isAdmin = isSuperAdmin || isR5;
-  const canAccessShop = r5ShopEnabled && !isShopVisibilityLoading;
+  const canAccessShop = !!user && r5ShopEnabled && !isShopVisibilityLoading;
   const hasKingdomSlug = !!publicSlug;
   // ðŸ†• Helper fÃ¼r KvK Manager Zugriff (freischaltbar Ã¼ber Rechte)
   const isSameKingdomAsSlug = user?.kingdomId && slugKingdomId ? user.kingdomId === slugKingdomId : false;
