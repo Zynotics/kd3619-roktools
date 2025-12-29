@@ -143,6 +143,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
     newUrl.searchParams.delete('login');
     newUrl.searchParams.delete('register');
     newUrl.searchParams.delete('account');
+    newUrl.searchParams.delete('shop');
+    window.location.href = newUrl.toString();
+  };
+
+  const handleGoToSuperadminDashboard = () => {
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.delete('slug');
+    newUrl.searchParams.delete('account');
+    newUrl.searchParams.delete('shop');
+    newUrl.searchParams.delete('login');
+    newUrl.searchParams.delete('register');
     window.location.href = newUrl.toString();
   };
 
@@ -258,7 +269,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
           )}
           {user?.role === 'admin' && (
             <button
-              onClick={handleGoToDashboard}
+              onClick={handleGoToSuperadminDashboard}
               className="px-4 py-2 rounded-lg border border-amber-400/60 text-xs font-semibold text-amber-100 hover:border-amber-300 hover:text-white transition"
             >
               Superadmin dashboard
