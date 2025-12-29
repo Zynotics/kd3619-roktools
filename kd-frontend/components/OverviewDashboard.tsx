@@ -270,29 +270,6 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
          <PowerHistoryChart files={uploadedFiles} />
       </div>
 
-      <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-        <h3 className="text-lg font-semibold text-gray-200 mb-4">Comparison Controls</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-            <div className="flex flex-col">
-                <label className="text-sm text-gray-400 mb-1">Start Date</label>
-                <select value={startFileId} onChange={e => setStartFileId(e.target.value)} className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5">
-                    <option value="">Select...</option>
-                    {uploadedFiles.map(f => <option key={f.id} value={f.id}>{cleanFileName(f.name)}</option>)}
-                </select>
-            </div>
-            <div className="flex flex-col">
-                <label className="text-sm text-gray-400 mb-1">End Date</label>
-                <select value={endFileId} onChange={e => setEndFileId(e.target.value)} className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5">
-                    <option value="">Select...</option>
-                    {uploadedFiles.map(f => <option key={f.id} value={f.id}>{cleanFileName(f.name)}</option>)}
-                </select>
-            </div>
-            <div className="flex flex-col">
-                <button onClick={handleCompare} disabled={!startFileId || !endFileId || startFileId===endFileId} className="mt-5 bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-600">Compare</button>
-            </div>
-        </div>
-      </div>
-
       <PlayerSearch 
           query={searchQuery} setQuery={setSearchQuery} onSearch={handleSearch} onClear={handleClearSearch} 
           results={searchResults} selectedPlayer={selectedPlayer} onSelectPlayer={handleSelectPlayer} 
@@ -303,6 +280,12 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           stats={comparisonStats} error={comparisonError} 
           file1Name={cleanFileName(uploadedFiles.find(f => f.id === startFileId)?.name || '')}
           file2Name={cleanFileName(uploadedFiles.find(f => f.id === endFileId)?.name || '')}
+          fileOptions={uploadedFiles.map(f => ({ id: f.id, label: cleanFileName(f.name) }))}
+          startFileId={startFileId}
+          endFileId={endFileId}
+          onStartChange={setStartFileId}
+          onEndChange={setEndFileId}
+          onCompare={handleCompare}
       />
     </div>
   );

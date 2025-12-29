@@ -96,6 +96,12 @@ interface ComparisonSectionProps {
   error: string | null;
   file1Name: string | null;
   file2Name: string | null;
+  fileOptions?: { id: string; label: string }[];
+  startFileId?: string;
+  endFileId?: string;
+  onStartChange?: (value: string) => void;
+  onEndChange?: (value: string) => void;
+  onCompare?: () => void;
 }
 
 interface SortableTableProps<T> {
@@ -339,7 +345,13 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
   stats,
   error,
   file1Name,
-  file2Name
+  file2Name,
+  fileOptions = [],
+  startFileId = '',
+  endFileId = '',
+  onStartChange,
+  onEndChange,
+  onCompare
 }) => {
   // State for column visibility
   const [visibleStatChangeCols, setVisibleStatChangeCols] = useState<PlayerStatChangeKey[]>([
@@ -432,11 +444,57 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
   };
 
   const getChangePercent = (diff: number, total1: number) => {
-      if (total1 === 0) {
-          return diff > 0 ? 100 : 0;
-      }
-      return (diff / total1) * 100;
-  }
+    if (total1 === 0) {
+      return diff > 0 ? 100 : 0;
+    }
+    return (diff / total1) * 100;
+  };
+
+  const comparisonControls = (
+    <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1.2fr_auto] gap-3 items-end mb-4">
+      <div className="flex flex-col">
+        <label className="text-sm text-gray-400 mb-1">Start Date</label>
+        <select
+          value={startFileId}
+          onChange={(e) => onStartChange && onStartChange(e.target.value)}
+          className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5"
+          disabled={!onStartChange}
+        >
+          <option value="">Select...</option>
+          {fileOptions.map((file) => (
+            <option key={file.id} value={file.id}>
+              {file.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="flex flex-col">
+        <label className="text-sm text-gray-400 mb-1">End Date</label>
+        <select
+          value={endFileId}
+          onChange={(e) => onEndChange && onEndChange(e.target.value)}
+          className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2.5"
+          disabled={!onEndChange}
+        >
+          <option value="">Select...</option>
+          {fileOptions.map((file) => (
+            <option key={file.id} value={file.id}>
+              {file.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="flex flex-col">
+        <button
+          onClick={() => onCompare && onCompare()}
+          disabled={!onCompare || !startFileId || !endFileId || startFileId === endFileId}
+          className="mt-5 bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-600"
+        >
+          Compare
+        </button>
+      </div>
+    </div>
+  );
 
   if (error) {
      return (
@@ -448,12 +506,16 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
 
   if (!stats) {
     return (
-        <Card gradient className="flex flex-col items-center justify-center text-center text-gray-400 py-20">
+        <Card gradient className="p-6">
+          <h3 className="text-lg font-semibold text-gray-200 mb-3">Summary</h3>
+          {comparisonControls}
+          <div className="flex flex-col items-center justify-center text-center text-gray-400 py-10">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <h2 className="text-2xl font-semibold text-white">Ready for Analysis</h2>
-            <p className="mt-2">Please select a start and end date from the controls above, then click "Compare" to view the statistics.</p>
+            <p className="mt-2">Please select a start and end date in Summary, then click "Compare" to view the statistics.</p>
+          </div>
         </Card>
     );
   }
@@ -462,8 +524,9 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
     <div className="space-y-8">
       <Card gradient className="p-6">
           <h3 className="text-lg font-semibold text-gray-200 mb-3">Summary</h3>
+          {comparisonControls}
           <p className="mb-4 text-sm text-gray-400">
-            Start: {file1Name ?? '–'} | End: {file2Name ?? '–'}
+            Start: {file1Name ?? '-'} | End: {file2Name ?? '-'}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
              <StatCard
