@@ -428,7 +428,7 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
   // Use filtered data for sorting
   const { items: sortedPlayerStatChanges, requestSort: requestPlayerStatChangesSort, sortConfig: playerStatChangesSortConfig } = useSortableData<PlayerStatChange>(
     filteredStatChanges,
-    { key: 'diffPower', direction: 'descending' }
+    { key: 'diffKillPoints', direction: 'descending' }
   );
   const { items: sortedNewPlayers, requestSort: requestNewPlayersSort, sortConfig: newPlayersSortConfig } = useSortableData<PlayerInfo>(filteredNewPlayers, { key: 'power', direction: 'descending' });
   const { items: sortedDisappearedPlayers, requestSort: requestDisappearedPlayersSort, sortConfig: disappearedPlayersSortConfig } = useSortableData<PlayerInfo>(filteredDisappearedPlayers, { key: 'power', direction: 'descending' });
