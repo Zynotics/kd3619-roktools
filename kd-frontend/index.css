@@ -1,10 +1,21 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Keine custom Grid-Klassen mehr nötig.
-   Wir nutzen native Tailwind-Klassen für das Layout.
-*/
-body {
-  @apply bg-gray-900; /* Fallback background */
+/* Global landing-style theme */
+:root {
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    font-family: "Space Grotesk", "Sora", "Trebuchet MS", sans-serif;
+    background-color: #020617;
+  }
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased;
+  }
+  a {
+    @apply text-emerald-200 hover:text-emerald-100;
+  }
 }
