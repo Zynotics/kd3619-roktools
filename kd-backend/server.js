@@ -768,14 +768,30 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
     try {
         const userId = req.params.id;
         const currentUserKingdomId = getKingdomId(req);
+        const currentUserRole = req.user.role;
 
         if (currentUserKingdomId) {
             const target = await get('SELECT kingdom_id, role FROM users WHERE id = $1', [userId]);
             if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Zugriff verweigert' });
             if (req.user.role === 'r5' && (target.role === 'r5' || target.role === 'admin')) return res.status(403).json({ error: 'Kein Zugriff' });
         }
-        await query('DELETE FROM users WHERE id = $1', [userId]);
-        res.json({ success: true });
+        if (currentUserRole === 'admin') {
+            await query('DELETE FROM users WHERE id = $1', [userId]);
+            return res.json({ success: true, deleted: true });
+        }
+
+        if (currentUserRole === 'r5') {
+            const target = await get('SELECT kingdom_id, role FROM users WHERE id = $1', [userId]);
+            if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Zugriff verweigert' });
+            if (target.role === 'r5' || target.role === 'admin') return res.status(403).json({ error: 'Kein Zugriff' });
+            await query(
+                'UPDATE users SET role = $1, kingdom_id = NULL, is_approved = FALSE, can_access_honor = FALSE, can_access_analytics = FALSE, can_access_overview = FALSE, can_manage_overview_files = FALSE, can_manage_honor_files = FALSE, can_manage_activity_files = FALSE, can_manage_analytics_files = FALSE, can_access_kvk_manager = FALSE WHERE id = $2',
+                ['user', userId]
+            );
+            return res.json({ success: true, removedFromKingdom: true });
+        }
+
+        res.status(403).json({ error: 'Kein Zugriff' });
     } catch(e) { res.status(500).json({error: 'Error'}); }
 });
 
