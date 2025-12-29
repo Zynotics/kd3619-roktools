@@ -152,7 +152,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
     newUrl.searchParams.delete('slug');
     newUrl.searchParams.delete('account');
     newUrl.searchParams.delete('shop');
-    newUrl.searchParams.delete('login');
+    newUrl.searchParams.set('login', 'true');
     newUrl.searchParams.delete('register');
     window.location.href = newUrl.toString();
   };
