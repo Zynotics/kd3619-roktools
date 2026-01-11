@@ -502,7 +502,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
         </div>
       </Card>
 
-      <Card className="p-6">
+      <Card className="p-0">
         {loading && <p className="text-slate-400">Loading migration data...</p>}
         {error && <p className="text-rose-300">{error}</p>}
         {!loading && !error && (
