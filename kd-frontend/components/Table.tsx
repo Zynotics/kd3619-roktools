@@ -5,12 +5,19 @@ interface TableProps {
   children: React.ReactNode;
   className?: string;
   maxHeight?: string;
+  frame?: boolean;
 }
 
-export const Table: React.FC<TableProps> = ({ children, className = '', maxHeight = 'auto' }) => {
+export const Table: React.FC<TableProps> = ({
+  children,
+  className = '',
+  maxHeight = 'auto',
+  frame = true
+}) => {
+  const frameClasses = frame ? 'border border-white/5 rounded-lg' : '';
   return (
     <div
-      className={`overflow-x-auto relative border border-white/5 rounded-lg ${
+      className={`overflow-x-auto relative ${frameClasses} ${
         maxHeight !== 'auto' ? `max-h-${maxHeight}` : ''
       }`}
     >
