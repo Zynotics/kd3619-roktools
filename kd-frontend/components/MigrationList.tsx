@@ -357,13 +357,24 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   );
 
   const migrationPlayers = useMemo(() => {
-    const map = new Map<string, StatProgressRow>();
-    autoMigrationPlayers.forEach(player => map.set(player.id, player));
-    manualMigrationPlayers.forEach(player => map.set(player.id, player));
-    autoMigratedPlayers.forEach(player => map.set(player.id, player));
     const blocked = new Set(excludedIds);
-    return Array.from(map.values()).filter(player => !blocked.has(player.id));
-  }, [autoMigrationPlayers, manualMigrationPlayers, autoMigratedPlayers, excludedIds]);
+    const manualOrdered = manualMigrationPlayers.filter(player => !blocked.has(player.id));
+    const seen = new Set(manualOrdered.map(player => player.id));
+    const rest: StatProgressRow[] = [];
+
+    const appendUnique = (players: StatProgressRow[]) => {
+      players.forEach(player => {
+        if (blocked.has(player.id) || seen.has(player.id)) return;
+        seen.add(player.id);
+        rest.push(player);
+      });
+    };
+
+    appendUnique(autoMigrationPlayers);
+    appendUnique(autoMigratedPlayers);
+
+    return [...manualOrdered, ...rest];
+  }, [manualMigrationPlayers, autoMigrationPlayers, autoMigratedPlayers, excludedIds]);
 
   useEffect(() => {
     if (migrationPlayers.length === 0) return;
@@ -495,7 +506,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
         {loading && <p className="text-slate-400">Loading migration data...</p>}
         {error && <p className="text-rose-300">{error}</p>}
         {!loading && !error && (
-          <Table className="table-fixed min-w-[1600px]">
+          <Table className="table-fixed min-w-[1900px]">
             <TableHeader>
               <tr>
                 <TableCell header className="w-[110px]">Gov ID</TableCell>
@@ -506,9 +517,9 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                 <TableCell header className="w-[150px]">Deads</TableCell>
                 <TableCell header className="w-[190px] whitespace-normal">Reason for migration</TableCell>
                 <TableCell header className="w-[120px]">Contacted</TableCell>
-                <TableCell header className="w-[320px] whitespace-normal">Info</TableCell>
-                <TableCell header className="w-[150px]">Migrated</TableCell>
-                <TableCell header className="w-[70px]">Actions</TableCell>
+                <TableCell header className="w-[420px] whitespace-normal">Info</TableCell>
+                <TableCell header className="w-[170px]">Migrated</TableCell>
+                <TableCell header className="w-[80px]">Actions</TableCell>
               </tr>
             </TableHeader>
             <tbody>
@@ -532,16 +543,18 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                       <div className={`font-semibold ${getPercentClass(player.dkpPercent)}`}>
                         {player.dkpPercent !== undefined ? `${player.dkpPercent.toFixed(1)}%` : 'N/A'}
                       </div>
-                      <div className="text-xs text-slate-500">
-                        {formatNumber(player.dkpScore || 0)} / {formatNumber(player.dkpGoal || 0)}
+                      <div className="text-xs text-slate-500 leading-tight">
+                        <div>{formatNumber(player.dkpScore || 0)}</div>
+                        <div>{formatNumber(player.dkpGoal || 0)}</div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className={`font-semibold ${getPercentClass(player.deadPercent)}`}>
                         {player.deadPercent !== undefined ? `${player.deadPercent.toFixed(1)}%` : 'N/A'}
                       </div>
-                      <div className="text-xs text-slate-500">
-                        {formatNumber(player.deadDiff || 0)} / {formatNumber(player.deadGoal || 0)}
+                      <div className="text-xs text-slate-500 leading-tight">
+                        <div>{formatNumber(player.deadDiff || 0)}</div>
+                        <div>{formatNumber(player.deadGoal || 0)}</div>
                       </div>
                     </TableCell>
                     <TableCell>
