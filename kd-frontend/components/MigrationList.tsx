@@ -228,6 +228,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   const [manualIds, setManualIds] = useState<string[]>([]);
   const [excludedIds, setExcludedIds] = useState<string[]>([]);
   const [manualMigratedIds, setManualMigratedIds] = useState<string[]>([]);
+  const [manualUnmigratedIds, setManualUnmigratedIds] = useState<string[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, MigrationMeta>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedInfoIds, setExpandedInfoIds] = useState<string[]>([]);
@@ -264,6 +265,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
       setManualIds([]);
       setExcludedIds([]);
       setManualMigratedIds([]);
+      setManualUnmigratedIds([]);
       setDetailsById({});
       setExpandedInfoIds([]);
       try {
@@ -405,10 +407,14 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     setExcludedIds(prev => (prev.includes(id) ? prev : [...prev, id]));
   };
 
-  const toggleManualMigrated = (id: string) => {
-    setManualMigratedIds(prev => (
-      prev.includes(id) ? prev.filter(existing => existing !== id) : [...prev, id]
-    ));
+  const handleMigratedChange = (id: string, value: 'yes' | 'no') => {
+    if (value === 'yes') {
+      setManualMigratedIds(prev => (prev.includes(id) ? prev : [...prev, id]));
+      setManualUnmigratedIds(prev => prev.filter(existing => existing !== id));
+      return;
+    }
+    setManualUnmigratedIds(prev => (prev.includes(id) ? prev : [...prev, id]));
+    setManualMigratedIds(prev => prev.filter(existing => existing !== id));
   };
 
   const toggleInfoExpanded = (id: string) => {
@@ -489,20 +495,20 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
         {loading && <p className="text-slate-400">Loading migration data...</p>}
         {error && <p className="text-rose-300">{error}</p>}
         {!loading && !error && (
-          <Table>
+          <Table className="table-fixed min-w-[1600px]">
             <TableHeader>
               <tr>
-                <TableCell header>Gov ID</TableCell>
-                <TableCell header>Name</TableCell>
-                <TableCell header>Alliance</TableCell>
-                <TableCell header>Base Power</TableCell>
-                <TableCell header>DKP</TableCell>
-                <TableCell header>Deads</TableCell>
-                <TableCell header>Reason for migration</TableCell>
-                <TableCell header>Contacted</TableCell>
-                <TableCell header>Info</TableCell>
-                <TableCell header>Migrated</TableCell>
-                <TableCell header>Actions</TableCell>
+                <TableCell header className="w-[110px]">Gov ID</TableCell>
+                <TableCell header className="w-[180px] whitespace-normal">Name</TableCell>
+                <TableCell header className="w-[120px] whitespace-normal">Alliance</TableCell>
+                <TableCell header className="w-[130px]">Base Power</TableCell>
+                <TableCell header className="w-[150px]">DKP</TableCell>
+                <TableCell header className="w-[150px]">Deads</TableCell>
+                <TableCell header className="w-[190px] whitespace-normal">Reason for migration</TableCell>
+                <TableCell header className="w-[120px]">Contacted</TableCell>
+                <TableCell header className="w-[320px] whitespace-normal">Info</TableCell>
+                <TableCell header className="w-[150px]">Migrated</TableCell>
+                <TableCell header className="w-[70px]">Actions</TableCell>
               </tr>
             </TableHeader>
             <tbody>
@@ -513,12 +519,14 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                 const showExpand = infoText.length > 80;
                 const isAutoMigrated = autoMigratedIds.has(player.id);
                 const isManuallyMigrated = manualMigratedIds.includes(player.id);
-                const isMigrated = isAutoMigrated || isManuallyMigrated;
+                const isManuallyUnmigrated = manualUnmigratedIds.includes(player.id);
+                const isMigrated = isManuallyMigrated ? true : isManuallyUnmigrated ? false : isAutoMigrated;
+                const migratedValue: 'yes' | 'no' = isMigrated ? 'yes' : 'no';
                 return (
                   <TableRow key={player.id}>
                     <TableCell>{player.id}</TableCell>
-                    <TableCell>{player.name}</TableCell>
-                    <TableCell>{player.alliance || 'â€”'}</TableCell>
+                    <TableCell className="whitespace-normal">{player.name}</TableCell>
+                    <TableCell className="whitespace-normal">{player.alliance || 'ƒ?"'}</TableCell>
                     <TableCell>{formatNumber(player.basePower || 0)}</TableCell>
                     <TableCell>
                       <div className={`font-semibold ${getPercentClass(player.dkpPercent)}`}>
@@ -557,13 +565,13 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                         <option value="no">No</option>
                       </select>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="whitespace-normal align-top">
                       <div className="flex flex-col gap-2">
                         <textarea
                           value={infoText}
                           onChange={(event) => updateDetails(player.id, { info: event.target.value })}
                           rows={isExpanded ? 6 : 3}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs text-white resize-none min-h-[84px]"
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs text-white resize-none min-h-[96px]"
                           placeholder="Notes"
                         />
                         {showExpand && (
@@ -579,17 +587,17 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs font-semibold ${isMigrated ? 'text-emerald-300' : 'text-slate-400'}`}>
-                          {isAutoMigrated ? 'Auto' : isMigrated ? 'Yes' : 'No'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => toggleManualMigrated(player.id)}
-                          disabled={isAutoMigrated}
-                          className="text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed rounded px-2 py-1"
+                        <select
+                          value={migratedValue}
+                          onChange={(event) => handleMigratedChange(player.id, event.target.value as 'yes' | 'no')}
+                          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
                         >
-                          {isMigrated ? 'Unmark' : 'Mark'}
-                        </button>
+                          <option value="yes">Yes</option>
+                          <option value="no">No</option>
+                        </select>
+                        {isAutoMigrated && !isManuallyMigrated && !isManuallyUnmigrated && (
+                          <span className="text-[10px] uppercase tracking-wide text-emerald-300">Auto</span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -637,3 +645,5 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
 };
 
 export default MigrationList;
+
+
