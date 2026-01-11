@@ -231,7 +231,6 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   const [manualUnmigratedIds, setManualUnmigratedIds] = useState<string[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, MigrationMeta>>({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedInfoIds, setExpandedInfoIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -267,7 +266,6 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
       setManualMigratedIds([]);
       setManualUnmigratedIds([]);
       setDetailsById({});
-      setExpandedInfoIds([]);
       try {
         const response = await fetch(`${API_BASE_URL}/api/public/kingdom/${kingdomSlug}/overview-files`);
         if (!response.ok) {
@@ -428,12 +426,6 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     setManualMigratedIds(prev => prev.filter(existing => existing !== id));
   };
 
-  const toggleInfoExpanded = (id: string) => {
-    setExpandedInfoIds(prev => (
-      prev.includes(id) ? prev.filter(existing => existing !== id) : [...prev, id]
-    ));
-  };
-
   const updateDetails = (id: string, updates: Partial<MigrationMeta>) => {
     setDetailsById(prev => ({
       ...prev,
@@ -525,100 +517,115 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
               {migrationPlayers.map(player => {
                 const details = detailsById[player.id];
                 const infoText = details?.info || '';
-                const isExpanded = expandedInfoIds.includes(player.id);
-                const showExpand = infoText.length > 80;
                 const isAutoMigrated = autoMigratedIds.has(player.id);
                 const isManuallyMigrated = manualMigratedIds.includes(player.id);
                 const isManuallyUnmigrated = manualUnmigratedIds.includes(player.id);
                 const isMigrated = isManuallyMigrated ? true : isManuallyUnmigrated ? false : isAutoMigrated;
                 const migratedValue: 'yes' | 'no' = isMigrated ? 'yes' : 'no';
                 return (
-                  <TableRow key={player.id}>
-                    <TableCell>{player.id}</TableCell>
-                    <TableCell className="whitespace-normal">{player.name}</TableCell>
-                    <TableCell className="whitespace-normal">{player.alliance || '-'}</TableCell>
-                    <TableCell>{formatNumber(player.basePower || 0)}</TableCell>
-                    <TableCell>
-                      <div className={`font-semibold ${getPercentClass(player.dkpPercent)}`}>
-                        {player.dkpPercent !== undefined ? `${player.dkpPercent.toFixed(1)}%` : 'N/A'}
-                      </div>
-                      <div className="text-xs text-slate-500 leading-tight">
-                        <div>{formatNumber(player.dkpScore || 0)}</div>
-                        <div>{formatNumber(player.dkpGoal || 0)}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className={`font-semibold ${getPercentClass(player.deadPercent)}`}>
-                        {player.deadPercent !== undefined ? `${player.deadPercent.toFixed(1)}%` : 'N/A'}
-                      </div>
-                      <div className="text-xs text-slate-500 leading-tight">
-                        <div>{formatNumber(player.deadDiff || 0)}</div>
-                        <div>{formatNumber(player.deadGoal || 0)}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <select
-                        value={details?.reason || 'dkp-deads'}
-                        onChange={(event) => updateDetails(player.id, { reason: event.target.value as MigrationMeta['reason'] })}
-                        className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
-                      >
-                        <option value="dkp-deads">DKP/Deads not reached</option>
-                        <option value="rule-breaker">Rule breaker</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </TableCell>
-                    <TableCell>
-                      <select
-                        value={details?.contacted || 'no'}
-                        onChange={(event) => updateDetails(player.id, { contacted: event.target.value as MigrationMeta['contacted'] })}
-                        className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
-                      >
-                        <option value="yes">Yes</option>
-                        <option value="no">No</option>
-                      </select>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
+                  <React.Fragment key={player.id}>
+                    <TableRow>
+                      <TableCell>{player.id}</TableCell>
+                      <TableCell className="whitespace-normal">{player.name}</TableCell>
+                      <TableCell className="whitespace-normal">{player.alliance || '-'}</TableCell>
+                      <TableCell>{formatNumber(player.basePower || 0)}</TableCell>
+                      <TableCell>
+                        <div className={`font-semibold ${getPercentClass(player.dkpPercent)}`}>
+                          {player.dkpPercent !== undefined ? `${player.dkpPercent.toFixed(1)}%` : 'N/A'}
+                        </div>
+                        <div className="text-xs text-slate-500 leading-tight">
+                          <div>{formatNumber(player.dkpScore || 0)}</div>
+                          <div>{formatNumber(player.dkpGoal || 0)}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className={`font-semibold ${getPercentClass(player.deadPercent)}`}>
+                          {player.deadPercent !== undefined ? `${player.deadPercent.toFixed(1)}%` : 'N/A'}
+                        </div>
+                        <div className="text-xs text-slate-500 leading-tight">
+                          <div>{formatNumber(player.deadDiff || 0)}</div>
+                          <div>{formatNumber(player.deadGoal || 0)}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
                         <select
-                          value={migratedValue}
-                          onChange={(event) => handleMigratedChange(player.id, event.target.value as 'yes' | 'no')}
+                          value={details?.reason || 'dkp-deads'}
+                          onChange={(event) => updateDetails(player.id, { reason: event.target.value as MigrationMeta['reason'] })}
+                          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                        >
+                          <option value="dkp-deads">DKP/Deads not reached</option>
+                          <option value="rule-breaker">Rule breaker</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </TableCell>
+                      <TableCell>
+                        <select
+                          value={details?.contacted || 'no'}
+                          onChange={(event) => updateDetails(player.id, { contacted: event.target.value as MigrationMeta['contacted'] })}
                           className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
                         >
                           <option value="yes">Yes</option>
                           <option value="no">No</option>
                         </select>
-                        {isAutoMigrated && !isManuallyMigrated && !isManuallyUnmigrated && (
-                          <span className="text-[10px] uppercase tracking-wide text-emerald-300">Auto</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePlayer(player.id)}
-                        aria-label="Remove from list"
-                        title="Remove from list"
-                        className="text-rose-200 hover:text-rose-100 bg-rose-500/20 hover:bg-rose-500/30 rounded px-2 py-1 inline-flex items-center justify-center"
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          className="h-4 w-4"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden="true"
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={migratedValue}
+                            onChange={(event) => handleMigratedChange(player.id, event.target.value as 'yes' | 'no')}
+                            className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                          >
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                          </select>
+                          {isAutoMigrated && !isManuallyMigrated && !isManuallyUnmigrated && (
+                            <span className="text-[10px] uppercase tracking-wide text-emerald-300">Auto</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePlayer(player.id)}
+                          aria-label="Remove from list"
+                          title="Remove from list"
+                          className="text-rose-200 hover:text-rose-100 bg-rose-500/20 hover:bg-rose-500/30 rounded px-2 py-1 inline-flex items-center justify-center"
                         >
-                          <path d="M3 6h18" />
-                          <path d="M8 6v-2h8v2" />
-                          <path d="M7 6l1 14h8l1-14" />
-                          <path d="M10 11v6" />
-                          <path d="M14 11v6" />
-                        </svg>
-                      </button>
-                    </TableCell>
-                  </TableRow>
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M3 6h18" />
+                            <path d="M8 6v-2h8v2" />
+                            <path d="M7 6l1 14h8l1-14" />
+                            <path d="M10 11v6" />
+                            <path d="M14 11v6" />
+                          </svg>
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell colSpan={7} className="py-2 text-xs text-slate-500">
+                        Notes
+                      </TableCell>
+                      <TableCell colSpan={2} className="py-2">
+                        <textarea
+                          value={infoText}
+                          onChange={(event) => updateDetails(player.id, { info: event.target.value })}
+                          rows={2}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white resize-none"
+                          placeholder="Notes"
+                        />
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </React.Fragment>
                 );
               })}
               {migrationPlayers.length === 0 && (
