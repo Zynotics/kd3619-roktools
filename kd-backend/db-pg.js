@@ -358,7 +358,8 @@ async function initUsersColumns() {
         ADD COLUMN IF NOT EXISTS can_manage_honor_files BOOLEAN DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS can_manage_activity_files BOOLEAN DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS can_manage_analytics_files BOOLEAN DEFAULT FALSE,
-        ADD COLUMN IF NOT EXISTS can_access_kvk_manager BOOLEAN DEFAULT FALSE
+        ADD COLUMN IF NOT EXISTS can_access_kvk_manager BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS can_access_migration_list BOOLEAN DEFAULT FALSE
     `);
     await query(`
       DO $$

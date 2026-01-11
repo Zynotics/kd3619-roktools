@@ -20,6 +20,7 @@ export interface User {
   canManageActivityFiles?: boolean;
   canManageAnalyticsFiles?: boolean;
   canAccessKvkManager?: boolean;
+  canAccessMigrationList?: boolean;
   r5AccessValid?: boolean;
   r5AccessExpiresAt?: string | null;
 }

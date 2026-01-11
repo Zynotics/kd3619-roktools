@@ -313,7 +313,7 @@ function authenticateToken(req, res, next) {
   jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) return res.status(403).json({ error: 'Invalid token' });
     
-    const dbUser = await get('SELECT role, kingdom_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager FROM users WHERE id = $1', [user.id]);
+    const dbUser = await get('SELECT role, kingdom_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager, can_access_migration_list FROM users WHERE id = $1', [user.id]);
     if (!dbUser) return res.status(404).json({ error: 'User not found' });
 
     let activeR5Access = null;
@@ -333,6 +333,7 @@ function authenticateToken(req, res, next) {
       canManageActivityFiles: !!dbUser.can_manage_activity_files,
       canManageAnalyticsFiles: !!dbUser.can_manage_analytics_files,
       canAccessKvkManager: !!dbUser.can_access_kvk_manager,
+      canAccessMigrationList: !!dbUser.can_access_migration_list,
       r5AccessValid: dbUser.role === 'r5' ? !!activeR5Access : false,
       r5AccessExpiresAt: activeR5Access ? activeR5Access.expires_at : null
     };
@@ -488,8 +489,8 @@ app.post('/api/auth/register', async (req, res) => {
     const userId = 'user-' + Date.now();
 
     await query(
-      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview, kingdom_id, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [userId, email, username, passwordHash, false, 'user', normalizedGovId, false, false, false, assignedKingdomId, false, false, false, false, false]
+      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_access_honor, can_access_analytics, can_access_overview, kingdom_id, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager, can_access_migration_list) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+      [userId, email, username, passwordHash, false, 'user', normalizedGovId, false, false, false, assignedKingdomId, false, false, false, false, false, false]
     );
 
     return res.json({
@@ -506,7 +507,8 @@ app.post('/api/auth/register', async (req, res) => {
           canManageHonorFiles: false,
           canManageActivityFiles: false,
           canManageAnalyticsFiles: false,
-          canAccessKvkManager: false
+          canAccessKvkManager: false,
+          canAccessMigrationList: false
       }
     });
   } catch (error) {
@@ -520,7 +522,7 @@ app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username and password are required' });
 
-    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager FROM users WHERE username = $1', [username]);
+    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager, can_access_migration_list FROM users WHERE username = $1', [username]);
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
     const activeR5Access = user.role === 'r5' ? await getActiveR5Access(user.id) : null;
@@ -547,6 +549,7 @@ app.post('/api/auth/login', async (req, res) => {
             canManageActivityFiles: !!user.can_manage_activity_files,
             canManageAnalyticsFiles: !!user.can_manage_analytics_files,
             canAccessKvkManager: !!user.can_access_kvk_manager,
+            canAccessMigrationList: !!user.can_access_migration_list,
             r5AccessValid: user.role === 'r5' ? !!activeR5Access : false,
             r5AccessExpiresAt: activeR5Access ? activeR5Access.expires_at : null
         }
@@ -559,7 +562,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/validate', authenticateToken, async (req, res) => {
   try {
-    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager FROM users WHERE id = $1', [req.user.id]);
+    const user = await get('SELECT *, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager, can_access_migration_list FROM users WHERE id = $1', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const activeR5Access = user.role === 'r5' ? await getActiveR5Access(user.id) : null;
@@ -580,6 +583,7 @@ app.get('/api/auth/validate', authenticateToken, async (req, res) => {
       canManageActivityFiles: !!user.can_manage_activity_files,
       canManageAnalyticsFiles: !!user.can_manage_analytics_files,
       canAccessKvkManager: !!user.can_access_kvk_manager,
+      canAccessMigrationList: !!user.can_access_migration_list,
       r5AccessValid: user.role === 'r5' ? !!activeR5Access : false,
       r5AccessExpiresAt: activeR5Access ? activeR5Access.expires_at : null
     });
@@ -594,10 +598,10 @@ app.post('/api/admin/create-admin', async (req, res) => {
   try {
     const adminPasswordHash = bcrypt.hashSync('*3619rocks!', 10);
     await query(
-      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager) 
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      `INSERT INTO users (id, email, username, password_hash, is_approved, role, governor_id, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager, can_access_migration_list) 
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash`,
-      ['admin-001', 'admin@kd3619.com', 'Stadmin', adminPasswordHash, true, 'admin', null, true, true, true, true, true]
+      ['admin-001', 'admin@kd3619.com', 'Stadmin', adminPasswordHash, true, 'admin', null, true, true, true, true, true, true]
     );
     res.json({ message: 'Admin user created successfully' });
   } catch (error) {
@@ -617,7 +621,7 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
     }
     
     const users = await all(
-      `SELECT id, email, username, is_approved, role, created_at, kingdom_id, governor_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager FROM users ${whereClause} ORDER BY created_at DESC`, params
+      `SELECT id, email, username, is_approved, role, created_at, kingdom_id, governor_id, can_access_honor, can_access_analytics, can_access_overview, can_manage_overview_files, can_manage_honor_files, can_manage_activity_files, can_manage_analytics_files, can_access_kvk_manager, can_access_migration_list FROM users ${whereClause} ORDER BY created_at DESC`, params
     );
 
     res.json(users.map((user) => ({
@@ -636,7 +640,8 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
         canManageHonorFiles: !!user.can_manage_honor_files,
         canManageActivityFiles: !!user.can_manage_activity_files,
         canManageAnalyticsFiles: !!user.can_manage_analytics_files,
-        canAccessKvkManager: !!user.can_access_kvk_manager
+        canAccessKvkManager: !!user.can_access_kvk_manager,
+        canAccessMigrationList: !!user.can_access_migration_list
     })));
   } catch (error) {
     res.status(500).json({ error: 'Failed to load users' });
@@ -680,7 +685,7 @@ app.post('/api/admin/users/access', authenticateToken, requireAdmin, async (req,
 
 app.post('/api/admin/users/access-files', authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const { userId, canManageActivityFiles, canManageAnalyticsFiles, canAccessKvkManager } = req.body;
+      const { userId, canManageActivityFiles, canManageAnalyticsFiles, canAccessKvkManager, canAccessMigrationList } = req.body;
       const currentUserKingdomId = getKingdomId(req);
 
       if (!userId) return res.status(400).json({ error: 'User ID is required' });
@@ -701,8 +706,8 @@ app.post('/api/admin/users/access-files', authenticateToken, requireAdmin, async
       const analyticsFlag = !!canManageAnalyticsFiles;
 
       await query(
-        `UPDATE users SET can_manage_overview_files=$1, can_manage_honor_files=$2, can_manage_activity_files=$3, can_manage_analytics_files=$4, can_access_kvk_manager=$5 WHERE id=$6`,
-        [analyticsFlag, analyticsFlag, !!canManageActivityFiles, analyticsFlag, !!canAccessKvkManager, userId]
+        `UPDATE users SET can_manage_overview_files=$1, can_manage_honor_files=$2, can_manage_activity_files=$3, can_manage_analytics_files=$4, can_access_kvk_manager=$5, can_access_migration_list=$6 WHERE id=$7`,
+        [analyticsFlag, analyticsFlag, !!canManageActivityFiles, analyticsFlag, !!canAccessKvkManager, !!canAccessMigrationList, userId]
       );
       res.json({ success: true });
     } catch(e) {
@@ -785,7 +790,7 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
             if (!target || target.kingdom_id !== currentUserKingdomId) return res.status(403).json({ error: 'Access denied' });
             if (target.role === 'r5' || target.role === 'admin') return res.status(403).json({ error: 'No access' });
             await query(
-                'UPDATE users SET role = $1, kingdom_id = NULL, is_approved = FALSE, can_access_honor = FALSE, can_access_analytics = FALSE, can_access_overview = FALSE, can_manage_overview_files = FALSE, can_manage_honor_files = FALSE, can_manage_activity_files = FALSE, can_manage_analytics_files = FALSE, can_access_kvk_manager = FALSE WHERE id = $2',
+                'UPDATE users SET role = $1, kingdom_id = NULL, is_approved = FALSE, can_access_honor = FALSE, can_access_analytics = FALSE, can_access_overview = FALSE, can_manage_overview_files = FALSE, can_manage_honor_files = FALSE, can_manage_activity_files = FALSE, can_manage_analytics_files = FALSE, can_access_kvk_manager = FALSE, can_access_migration_list = FALSE WHERE id = $2',
                 ['user', userId]
             );
             return res.json({ success: true, removedFromKingdom: true });
@@ -811,7 +816,7 @@ app.post('/api/admin/users/assign-r4', authenticateToken, requireAdmin, async (r
              return res.status(403).json({ error: 'Cannot assign Admin/R5 roles via this endpoint.' });
         }
         
-        await query('UPDATE users SET role = $1, kingdom_id = $2, is_approved = true, can_manage_overview_files = false, can_manage_honor_files = false, can_manage_activity_files = false WHERE id = $3', ['r4', kingdomId, userId]);
+        await query('UPDATE users SET role = $1, kingdom_id = $2, is_approved = true, can_manage_overview_files = false, can_manage_honor_files = false, can_manage_activity_files = false, can_access_migration_list = false WHERE id = $3', ['r4', kingdomId, userId]);
         
         return res.json({ success: true, message: `User ${userId} was assigned role R4 and kingdom ${kingdomId}.` });
         
@@ -1766,9 +1771,3 @@ async function startServer() {
 }
 
 startServer();
-
-
-
-
-
-
