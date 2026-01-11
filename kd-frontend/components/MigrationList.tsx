@@ -506,20 +506,20 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
         {loading && <p className="text-slate-400">Loading migration data...</p>}
         {error && <p className="text-rose-300">{error}</p>}
         {!loading && !error && (
-          <Table className="table-fixed min-w-[2100px] [&_td]:px-2 [&_td]:py-2">
+          <Table className="table-fixed min-w-[1500px] [&_td]:px-2 [&_td]:py-2">
             <TableHeader>
               <tr>
-                <TableCell header className="w-[110px]">Gov ID</TableCell>
-                <TableCell header className="w-[180px] whitespace-normal">Name</TableCell>
-                <TableCell header className="w-[120px] whitespace-normal">Alliance</TableCell>
-                <TableCell header className="w-[130px]">Base Power</TableCell>
-                <TableCell header className="w-[150px]">DKP</TableCell>
-                <TableCell header className="w-[150px]">Deads</TableCell>
-                <TableCell header className="w-[190px] whitespace-normal">Reason for migration</TableCell>
-                <TableCell header className="w-[120px]">Contacted</TableCell>
-                <TableCell header className="w-[520px] whitespace-normal">Info</TableCell>
-                <TableCell header className="w-[170px]">Migrated</TableCell>
-                <TableCell header className="w-[80px]">Actions</TableCell>
+                <TableCell header className="w-[90px]">Gov ID</TableCell>
+                <TableCell header className="w-[150px] whitespace-normal">Name</TableCell>
+                <TableCell header className="w-[100px] whitespace-normal">Alliance</TableCell>
+                <TableCell header className="w-[110px]">Base Power</TableCell>
+                <TableCell header className="w-[120px]">DKP</TableCell>
+                <TableCell header className="w-[120px]">Deads</TableCell>
+                <TableCell header className="w-[320px] whitespace-normal">Info</TableCell>
+                <TableCell header className="w-[170px] whitespace-normal">Reason for migration</TableCell>
+                <TableCell header className="w-[90px]">Contacted</TableCell>
+                <TableCell header className="w-[120px]">Migrated</TableCell>
+                <TableCell header className="w-[60px]">Actions</TableCell>
               </tr>
             </TableHeader>
             <tbody>
@@ -557,6 +557,26 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                         <div>{formatNumber(player.deadGoal || 0)}</div>
                       </div>
                     </TableCell>
+                    <TableCell className="whitespace-normal align-top">
+                      <div className="flex flex-col gap-2">
+                        <textarea
+                          value={infoText}
+                          onChange={(event) => updateDetails(player.id, { info: event.target.value })}
+                          rows={isExpanded ? 8 : 4}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs text-white resize-none min-h-[140px]"
+                          placeholder="Notes"
+                        />
+                        {showExpand && (
+                          <button
+                            type="button"
+                            onClick={() => toggleInfoExpanded(player.id)}
+                            className="text-xs text-slate-400 hover:text-slate-200 w-fit"
+                          >
+                            {isExpanded ? 'Collapse' : 'Expand'}
+                          </button>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <select
                         value={details?.reason || 'dkp-deads'}
@@ -577,26 +597,6 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                         <option value="yes">Yes</option>
                         <option value="no">No</option>
                       </select>
-                    </TableCell>
-                    <TableCell className="whitespace-normal align-top">
-                      <div className="flex flex-col gap-2">
-                        <textarea
-                          value={infoText}
-                          onChange={(event) => updateDetails(player.id, { info: event.target.value })}
-                          rows={isExpanded ? 8 : 4}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs text-white resize-none min-h-[140px]"
-                          placeholder="Notes"
-                        />
-                        {showExpand && (
-                          <button
-                            type="button"
-                            onClick={() => toggleInfoExpanded(player.id)}
-                            className="text-xs text-slate-400 hover:text-slate-200 w-fit"
-                          >
-                            {isExpanded ? 'Collapse' : 'Expand'}
-                          </button>
-                        )}
-                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
