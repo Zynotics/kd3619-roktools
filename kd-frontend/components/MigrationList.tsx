@@ -506,7 +506,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
         {loading && <p className="text-slate-400">Loading migration data...</p>}
         {error && <p className="text-rose-300">{error}</p>}
         {!loading && !error && (
-          <Table className="table-fixed min-w-[1900px]">
+          <Table className="table-fixed min-w-[2100px] [&_td]:px-2 [&_td]:py-2">
             <TableHeader>
               <tr>
                 <TableCell header className="w-[110px]">Gov ID</TableCell>
@@ -517,7 +517,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                 <TableCell header className="w-[150px]">Deads</TableCell>
                 <TableCell header className="w-[190px] whitespace-normal">Reason for migration</TableCell>
                 <TableCell header className="w-[120px]">Contacted</TableCell>
-                <TableCell header className="w-[420px] whitespace-normal">Info</TableCell>
+                <TableCell header className="w-[520px] whitespace-normal">Info</TableCell>
                 <TableCell header className="w-[170px]">Migrated</TableCell>
                 <TableCell header className="w-[80px]">Actions</TableCell>
               </tr>
@@ -583,8 +583,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                         <textarea
                           value={infoText}
                           onChange={(event) => updateDetails(player.id, { info: event.target.value })}
-                          rows={isExpanded ? 6 : 3}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs text-white resize-none min-h-[96px]"
+                          rows={isExpanded ? 8 : 4}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs text-white resize-none min-h-[140px]"
                           placeholder="Notes"
                         />
                         {showExpand && (
