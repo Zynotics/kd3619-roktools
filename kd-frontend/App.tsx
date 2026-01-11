@@ -13,6 +13,7 @@ import R5CustomerAccess from './components/R5CustomerAccess';
 import R5CodeAdmin from './components/R5CodeAdmin';
 import ShopWidget from './components/ShopWidget';
 import LandingPage from './components/LandingPage';
+import MigrationList from './components/MigrationList';
 import { fetchShopVisibility } from './api';
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
@@ -29,6 +30,7 @@ type ActiveView =
   | 'kingdoms-overview'
   | 'r5-access'
   | 'r5-codes'
+  | 'migration-list'
   | 'shop';
 // Sidebar Navigation Item
 const NavItem: React.FC<{
@@ -97,6 +99,7 @@ const AppContent: React.FC = () => {
     !isSuperAdmin &&
     slugKingdomId !== null &&
     !isSameKingdomAsSlug;
+  const canAccessMigrationList = !shouldForcePublicForForeignKingdom && (isSuperAdmin || isR5 || (isR4 && !!user?.canAccessMigrationList));
 
   const canManageKvk =
     !shouldForcePublicForForeignKingdom &&
@@ -156,6 +159,16 @@ const AppContent: React.FC = () => {
           icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
           onNavigate={onNavigate}
         />
+        {canAccessMigrationList && (
+          <NavItem
+            view="migration-list"
+            currentActiveView={activeView}
+            setActiveView={setActiveView}
+            label="Migration list"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h8M3 12h12M3 17h6M15 7l4 4m0 0l-4 4m4-4H11" /></svg>}
+            onNavigate={onNavigate}
+          />
+        )}
         {canAccessShop && (
           <NavItem
             view="shop"
@@ -324,7 +337,7 @@ const AppContent: React.FC = () => {
       !isRegisterInvite
     ) {
         // Reset gesch?tzte Views wenn Public
-        if (['admin', 'activity', 'kvk-manager', 'kingdoms-overview'].includes(activeView)) setActiveView('overview');
+        if (['admin', 'activity', 'kvk-manager', 'kingdoms-overview', 'migration-list'].includes(activeView)) setActiveView('overview');
         return;
     } 
     if (isRegistrationInviteView) {
@@ -347,6 +360,9 @@ const AppContent: React.FC = () => {
     if (activeView === 'r5-access' && !isR5) {
         setActiveView('overview');
     }
+    if (activeView === 'migration-list' && !canAccessMigrationList) {
+        setActiveView('overview');
+    }
     if (activeView === 'shop' && (isShopVisibilityLoading || !r5ShopEnabled)) {
         setActiveView('overview');
     }
@@ -360,6 +376,7 @@ const AppContent: React.FC = () => {
     shouldForcePublicForForeignKingdom,
     r5ShopEnabled,
     isShopVisibilityLoading,
+    canAccessMigrationList,
   ]);
 
   // Persist last visited view for refreshes
@@ -647,6 +664,16 @@ const AppContent: React.FC = () => {
                     />
                 </PublicOrProtectedRoute>
             )}
+                {activeView === 'migration-list' && canAccessMigrationList && (
+                    <PublicOrProtectedRoute
+                    isPublic={false}
+                    publicSlug={null}
+                    accessType="migration"
+                    isAdminOverride={false}
+                    >
+                      <MigrationList kingdomSlug={publicSlug} />
+                    </PublicOrProtectedRoute>
+                )}
                 {activeView === 'shop' && canAccessShop && (
                     <PublicOrProtectedRoute
                     isPublic={effectivePublicView}
@@ -682,7 +709,7 @@ interface PublicOrProtectedRouteProps {
   children: React.ReactNode;
   isPublic: boolean;
   publicSlug: string | null;
-  accessType: 'overview' | 'honor' | 'analytics' | 'activity' | 'admin';
+  accessType: 'overview' | 'honor' | 'analytics' | 'activity' | 'admin' | 'migration';
   isAdminOverride: boolean;
 }
 const PublicOrProtectedRoute: React.FC<PublicOrProtectedRouteProps> = ({

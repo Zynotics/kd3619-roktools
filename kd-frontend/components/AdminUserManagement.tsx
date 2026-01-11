@@ -27,6 +27,7 @@ interface User {
   canManageActivityFiles?: boolean;
   canManageAnalyticsFiles?: boolean;
   canAccessKvkManager?: boolean;
+  canAccessMigrationList?: boolean;
 }
 
 type Kingdom = KingdomType;
@@ -145,6 +146,7 @@ const AdminUserManagement: React.FC = () => {
             canManageActivityFiles: u.canManageActivityFiles ?? false,
             canManageAnalyticsFiles: u.canManageAnalyticsFiles ?? false,
             canAccessKvkManager: u.canAccessKvkManager ?? false,
+            canAccessMigrationList: u.canAccessMigrationList ?? false,
         }));
         
         setUsers(normalizedUsers);
@@ -267,7 +269,7 @@ const AdminUserManagement: React.FC = () => {
   // 📝 NEU: Handler für die neuen granularen File Permissions
   const updateFileAccess = async (
     targetUser: User,
-    key: 'canManageActivityFiles' | 'canManageAnalyticsFiles' | 'canAccessKvkManager',
+    key: 'canManageActivityFiles' | 'canManageAnalyticsFiles' | 'canAccessKvkManager' | 'canAccessMigrationList',
     value: boolean
   ) => {
     setUserError(null);
@@ -291,6 +293,10 @@ const AdminUserManagement: React.FC = () => {
             : targetUser.canManageAnalyticsFiles,
         canAccessKvkManager:
           key === 'canAccessKvkManager' ? value : targetUser.canAccessKvkManager,
+        canAccessMigrationList:
+          key === 'canAccessMigrationList'
+            ? value
+            : targetUser.canAccessMigrationList,
       };
 
       // 📝 NEU: Verwende /api/admin/users/access-files Endpoint
@@ -1001,6 +1007,9 @@ const AdminUserManagement: React.FC = () => {
                       <TableCell align="center" header>
                         KVK Manager
                       </TableCell>
+                      <TableCell align="center" header>
+                        Migration List
+                      </TableCell>
                     </>
                   )}
                   <TableCell align="center" header>
@@ -1123,6 +1132,19 @@ const AdminUserManagement: React.FC = () => {
                               } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                               {user.canAccessKvkManager ? 'Unlocked' : 'Locked'}
+                            </button>
+                          </TableCell>
+                          <TableCell align="center">
+                            <button
+                              disabled={!canManageFileRightsGranularly}
+                              onClick={() => updateFileAccess(user, 'canAccessMigrationList', !user.canAccessMigrationList)}
+                              className={`px-2 py-1 rounded text-xs font-semibold ${
+                                user.canAccessMigrationList
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'bg-gray-700 text-gray-300'
+                              } ${!canManageFileRightsGranularly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              {user.canAccessMigrationList ? 'Unlocked' : 'Locked'}
                             </button>
                           </TableCell>
                         </>

@@ -5,7 +5,7 @@ import { useAuth, UserRole } from './AuthContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  accessType?: 'overview' | 'honor' | 'analytics' | 'admin' | 'activity';
+  accessType?: 'overview' | 'honor' | 'analytics' | 'admin' | 'activity' | 'migration';
 }
 
 // Eine einfache Komponente für den Fall, dass die Approval aussteht
@@ -50,6 +50,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, accessType })
       return (
           <div className="text-center p-8 text-red-400 bg-gray-800 rounded-xl">
               Access Denied. Only R5 or Admin can access User Management.
+          </div>
+      );
+    }
+  }
+  if (accessType === 'migration') {
+    const canAccessMigrationList = role === 'admin' || role === 'r5' || (role === 'r4' && !!user.canAccessMigrationList);
+    if (!canAccessMigrationList) {
+      return (
+          <div className="text-center p-8 text-red-400 bg-gray-800 rounded-xl">
+              Access Denied. Only R5 or authorized R4 users can access the Migration list.
           </div>
       );
     }
