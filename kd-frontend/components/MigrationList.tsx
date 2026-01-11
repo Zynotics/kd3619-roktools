@@ -515,7 +515,6 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                 <TableCell header className="w-[110px]">Base Power</TableCell>
                 <TableCell header className="w-[120px]">DKP</TableCell>
                 <TableCell header className="w-[120px]">Deads</TableCell>
-                <TableCell header className="w-[260px] whitespace-normal">Info</TableCell>
                 <TableCell header className="w-[170px] whitespace-normal">Reason for migration</TableCell>
                 <TableCell header className="w-[90px]">Contacted</TableCell>
                 <TableCell header className="w-[100px]">Migrated</TableCell>
@@ -555,26 +554,6 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                       <div className="text-xs text-slate-500 leading-tight">
                         <div>{formatNumber(player.deadDiff || 0)}</div>
                         <div>{formatNumber(player.deadGoal || 0)}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-normal align-top">
-                      <div className="flex flex-col gap-2">
-                        <textarea
-                          value={infoText}
-                          onChange={(event) => updateDetails(player.id, { info: event.target.value })}
-                          rows={isExpanded ? 6 : 3}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs text-white resize-none min-h-[96px]"
-                          placeholder="Notes"
-                        />
-                        {showExpand && (
-                          <button
-                            type="button"
-                            onClick={() => toggleInfoExpanded(player.id)}
-                            className="text-xs text-slate-400 hover:text-slate-200 w-fit"
-                          >
-                            {isExpanded ? 'Collapse' : 'Expand'}
-                          </button>
-                        )}
                       </div>
                     </TableCell>
                     <TableCell>
