@@ -509,8 +509,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                         <textarea
                           value={infoText}
                           onChange={(event) => updateDetails(player.id, { info: event.target.value })}
-                          rows={isExpanded ? 4 : 2}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white resize-none"
+                          rows={isExpanded ? 6 : 3}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs text-white resize-none min-h-[84px]"
                           placeholder="Notes"
                         />
                         {showExpand && (
@@ -528,9 +528,26 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                       <button
                         type="button"
                         onClick={() => handleRemovePlayer(player.id)}
-                        className="text-xs text-rose-200 hover:text-rose-100 bg-rose-500/20 hover:bg-rose-500/30 rounded px-2 py-1"
+                        aria-label="Remove from list"
+                        title="Remove from list"
+                        className="text-rose-200 hover:text-rose-100 bg-rose-500/20 hover:bg-rose-500/30 rounded px-2 py-1 inline-flex items-center justify-center"
                       >
-                        Remove
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M3 6h18" />
+                          <path d="M8 6v-2h8v2" />
+                          <path d="M7 6l1 14h8l1-14" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                        </svg>
                       </button>
                     </TableCell>
                   </TableRow>
