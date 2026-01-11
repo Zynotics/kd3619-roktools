@@ -482,7 +482,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                   className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 flex items-center justify-between"
                 >
                   <span>{player.name} <span className="text-slate-500">({player.id})</span></span>
-                  <span className="text-xs text-slate-500">{player.alliance || 'â€”'}</span>
+                  <span className="text-xs text-slate-500">{player.alliance || ''}</span>
                 </button>
               ))}
             </div>
@@ -526,7 +526,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                   <TableRow key={player.id}>
                     <TableCell>{player.id}</TableCell>
                     <TableCell className="whitespace-normal">{player.name}</TableCell>
-                    <TableCell className="whitespace-normal">{player.alliance || 'ƒ?"'}</TableCell>
+                    <TableCell className="whitespace-normal">{player.alliance || '-'}</TableCell>
                     <TableCell>{formatNumber(player.basePower || 0)}</TableCell>
                     <TableCell>
                       <div className={`font-semibold ${getPercentClass(player.dkpPercent)}`}>
