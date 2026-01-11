@@ -506,7 +506,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
         {loading && <p className="text-slate-400">Loading migration data...</p>}
         {error && <p className="text-rose-300">{error}</p>}
         {!loading && !error && (
-          <Table className="table-fixed min-w-[1500px] [&_td]:px-2 [&_td]:py-2">
+          <Table className="table-fixed min-w-[1400px] [&_td]:px-2 [&_td]:py-2">
             <TableHeader>
               <tr>
                 <TableCell header className="w-[90px]">Gov ID</TableCell>
@@ -515,10 +515,10 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                 <TableCell header className="w-[110px]">Base Power</TableCell>
                 <TableCell header className="w-[120px]">DKP</TableCell>
                 <TableCell header className="w-[120px]">Deads</TableCell>
-                <TableCell header className="w-[320px] whitespace-normal">Info</TableCell>
+                <TableCell header className="w-[260px] whitespace-normal">Info</TableCell>
                 <TableCell header className="w-[170px] whitespace-normal">Reason for migration</TableCell>
                 <TableCell header className="w-[90px]">Contacted</TableCell>
-                <TableCell header className="w-[120px]">Migrated</TableCell>
+                <TableCell header className="w-[100px]">Migrated</TableCell>
                 <TableCell header className="w-[60px]">Actions</TableCell>
               </tr>
             </TableHeader>
@@ -562,8 +562,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                         <textarea
                           value={infoText}
                           onChange={(event) => updateDetails(player.id, { info: event.target.value })}
-                          rows={isExpanded ? 8 : 4}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs text-white resize-none min-h-[140px]"
+                          rows={isExpanded ? 6 : 3}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs text-white resize-none min-h-[96px]"
                           placeholder="Notes"
                         />
                         {showExpand && (
