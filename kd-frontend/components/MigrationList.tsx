@@ -227,6 +227,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   const [statsData, setStatsData] = useState<StatProgressRow[]>([]);
   const [manualIds, setManualIds] = useState<string[]>([]);
   const [excludedIds, setExcludedIds] = useState<string[]>([]);
+  const [manualMigratedIds, setManualMigratedIds] = useState<string[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, MigrationMeta>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedInfoIds, setExpandedInfoIds] = useState<string[]>([]);
@@ -262,6 +263,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
       setError('');
       setManualIds([]);
       setExcludedIds([]);
+      setManualMigratedIds([]);
       setDetailsById({});
       setExpandedInfoIds([]);
       try {
@@ -307,6 +309,46 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     [statsData]
   );
 
+  const autoMigratedIds = useMemo(() => {
+    if (!activeEvent || overviewFiles.length === 0) return new Set<string>();
+
+    const eventFileIds = new Set<string>();
+    activeEvent.fights?.forEach(fight => {
+      if (fight.startFileId) eventFileIds.add(fight.startFileId);
+      if (fight.endFileId) eventFileIds.add(fight.endFileId);
+    });
+    if (activeEvent.eventStartFileId) eventFileIds.add(activeEvent.eventStartFileId);
+    if (eventFileIds.size === 0) return new Set<string>();
+
+    let lastEventIndex = -1;
+    let lastEventFile: UploadedFile | undefined;
+    overviewFiles.forEach((file, index) => {
+      if (eventFileIds.has(file.id) && index > lastEventIndex) {
+        lastEventIndex = index;
+        lastEventFile = file;
+      }
+    });
+    if (!lastEventFile || lastEventIndex < 0) return new Set<string>();
+
+    const baseIds = new Set<string>(Array.from(getSnapshotData(lastEventFile).keys()));
+    if (baseIds.size === 0) return new Set<string>();
+
+    const migratedIds = new Set<string>();
+    overviewFiles.slice(lastEventIndex + 1).forEach(file => {
+      const currentIds = new Set<string>(Array.from(getSnapshotData(file).keys()));
+      baseIds.forEach(id => {
+        if (!currentIds.has(id)) migratedIds.add(id);
+      });
+    });
+
+    return migratedIds;
+  }, [activeEvent, overviewFiles]);
+
+  const autoMigratedPlayers = useMemo(
+    () => statsData.filter(player => autoMigratedIds.has(player.id)),
+    [statsData, autoMigratedIds]
+  );
+
   const manualMigrationPlayers = useMemo(
     () => manualIds.map(id => statsData.find(player => player.id === id)).filter(Boolean) as StatProgressRow[],
     [manualIds, statsData]
@@ -316,9 +358,10 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     const map = new Map<string, StatProgressRow>();
     autoMigrationPlayers.forEach(player => map.set(player.id, player));
     manualMigrationPlayers.forEach(player => map.set(player.id, player));
+    autoMigratedPlayers.forEach(player => map.set(player.id, player));
     const blocked = new Set(excludedIds);
     return Array.from(map.values()).filter(player => !blocked.has(player.id));
-  }, [autoMigrationPlayers, manualMigrationPlayers, excludedIds]);
+  }, [autoMigrationPlayers, manualMigrationPlayers, autoMigratedPlayers, excludedIds]);
 
   useEffect(() => {
     if (migrationPlayers.length === 0) return;
@@ -360,6 +403,12 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   const handleRemovePlayer = (id: string) => {
     setManualIds(prev => prev.filter(existing => existing !== id));
     setExcludedIds(prev => (prev.includes(id) ? prev : [...prev, id]));
+  };
+
+  const toggleManualMigrated = (id: string) => {
+    setManualMigratedIds(prev => (
+      prev.includes(id) ? prev.filter(existing => existing !== id) : [...prev, id]
+    ));
   };
 
   const toggleInfoExpanded = (id: string) => {
@@ -452,6 +501,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                 <TableCell header>Reason for migration</TableCell>
                 <TableCell header>Contacted</TableCell>
                 <TableCell header>Info</TableCell>
+                <TableCell header>Migrated</TableCell>
                 <TableCell header>Actions</TableCell>
               </tr>
             </TableHeader>
@@ -461,6 +511,9 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                 const infoText = details?.info || '';
                 const isExpanded = expandedInfoIds.includes(player.id);
                 const showExpand = infoText.length > 80;
+                const isAutoMigrated = autoMigratedIds.has(player.id);
+                const isManuallyMigrated = manualMigratedIds.includes(player.id);
+                const isMigrated = isAutoMigrated || isManuallyMigrated;
                 return (
                   <TableRow key={player.id}>
                     <TableCell>{player.id}</TableCell>
@@ -525,6 +578,21 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                       </div>
                     </TableCell>
                     <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold ${isMigrated ? 'text-emerald-300' : 'text-slate-400'}`}>
+                          {isAutoMigrated ? 'Auto' : isMigrated ? 'Yes' : 'No'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => toggleManualMigrated(player.id)}
+                          disabled={isAutoMigrated}
+                          className="text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed rounded px-2 py-1"
+                        >
+                          {isMigrated ? 'Unmark' : 'Mark'}
+                        </button>
+                      </div>
+                    </TableCell>
+                    <TableCell>
                       <button
                         type="button"
                         onClick={() => handleRemovePlayer(player.id)}
@@ -555,7 +623,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
               })}
               {migrationPlayers.length === 0 && (
                 <TableRow>
-                  <td colSpan={10} className="px-4 py-3 text-center text-slate-400">
+                  <td colSpan={11} className="px-4 py-3 text-center text-slate-400">
                     No players currently missing KvK goals.
                   </td>
                 </TableRow>
