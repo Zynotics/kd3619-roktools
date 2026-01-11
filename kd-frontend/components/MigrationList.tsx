@@ -502,11 +502,11 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
         </div>
       </Card>
 
-      <Card className="p-0">
+      <Card className="p-0 border-0 shadow-none bg-transparent">
         {loading && <p className="text-slate-400">Loading migration data...</p>}
         {error && <p className="text-rose-300">{error}</p>}
         {!loading && !error && (
-          <Table className="table-fixed min-w-[1400px] [&_td]:px-2 [&_td]:py-2">
+          <Table frame={false} className="table-fixed min-w-[1400px] [&_td]:px-2 [&_td]:py-2">
             <TableHeader>
               <tr>
                 <TableCell header className="w-[90px]">Gov ID</TableCell>
