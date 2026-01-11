@@ -226,8 +226,10 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   const [eventStartSelection, setEventStartSelection] = useState<string>('');
   const [statsData, setStatsData] = useState<StatProgressRow[]>([]);
   const [manualIds, setManualIds] = useState<string[]>([]);
+  const [excludedIds, setExcludedIds] = useState<string[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, MigrationMeta>>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [expandedInfoIds, setExpandedInfoIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -259,7 +261,9 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
       setLoading(true);
       setError('');
       setManualIds([]);
+      setExcludedIds([]);
       setDetailsById({});
+      setExpandedInfoIds([]);
       try {
         const response = await fetch(`${API_BASE_URL}/api/public/kingdom/${kingdomSlug}/overview-files`);
         if (!response.ok) {
@@ -312,8 +316,9 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     const map = new Map<string, StatProgressRow>();
     autoMigrationPlayers.forEach(player => map.set(player.id, player));
     manualMigrationPlayers.forEach(player => map.set(player.id, player));
-    return Array.from(map.values());
-  }, [autoMigrationPlayers, manualMigrationPlayers]);
+    const blocked = new Set(excludedIds);
+    return Array.from(map.values()).filter(player => !blocked.has(player.id));
+  }, [autoMigrationPlayers, manualMigrationPlayers, excludedIds]);
 
   useEffect(() => {
     if (migrationPlayers.length === 0) return;
@@ -347,8 +352,20 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   }, [searchQuery, statsData]);
 
   const handleAddPlayer = (id: string) => {
+    setExcludedIds(prev => prev.filter(existing => existing !== id));
     setManualIds(prev => (prev.includes(id) ? prev : [...prev, id]));
     setSearchQuery('');
+  };
+
+  const handleRemovePlayer = (id: string) => {
+    setManualIds(prev => prev.filter(existing => existing !== id));
+    setExcludedIds(prev => (prev.includes(id) ? prev : [...prev, id]));
+  };
+
+  const toggleInfoExpanded = (id: string) => {
+    setExpandedInfoIds(prev => (
+      prev.includes(id) ? prev.filter(existing => existing !== id) : [...prev, id]
+    ));
   };
 
   const updateDetails = (id: string, updates: Partial<MigrationMeta>) => {
@@ -435,11 +452,15 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                 <TableCell header>Reason for migration</TableCell>
                 <TableCell header>Contacted</TableCell>
                 <TableCell header>Info</TableCell>
+                <TableCell header>Actions</TableCell>
               </tr>
             </TableHeader>
             <tbody>
               {migrationPlayers.map(player => {
                 const details = detailsById[player.id];
+                const infoText = details?.info || '';
+                const isExpanded = expandedInfoIds.includes(player.id);
+                const showExpand = infoText.length > 80;
                 return (
                   <TableRow key={player.id}>
                     <TableCell>{player.id}</TableCell>
@@ -484,20 +505,40 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                       </select>
                     </TableCell>
                     <TableCell>
-                      <input
-                        type="text"
-                        value={details?.info || ''}
-                        onChange={(event) => updateDetails(player.id, { info: event.target.value })}
-                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
-                        placeholder="Notes"
-                      />
+                      <div className="flex flex-col gap-2">
+                        <textarea
+                          value={infoText}
+                          onChange={(event) => updateDetails(player.id, { info: event.target.value })}
+                          rows={isExpanded ? 4 : 2}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white resize-none"
+                          placeholder="Notes"
+                        />
+                        {showExpand && (
+                          <button
+                            type="button"
+                            onClick={() => toggleInfoExpanded(player.id)}
+                            className="text-xs text-slate-400 hover:text-slate-200 w-fit"
+                          >
+                            {isExpanded ? 'Collapse' : 'Expand'}
+                          </button>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePlayer(player.id)}
+                        className="text-xs text-rose-200 hover:text-rose-100 bg-rose-500/20 hover:bg-rose-500/30 rounded px-2 py-1"
+                      >
+                        Remove
+                      </button>
                     </TableCell>
                   </TableRow>
                 );
               })}
               {migrationPlayers.length === 0 && (
                 <TableRow>
-                  <td colSpan={9} className="px-4 py-3 text-center text-slate-400">
+                  <td colSpan={10} className="px-4 py-3 text-center text-slate-400">
                     No players currently missing KvK goals.
                   </td>
                 </TableRow>
