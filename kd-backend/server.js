@@ -415,6 +415,26 @@ function requireKvkManager(req, res, next) {
   return res.status(403).json({ error: 'Admin, R5 or KvK Manager rights required' });
 }
 
+function requireMigrationListAccess(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+  const { role, kingdomId, canAccessMigrationList } = req.user;
+
+  if (role === 'admin') return next();
+
+  if (role === 'r5') {
+    if (!isActiveR5(req)) return ensureActiveR5OrDeny(res);
+    if (!kingdomId) return res.status(403).json({ error: 'R5 user is not assigned to a kingdom.' });
+    return next();
+  }
+
+  if (role === 'r4' && canAccessMigrationList) {
+    if (!kingdomId) return res.status(403).json({ error: 'R4 user is not assigned to a kingdom.' });
+    return next();
+  }
+
+  return res.status(403).json({ error: 'Admin, R5 or authorized R4 required' });
+}
+
 function hasFileManagementAccess(req, type) {
     const {
       role,
@@ -1517,6 +1537,76 @@ app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
     if (!k) return res.status(404).json({ error: 'Not found' });
     const rows = await all(`SELECT * FROM honor_files WHERE kingdom_id = $1 ORDER BY fileOrder, uploaddate ASC`, [k.id]);
     res.json(rows.map(normalizeFileRow));
+});
+
+// ==================== MIGRATION LIST ====================
+
+app.get('/api/migration-list', authenticateToken, requireMigrationListAccess, async (req, res) => {
+  try {
+    const kingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+    const rows = await all(
+      `SELECT player_id, reason, contacted, info, manually_added, excluded, migrated_override
+       FROM migration_list_entries
+       WHERE kingdom_id = $1`,
+      [kingdomId]
+    );
+    res.json(rows.map(row => ({
+      playerId: row.player_id,
+      reason: row.reason,
+      contacted: row.contacted,
+      info: row.info,
+      manuallyAdded: row.manually_added,
+      excluded: row.excluded,
+      migratedOverride: row.migrated_override
+    })));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to load migration list.' });
+  }
+});
+
+app.put('/api/migration-list', authenticateToken, requireMigrationListAccess, async (req, res) => {
+  try {
+    const kingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+    const entries = Array.isArray(req.body?.entries) ? req.body.entries : [];
+
+    await query('BEGIN');
+    await query('DELETE FROM migration_list_entries WHERE kingdom_id = $1', [kingdomId]);
+
+    for (const entry of entries) {
+      if (!entry || !entry.playerId) continue;
+      const playerId = String(entry.playerId);
+      const migratedOverride =
+        entry.migratedOverride === true ? true :
+        entry.migratedOverride === false ? false :
+        null;
+
+      await query(
+        `INSERT INTO migration_list_entries
+          (kingdom_id, player_id, reason, contacted, info, manually_added, excluded, migrated_override, updated_by_user_id, updated_at)
+         VALUES
+          ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())`,
+        [
+          kingdomId,
+          playerId,
+          entry.reason || null,
+          entry.contacted || null,
+          entry.info || null,
+          !!entry.manuallyAdded,
+          !!entry.excluded,
+          migratedOverride,
+          req.user.id
+        ]
+      );
+    }
+
+    await query('COMMIT');
+    res.json({ success: true, count: entries.length });
+  } catch (error) {
+    console.error(error);
+    await query('ROLLBACK');
+    res.status(500).json({ error: 'Failed to save migration list.' });
+  }
 });
 
 

@@ -386,11 +386,49 @@ async function initUsersColumns() {
   }
 }
 
+async function initMigrationListTable() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS migration_list_entries (
+        kingdom_id TEXT NOT NULL,
+        player_id TEXT NOT NULL,
+        reason TEXT,
+        contacted TEXT,
+        info TEXT,
+        manually_added BOOLEAN DEFAULT FALSE,
+        excluded BOOLEAN DEFAULT FALSE,
+        migrated_override BOOLEAN,
+        updated_by_user_id TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (kingdom_id, player_id)
+      )
+    `);
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name = 'migration_list_entries_kingdom_fk'
+            AND table_name = 'migration_list_entries'
+        ) THEN
+          ALTER TABLE migration_list_entries
+            ADD CONSTRAINT migration_list_entries_kingdom_fk FOREIGN KEY (kingdom_id)
+            REFERENCES kingdoms(id) ON DELETE CASCADE;
+        END IF;
+      END$$;
+    `);
+    console.log('Postgres: migration_list_entries table checked/updated.');
+  } catch (e) {
+    console.error('Error initializing migration_list_entries table:', e.message);
+  }
+}
+
 if (process.env.DATABASE_URL) {
     initKvkTable();
     initR5CodesTable();
     initAppSettingsTable();
     initUsersColumns();
+    initMigrationListTable();
 }
 
 /**
@@ -580,6 +618,7 @@ module.exports = {
   deactivateR5Code,
   getAppSetting,
   setAppSetting,
+  initMigrationListTable,
   // KvK Exports
   createKvkEvent,
   getKvkEvents,
