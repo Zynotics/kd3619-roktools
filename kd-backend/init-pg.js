@@ -107,6 +107,23 @@ async function init() {
     );
   `);
 
+  // MIGRATION LIST ENTRIES
+  await query(`
+    CREATE TABLE IF NOT EXISTS migration_list_entries (
+      kingdom_id TEXT NOT NULL,
+      player_id TEXT NOT NULL,
+      reason TEXT,
+      contacted TEXT,
+      info TEXT,
+      manually_added BOOLEAN DEFAULT FALSE,
+      excluded BOOLEAN DEFAULT FALSE,
+      migrated_override BOOLEAN,
+      updated_by_user_id TEXT,
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (kingdom_id, player_id)
+    );
+  `);
+
   // KINGDOMS
   await query(`
     CREATE TABLE IF NOT EXISTS kingdoms (
@@ -207,6 +224,22 @@ async function init() {
       ) THEN
         ALTER TABLE kvk_events
           ADD CONSTRAINT kvk_events_kingdom_fk FOREIGN KEY (kingdom_id)
+          REFERENCES kingdoms(id) ON DELETE CASCADE;
+      END IF;
+    END$$;
+  `);
+
+  // Migration list: kingdom_id guardrail
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'migration_list_entries_kingdom_fk'
+          AND table_name = 'migration_list_entries'
+      ) THEN
+        ALTER TABLE migration_list_entries
+          ADD CONSTRAINT migration_list_entries_kingdom_fk FOREIGN KEY (kingdom_id)
           REFERENCES kingdoms(id) ON DELETE CASCADE;
       END IF;
     END$$;

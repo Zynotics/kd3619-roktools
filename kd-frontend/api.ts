@@ -135,6 +135,55 @@ export async function fetchShopVisibility(): Promise<{ enabled: boolean }> {
   return res.json();
 }
 
+export async function fetchMigrationList(slug?: string): Promise<{
+  playerId: string;
+  reason?: string | null;
+  contacted?: string | null;
+  info?: string | null;
+  manuallyAdded?: boolean;
+  excluded?: boolean;
+  migratedOverride?: boolean | null;
+}[]> {
+  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/migration-list${query}`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to load migration list');
+  }
+
+  return res.json();
+}
+
+export async function saveMigrationList(
+  entries: {
+    playerId: string;
+    reason?: string | null;
+    contacted?: string | null;
+    info?: string | null;
+    manuallyAdded?: boolean;
+    excluded?: boolean;
+    migratedOverride?: boolean | null;
+  }[],
+  slug?: string
+): Promise<{ success: boolean; count: number }> {
+  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/migration-list${query}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ entries }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to save migration list');
+  }
+
+  return res.json();
+}
+
 // ==================== FILE MANAGEMENT API ====================
 
 /**

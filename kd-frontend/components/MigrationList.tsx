@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { KvkEvent, UploadedFile } from '../types';
-import { API_BASE_URL, fetchPublicKvkEvents } from '../api';
+import { API_BASE_URL, fetchMigrationList, fetchPublicKvkEvents, saveMigrationList } from '../api';
 import { findColumnIndex, formatNumber, parseGermanNumber } from '../utils';
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
@@ -247,6 +247,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   const [contactedFilter, setContactedFilter] = useState('all');
   const [migratedFilter, setMigratedFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
+  const [isPersistLoaded, setIsPersistLoaded] = useState(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -287,6 +289,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
       setContactedFilter('all');
       setMigratedFilter('all');
       setSortConfig(null);
+      setIsPersistLoaded(false);
       try {
         const response = await fetch(`${API_BASE_URL}/api/public/kingdom/${kingdomSlug}/overview-files`);
         if (!response.ok) {
@@ -305,6 +308,49 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     };
     loadOverviewFiles();
   }, [kingdomSlug, selectedEventId, events]);
+
+  useEffect(() => {
+    if (!token || !kingdomSlug) return;
+    let isMounted = true;
+    const loadPersisted = async () => {
+      try {
+        const entries = await fetchMigrationList(kingdomSlug);
+        if (!isMounted) return;
+        const details: Record<string, MigrationMeta> = {};
+        const manualIdsNext: string[] = [];
+        const excludedIdsNext: string[] = [];
+        const manualMigratedNext: string[] = [];
+        const manualUnmigratedNext: string[] = [];
+
+        entries.forEach(entry => {
+          const id = String(entry.playerId);
+          details[id] = {
+            reason: (entry.reason as MigrationMeta['reason']) || 'dkp-deads',
+            contacted: (entry.contacted as MigrationMeta['contacted']) || 'no',
+            info: entry.info || ''
+          };
+          if (entry.manuallyAdded) manualIdsNext.push(id);
+          if (entry.excluded) excludedIdsNext.push(id);
+          if (entry.migratedOverride === true) manualMigratedNext.push(id);
+          if (entry.migratedOverride === false) manualUnmigratedNext.push(id);
+        });
+
+        setDetailsById(details);
+        setManualIds(manualIdsNext);
+        setExcludedIds(excludedIdsNext);
+        setManualMigratedIds(manualMigratedNext);
+        setManualUnmigratedIds(manualUnmigratedNext);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (isMounted) setIsPersistLoaded(true);
+      }
+    };
+    loadPersisted();
+    return () => {
+      isMounted = false;
+    };
+  }, [token, kingdomSlug]);
 
   useEffect(() => {
     if (!activeEvent || !activeEvent.fights?.length || overviewFiles.length === 0) {
@@ -482,6 +528,38 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     manualUnmigratedIds
   ]);
 
+  const migrationEntries = useMemo(() => {
+    const ids = new Set<string>();
+    Object.keys(detailsById).forEach(id => ids.add(id));
+    manualIds.forEach(id => ids.add(id));
+    excludedIds.forEach(id => ids.add(id));
+    manualMigratedIds.forEach(id => ids.add(id));
+    manualUnmigratedIds.forEach(id => ids.add(id));
+
+    return Array.from(ids).map(id => {
+      const details = detailsById[id];
+      return {
+        playerId: id,
+        reason: details?.reason || 'dkp-deads',
+        contacted: details?.contacted || 'no',
+        info: details?.info || '',
+        manuallyAdded: manualIds.includes(id),
+        excluded: excludedIds.includes(id),
+        migratedOverride: manualMigratedIds.includes(id)
+          ? true
+          : manualUnmigratedIds.includes(id)
+            ? false
+            : null
+      };
+    });
+  }, [
+    detailsById,
+    manualIds,
+    excludedIds,
+    manualMigratedIds,
+    manualUnmigratedIds
+  ]);
+
   useEffect(() => {
     if (migrationPlayers.length === 0) return;
     setDetailsById(prev => {
@@ -546,6 +624,20 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     if (!sortConfig || sortConfig.key !== key) return null;
     return sortConfig.direction === 'asc' ? ' ▲' : ' ▼';
   };
+
+  useEffect(() => {
+    if (!isPersistLoaded || !token || !kingdomSlug) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveMigrationList(migrationEntries, kingdomSlug).catch(err => {
+        console.error(err);
+      });
+    }, 700);
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [isPersistLoaded, token, kingdomSlug, migrationEntries]);
 
   const updateDetails = (id: string, updates: Partial<MigrationMeta>) => {
     setDetailsById(prev => ({
