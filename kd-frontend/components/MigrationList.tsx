@@ -494,7 +494,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
         </div>
       </Card>
 
-      <Card className="p-6">
+      <Card className="p-0 border-0 shadow-none bg-transparent">
         {loading && <p className="text-slate-400">Loading migration data...</p>}
         {error && <p className="text-rose-300">{error}</p>}
         {!loading && !error && (
@@ -557,46 +557,31 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                           <option value="other">Other</option>
                         </select>
                       </TableCell>
-                      <TableCell colSpan={2}>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-[10px] uppercase tracking-wide text-slate-500">Contacted</span>
-                            <select
-                              value={details?.contacted || 'no'}
-                              onChange={(event) => updateDetails(player.id, { contacted: event.target.value as MigrationMeta['contacted'] })}
-                              className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
-                            >
-                              <option value="yes">Yes</option>
-                              <option value="no">No</option>
-                            </select>
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            <span className="text-[10px] uppercase tracking-wide text-slate-500">Migrated</span>
-                            <div className="flex items-center gap-2">
-                              <select
-                                value={migratedValue}
-                                onChange={(event) => handleMigratedChange(player.id, event.target.value as 'yes' | 'no')}
-                                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
-                              >
-                                <option value="yes">Yes</option>
-                                <option value="no">No</option>
-                              </select>
-                              {isAutoMigrated && !isManuallyMigrated && !isManuallyUnmigrated && (
-                                <span className="text-[10px] uppercase tracking-wide text-emerald-300">Auto</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="col-span-2">
-                            <textarea
-                              value={infoText}
-                              onChange={(event) => updateDetails(player.id, { info: event.target.value })}
-                              rows={2}
-                              className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white resize-none"
-                              placeholder="Notes"
-                            />
-                          </div>
-                        </div>
-                      </TableCell>
+                    <TableCell>
+                      <select
+                        value={details?.contacted || 'no'}
+                        onChange={(event) => updateDetails(player.id, { contacted: event.target.value as MigrationMeta['contacted'] })}
+                        className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                      >
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </select>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={migratedValue}
+                          onChange={(event) => handleMigratedChange(player.id, event.target.value as 'yes' | 'no')}
+                          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                        >
+                          <option value="yes">Yes</option>
+                          <option value="no">No</option>
+                        </select>
+                        {isAutoMigrated && !isManuallyMigrated && !isManuallyUnmigrated && (
+                          <span className="text-[10px] uppercase tracking-wide text-emerald-300">Auto</span>
+                        )}
+                      </div>
+                    </TableCell>
                       <TableCell>
                         <button
                           type="button"
