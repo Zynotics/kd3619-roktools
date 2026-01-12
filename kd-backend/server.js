@@ -1584,7 +1584,6 @@ app.put('/api/migration-list', authenticateToken, requireMigrationListAccess, as
 
     await query('BEGIN');
     transactionStarted = true;
-    await query('DELETE FROM migration_list_entries WHERE kingdom_id = $1', [kingdomId]);
 
     for (const entry of entries) {
       if (!entry || !entry.playerId) continue;
