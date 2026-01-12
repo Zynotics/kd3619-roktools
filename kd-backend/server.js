@@ -1585,30 +1585,23 @@ app.put('/api/migration-list', authenticateToken, requireMigrationListAccess, as
     await query('BEGIN');
     transactionStarted = true;
 
-    for (const entry of entries) {
-      if (!entry || !entry.playerId) continue;
-      const playerId = String(entry.playerId);
-      const migratedOverride =
-        entry.migratedOverride === true ? true :
-        entry.migratedOverride === false ? false :
-        null;
+    if (entries.length > 0) {
+      const values = [];
+      const params = [];
+      let idx = 1;
 
-      await query(
-        `INSERT INTO migration_list_entries
-          (kingdom_id, player_id, reason, contacted, info, manually_added, excluded, migrated_override, updated_by_user_id, updated_at)
-         VALUES
-          ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
-         ON CONFLICT (kingdom_id, player_id)
-         DO UPDATE SET
-           reason = EXCLUDED.reason,
-           contacted = EXCLUDED.contacted,
-           info = EXCLUDED.info,
-           manually_added = EXCLUDED.manually_added,
-           excluded = EXCLUDED.excluded,
-           migrated_override = EXCLUDED.migrated_override,
-           updated_by_user_id = EXCLUDED.updated_by_user_id,
-           updated_at = NOW()`,
-        [
+      for (const entry of entries) {
+        if (!entry || !entry.playerId) continue;
+        const playerId = String(entry.playerId);
+        const migratedOverride =
+          entry.migratedOverride === true ? true :
+          entry.migratedOverride === false ? false :
+          null;
+
+        values.push(
+          `($${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},NOW())`
+        );
+        params.push(
           kingdomId,
           playerId,
           entry.reason || null,
@@ -1618,8 +1611,28 @@ app.put('/api/migration-list', authenticateToken, requireMigrationListAccess, as
           !!entry.excluded,
           migratedOverride,
           req.user.id
-        ]
-      );
+        );
+      }
+
+      if (values.length > 0) {
+        await query(
+          `INSERT INTO migration_list_entries
+            (kingdom_id, player_id, reason, contacted, info, manually_added, excluded, migrated_override, updated_by_user_id, updated_at)
+           VALUES
+            ${values.join(',')}
+           ON CONFLICT (kingdom_id, player_id)
+           DO UPDATE SET
+             reason = EXCLUDED.reason,
+             contacted = EXCLUDED.contacted,
+             info = EXCLUDED.info,
+             manually_added = EXCLUDED.manually_added,
+             excluded = EXCLUDED.excluded,
+             migrated_override = EXCLUDED.migrated_override,
+             updated_by_user_id = EXCLUDED.updated_by_user_id,
+             updated_at = NOW()`,
+          params
+        );
+      }
     }
 
     await query('COMMIT');
