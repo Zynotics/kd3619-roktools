@@ -261,6 +261,10 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const getDetailsForPlayer = (id: string): MigrationMeta => {
+    return detailsById[id] || defaultMigrationMeta;
+  };
+
   const activeEvent = useMemo(
     () => events.find(event => event.id === selectedEventId),
     [events, selectedEventId]
@@ -590,10 +594,6 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   useEffect(() => {
     latestEntriesRef.current = migrationEntries;
   }, [migrationEntries]);
-
-  const getDetailsForPlayer = (id: string): MigrationMeta => {
-    return detailsById[id] || defaultMigrationMeta;
-  };
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
