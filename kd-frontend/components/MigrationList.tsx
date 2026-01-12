@@ -523,7 +523,10 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                 const isMigrated = isManuallyMigrated ? true : isManuallyUnmigrated ? false : isAutoMigrated;
                 const migratedValue: 'yes' | 'no' = isMigrated ? 'yes' : 'no';
                 return (
-                  <TableRow key={player.id}>
+                  <TableRow
+                    key={player.id}
+                    className={isMigrated ? 'bg-slate-800/70' : ''}
+                  >
                       <TableCell>{player.id}</TableCell>
                       <TableCell className="whitespace-normal">{player.name}</TableCell>
                       <TableCell className="whitespace-normal">{player.alliance || '-'}</TableCell>
