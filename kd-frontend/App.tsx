@@ -295,8 +295,13 @@ const AppContent: React.FC = () => {
     const savedView = localStorage.getItem(activeViewStorageKey) as ActiveView | null;
     if (savedView) {
       setActiveView(savedView);
+      return;
     }
-  }, [activeViewStorageKey]);
+    if (publicSlug) {
+      const fallbackView = localStorage.getItem('kd-active-view') as ActiveView | null;
+      if (fallbackView) setActiveView(fallbackView);
+    }
+  }, [activeViewStorageKey, publicSlug]);
 
   useEffect(() => {
     setIsMobileNavOpen(false);
@@ -331,6 +336,7 @@ const AppContent: React.FC = () => {
   };
   // 1. VIEW ROUTING & RESET
   useEffect(() => {
+    if (isLoading) return;
     if (
       publicSlug &&
       ((!user || user.role === 'user') || shouldForcePublicForForeignKingdom) &&
@@ -374,6 +380,7 @@ const AppContent: React.FC = () => {
     isRegisterInvite,
     isRegistrationInviteView,
     shouldForcePublicForForeignKingdom,
+    isLoading,
     r5ShopEnabled,
     isShopVisibilityLoading,
     canAccessMigrationList,

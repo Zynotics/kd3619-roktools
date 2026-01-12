@@ -279,17 +279,11 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     const loadOverviewFiles = async () => {
       setLoading(true);
       setError('');
-      setManualIds([]);
-      setExcludedIds([]);
-      setManualMigratedIds([]);
-      setManualUnmigratedIds([]);
-      setDetailsById({});
       setAllianceFilter('all');
       setReasonFilter('all');
       setContactedFilter('all');
       setMigratedFilter('all');
       setSortConfig(null);
-      setIsPersistLoaded(false);
       try {
         const response = await fetch(`${API_BASE_URL}/api/public/kingdom/${kingdomSlug}/overview-files`);
         if (!response.ok) {
@@ -310,11 +304,11 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   }, [kingdomSlug, selectedEventId, events]);
 
   useEffect(() => {
-    if (!token || !kingdomSlug) return;
+    if (!token) return;
     let isMounted = true;
     const loadPersisted = async () => {
       try {
-        const entries = await fetchMigrationList(kingdomSlug);
+        const entries = await fetchMigrationList(kingdomSlug || undefined);
         if (!isMounted) return;
         const details: Record<string, MigrationMeta> = {};
         const manualIdsNext: string[] = [];
@@ -626,10 +620,10 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   };
 
   useEffect(() => {
-    if (!isPersistLoaded || !token || !kingdomSlug) return;
+    if (!isPersistLoaded || !token) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      saveMigrationList(migrationEntries, kingdomSlug).catch(err => {
+      saveMigrationList(migrationEntries, kingdomSlug || undefined).catch(err => {
         console.error(err);
       });
     }, 700);
