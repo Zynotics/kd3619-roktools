@@ -17,7 +17,7 @@ const {
   query, get, all, assignR5, updateKingdomStatus, deleteKingdom,
   createKvkEvent, getKvkEvents, getAllKvkEvents, getKvkEventById, updateKvkEvent, deleteKvkEvent,
   generateR5Code, getR5Codes, getR5Code, activateR5Code, getActiveR5Access, assignR5Code, deactivateR5Code,
-  getAppSetting, setAppSetting
+  getAppSetting, setAppSetting, initMigrationListTable
 } = require('./db-pg');
 const { init: initPgSchema } = require('./init-pg');
 
@@ -1543,7 +1543,13 @@ app.get('/api/public/kingdom/:slug/honor-files', async (req, res) => {
 
 app.get('/api/migration-list', authenticateToken, requireMigrationListAccess, async (req, res) => {
   try {
-    const kingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+    let kingdomId;
+    try {
+      kingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+    } catch (error) {
+      return res.status(400).json({ error: error.message || 'Invalid kingdom context.' });
+    }
+
     const rows = await all(
       `SELECT player_id, reason, contacted, info, manually_added, excluded, migrated_override
        FROM migration_list_entries
@@ -1566,11 +1572,18 @@ app.get('/api/migration-list', authenticateToken, requireMigrationListAccess, as
 });
 
 app.put('/api/migration-list', authenticateToken, requireMigrationListAccess, async (req, res) => {
+  let transactionStarted = false;
   try {
-    const kingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+    let kingdomId;
+    try {
+      kingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+    } catch (error) {
+      return res.status(400).json({ error: error.message || 'Invalid kingdom context.' });
+    }
     const entries = Array.isArray(req.body?.entries) ? req.body.entries : [];
 
     await query('BEGIN');
+    transactionStarted = true;
     await query('DELETE FROM migration_list_entries WHERE kingdom_id = $1', [kingdomId]);
 
     for (const entry of entries) {
@@ -1604,7 +1617,13 @@ app.put('/api/migration-list', authenticateToken, requireMigrationListAccess, as
     res.json({ success: true, count: entries.length });
   } catch (error) {
     console.error(error);
-    await query('ROLLBACK');
+    if (transactionStarted) {
+      try {
+        await query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('Migration list rollback failed:', rollbackError);
+      }
+    }
     res.status(500).json({ error: 'Failed to save migration list.' });
   }
 });
@@ -1850,6 +1869,7 @@ async function startServer() {
   if (process.env.DATABASE_URL) {
     try {
       await initPgSchema();
+      await initMigrationListTable();
     } catch (err) {
       console.error('Postgres schema init failed:', err);
     }
