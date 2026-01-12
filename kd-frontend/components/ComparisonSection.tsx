@@ -187,12 +187,29 @@ interface PlayerTableProps extends SortableTableProps<PlayerInfo> {
     alliances: string[];
     selectedAlliance: string;
     onAllianceChange: (alliance: string) => void;
+    accentClass?: string;
+    titleClass?: string;
 }
 
-const PlayerTable: React.FC<PlayerTableProps> = ({ title, players, count, requestSort, sortConfig, isExpanded, onToggleExpand, visibleColumns, setVisibleColumns, alliances, selectedAlliance, onAllianceChange }) => (
-    <Card className="p-6">
+const PlayerTable: React.FC<PlayerTableProps> = ({
+    title,
+    players,
+    count,
+    requestSort,
+    sortConfig,
+    isExpanded,
+    onToggleExpand,
+    visibleColumns,
+    setVisibleColumns,
+    alliances,
+    selectedAlliance,
+    onAllianceChange,
+    accentClass,
+    titleClass
+}) => (
+    <Card className={`p-6 ${accentClass || ''}`}>
         <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-200">
+            <h3 className={`text-lg font-semibold text-gray-200 ${titleClass || ''}`}>
                 {title} ({count})
             </h3>
             <div className="flex items-center gap-4">
@@ -267,14 +284,30 @@ interface PlayerStatChangesTableProps extends SortableTableProps<PlayerStatChang
     alliances: string[];
     selectedAlliance: string;
     onAllianceChange: (alliance: string) => void;
+    accentClass?: string;
+    titleClass?: string;
 }
 
-const PlayerStatChangesTable: React.FC<PlayerStatChangesTableProps> = ({ changes, count, requestSort, sortConfig, isExpanded, onToggleExpand, visibleColumns, setVisibleColumns, alliances, selectedAlliance, onAllianceChange }) => {
+const PlayerStatChangesTable: React.FC<PlayerStatChangesTableProps> = ({
+    changes,
+    count,
+    requestSort,
+    sortConfig,
+    isExpanded,
+    onToggleExpand,
+    visibleColumns,
+    setVisibleColumns,
+    alliances,
+    selectedAlliance,
+    onAllianceChange,
+    accentClass,
+    titleClass
+}) => {
 
     return (
-        <Card className="p-6">
+        <Card className={`p-6 ${accentClass || ''}`}>
             <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-200">
+                <h3 className={`text-lg font-semibold text-gray-200 ${titleClass || ''}`}>
                     CH25 Player Stat Changes ({count})
                 </h3>
                 <div className="flex items-center gap-4">
@@ -572,6 +605,8 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
           alliances={statChangeAlliances}
           selectedAlliance={statChangeAlliance}
           onAllianceChange={setStatChangeAlliance}
+          accentClass="border-l-4 border-sky-400/40"
+          titleClass="text-sky-200"
       />
 
       <PlayerTable
@@ -587,6 +622,8 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
           alliances={newPlayerAlliances}
           selectedAlliance={newPlayerAlliance}
           onAllianceChange={setNewPlayerAlliance}
+          accentClass="border-l-4 border-emerald-400/40"
+          titleClass="text-emerald-200"
       />
       
       <PlayerTable
@@ -602,6 +639,8 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
           alliances={disappearedPlayerAlliances}
           selectedAlliance={disappearedPlayerAlliance}
           onAllianceChange={setDisappearedPlayerAlliance}
+          accentClass="border-l-4 border-rose-400/40"
+          titleClass="text-rose-200"
       />
     </div>
   );
