@@ -250,6 +250,9 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   const [isPersistLoaded, setIsPersistLoaded] = useState(false);
   const [persistLoadError, setPersistLoadError] = useState<string | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveInFlightRef = useRef(false);
+  const saveQueuedRef = useRef(false);
+  const latestEntriesRef = useRef<typeof migrationEntries | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -561,6 +564,10 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   ]);
 
   useEffect(() => {
+    latestEntriesRef.current = migrationEntries;
+  }, [migrationEntries]);
+
+  useEffect(() => {
     if (migrationPlayers.length === 0) return;
     setDetailsById(prev => {
       const next = { ...prev };
@@ -625,14 +632,33 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     return sortConfig.direction === 'asc' ? ' ▲' : ' ▼';
   };
 
+  const triggerSave = () => {
+    if (saveInFlightRef.current) {
+      saveQueuedRef.current = true;
+      return;
+    }
+    const entries = latestEntriesRef.current;
+    if (!entries) return;
+    saveInFlightRef.current = true;
+    saveMigrationList(entries, apiSlug)
+      .catch(err => {
+        console.error(err);
+      })
+      .finally(() => {
+        saveInFlightRef.current = false;
+        if (saveQueuedRef.current) {
+          saveQueuedRef.current = false;
+          triggerSave();
+        }
+      });
+  };
+
   useEffect(() => {
     if (!isPersistLoaded || !token || persistLoadError) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      saveMigrationList(migrationEntries, apiSlug).catch(err => {
-        console.error(err);
-      });
-    }, 300);
+      triggerSave();
+    }, 400);
 
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
