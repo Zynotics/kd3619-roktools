@@ -48,6 +48,11 @@ interface MigrationListProps {
 }
 
 const parseAnyNumber = (val: any): number => parseGermanNumber(val);
+const defaultMigrationMeta: MigrationMeta = {
+  reason: 'dkp-deads',
+  contacted: 'no',
+  info: ''
+};
 
 type SortKey =
   | 'name'
@@ -325,11 +330,12 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
 
         entries.forEach(entry => {
           const id = String(entry.playerId);
-          details[id] = {
-            reason: (entry.reason as MigrationMeta['reason']) || 'dkp-deads',
-            contacted: (entry.contacted as MigrationMeta['contacted']) || 'no',
-            info: entry.info || ''
-          };
+          const reason = (entry.reason as MigrationMeta['reason']) || 'dkp-deads';
+          const contacted = (entry.contacted as MigrationMeta['contacted']) || 'no';
+          const info = entry.info || '';
+          if (reason !== defaultMigrationMeta.reason || contacted !== defaultMigrationMeta.contacted || info) {
+            details[id] = { reason, contacted, info };
+          }
           if (entry.manuallyAdded) manualIdsNext.push(id);
           if (entry.excluded) excludedIdsNext.push(id);
           if (entry.migratedOverride === true) manualMigratedNext.push(id);
@@ -454,21 +460,20 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
 
   const filteredPlayers = useMemo(() => {
     return migrationPlayers.filter(player => {
-      const details = detailsById[player.id];
+      const details = getDetailsForPlayer(player.id);
       const isAutoMigrated = autoMigratedIds.has(player.id);
       const isManuallyMigrated = manualMigratedIds.includes(player.id);
       const isManuallyUnmigrated = manualUnmigratedIds.includes(player.id);
       const isMigrated = isManuallyMigrated ? true : isManuallyUnmigrated ? false : isAutoMigrated;
 
       if (allianceFilter !== 'all' && (player.alliance || '') !== allianceFilter) return false;
-      if (reasonFilter !== 'all' && details?.reason !== reasonFilter) return false;
-      if (contactedFilter !== 'all' && details?.contacted !== contactedFilter) return false;
+      if (reasonFilter !== 'all' && details.reason !== reasonFilter) return false;
+      if (contactedFilter !== 'all' && details.contacted !== contactedFilter) return false;
       if (migratedFilter !== 'all' && (migratedFilter === 'yes') !== isMigrated) return false;
       return true;
     });
   }, [
     migrationPlayers,
-    detailsById,
     allianceFilter,
     reasonFilter,
     contactedFilter,
@@ -488,8 +493,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     const getNumber = (val?: number) => (val ?? -1);
 
     sorted.sort((a, b) => {
-      const detailsA = detailsById[a.id];
-      const detailsB = detailsById[b.id];
+      const detailsA = getDetailsForPlayer(a.id);
+      const detailsB = getDetailsForPlayer(b.id);
       const migratedA =
         manualMigratedIds.includes(a.id) ? true :
         manualUnmigratedIds.includes(a.id) ? false :
@@ -511,9 +516,9 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
         case 'deadPercent':
           return (getNumber(a.deadPercent) - getNumber(b.deadPercent)) * dir;
         case 'reason':
-          return getString(detailsA?.reason).localeCompare(getString(detailsB?.reason)) * dir;
+          return getString(detailsA.reason).localeCompare(getString(detailsB.reason)) * dir;
         case 'contacted':
-          return getString(detailsA?.contacted).localeCompare(getString(detailsB?.contacted)) * dir;
+          return getString(detailsA.contacted).localeCompare(getString(detailsB.contacted)) * dir;
         case 'migrated':
           return ((migratedA ? 1 : 0) - (migratedB ? 1 : 0)) * dir;
         default:
@@ -539,22 +544,41 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     manualMigratedIds.forEach(id => ids.add(id));
     manualUnmigratedIds.forEach(id => ids.add(id));
 
-    return Array.from(ids).map(id => {
-      const details = detailsById[id];
-      return {
-        playerId: id,
-        reason: details?.reason || 'dkp-deads',
-        contacted: details?.contacted || 'no',
-        info: details?.info || '',
-        manuallyAdded: manualIds.includes(id),
-        excluded: excludedIds.includes(id),
-        migratedOverride: manualMigratedIds.includes(id)
-          ? true
-          : manualUnmigratedIds.includes(id)
-            ? false
-            : null
-      };
-    });
+    return Array.from(ids).reduce((acc, id) => {
+      const details = getDetailsForPlayer(id);
+      const isDefault =
+        details.reason === defaultMigrationMeta.reason &&
+        details.contacted === defaultMigrationMeta.contacted &&
+        details.info === defaultMigrationMeta.info;
+      const manuallyAdded = manualIds.includes(id);
+      const excluded = excludedIds.includes(id);
+      const migratedOverride = manualMigratedIds.includes(id)
+        ? true
+        : manualUnmigratedIds.includes(id)
+          ? false
+          : null;
+
+      if (!isDefault || manuallyAdded || excluded || migratedOverride !== null) {
+        acc.push({
+          playerId: id,
+          reason: details.reason,
+          contacted: details.contacted,
+          info: details.info,
+          manuallyAdded,
+          excluded,
+          migratedOverride
+        });
+      }
+      return acc;
+    }, [] as {
+      playerId: string;
+      reason: string;
+      contacted: string;
+      info: string;
+      manuallyAdded: boolean;
+      excluded: boolean;
+      migratedOverride: boolean | null;
+    }[]);
   }, [
     detailsById,
     manualIds,
@@ -567,24 +591,9 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     latestEntriesRef.current = migrationEntries;
   }, [migrationEntries]);
 
-  useEffect(() => {
-    if (migrationPlayers.length === 0) return;
-    setDetailsById(prev => {
-      const next = { ...prev };
-      let changed = false;
-      migrationPlayers.forEach(player => {
-        if (!next[player.id]) {
-          next[player.id] = {
-            reason: 'dkp-deads',
-            contacted: 'no',
-            info: ''
-          };
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
-    });
-  }, [migrationPlayers]);
+  const getDetailsForPlayer = (id: string): MigrationMeta => {
+    return detailsById[id] || defaultMigrationMeta;
+  };
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -845,8 +854,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
             </TableHeader>
             <tbody>
               {sortedPlayers.map(player => {
-                const details = detailsById[player.id];
-                const infoText = details?.info || '';
+                const details = getDetailsForPlayer(player.id);
+                const infoText = details.info || '';
                 const isAutoMigrated = autoMigratedIds.has(player.id);
                 const isManuallyMigrated = manualMigratedIds.includes(player.id);
                 const isManuallyUnmigrated = manualUnmigratedIds.includes(player.id);
@@ -882,7 +891,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                     <TableCell>
                       <div className="flex flex-col gap-2">
                         <select
-                          value={details?.reason || 'dkp-deads'}
+                          value={details.reason}
                           onChange={(event) => updateDetails(player.id, { reason: event.target.value as MigrationMeta['reason'] })}
                           className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
                         >
@@ -901,7 +910,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                     </TableCell>
                     <TableCell>
                       <select
-                        value={details?.contacted || 'no'}
+                        value={details.contacted}
                         onChange={(event) => updateDetails(player.id, { contacted: event.target.value as MigrationMeta['contacted'] })}
                         className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
                       >
