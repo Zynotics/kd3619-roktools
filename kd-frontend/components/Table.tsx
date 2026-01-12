@@ -57,8 +57,9 @@ export const TableRow: React.FC<TableRowProps> = ({
   className = '',
 }) => {
   const hoverClass = hover ? 'hover:bg-white/5 transition-colors duration-200' : '';
+  const baseClass = className.includes('bg-') ? '' : 'bg-slate-900/70';
   return (
-    <tr className={`border-b border-white/5 bg-slate-900/70 ${hoverClass} ${className}`}>
+    <tr className={`border-b border-white/5 ${baseClass} ${hoverClass} ${className}`}>
       {children}
     </tr>
   );

@@ -589,6 +589,20 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                           <option value="yes">Yes</option>
                           <option value="no">No</option>
                         </select>
+                        {isMigrated && (
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4 text-emerald-300"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
                         {isAutoMigrated && !isManuallyMigrated && !isManuallyUnmigrated && (
                           <span className="text-[10px] uppercase tracking-wide text-emerald-300">Auto</span>
                         )}
