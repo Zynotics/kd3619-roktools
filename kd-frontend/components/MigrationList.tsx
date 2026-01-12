@@ -248,6 +248,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   const [migratedFilter, setMigratedFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
   const [isPersistLoaded, setIsPersistLoaded] = useState(false);
+  const [persistLoadError, setPersistLoadError] = useState<string | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -308,6 +309,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     let isMounted = true;
     const loadPersisted = async () => {
       try {
+        setPersistLoadError(null);
         const entries = await fetchMigrationList(kingdomSlug || undefined);
         if (!isMounted) return;
         const details: Record<string, MigrationMeta> = {};
@@ -334,10 +336,12 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
         setExcludedIds(excludedIdsNext);
         setManualMigratedIds(manualMigratedNext);
         setManualUnmigratedIds(manualUnmigratedNext);
-      } catch (err) {
-        console.error(err);
-      } finally {
         if (isMounted) setIsPersistLoaded(true);
+      } catch (err: any) {
+        console.error(err);
+        if (isMounted) {
+          setPersistLoadError(err?.message || 'Failed to load migration list.');
+        }
       }
     };
     loadPersisted();
@@ -620,18 +624,40 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   };
 
   useEffect(() => {
-    if (!isPersistLoaded || !token) return;
+    if (!isPersistLoaded || !token || persistLoadError) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       saveMigrationList(migrationEntries, kingdomSlug || undefined).catch(err => {
         console.error(err);
       });
-    }, 700);
+    }, 300);
 
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [isPersistLoaded, token, kingdomSlug, migrationEntries]);
+  }, [isPersistLoaded, token, persistLoadError, kingdomSlug, migrationEntries]);
+
+  useEffect(() => {
+    if (!isPersistLoaded || !token || persistLoadError) return;
+    const handleBeforeUnload = () => {
+      const query = kingdomSlug ? `?slug=${encodeURIComponent(kingdomSlug)}` : '';
+      const url = `${API_BASE_URL}/api/migration-list${query}`;
+      fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ entries: migrationEntries }),
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isPersistLoaded, token, persistLoadError, kingdomSlug, migrationEntries]);
 
   const updateDetails = (id: string, updates: Partial<MigrationMeta>) => {
     setDetailsById(prev => ({
