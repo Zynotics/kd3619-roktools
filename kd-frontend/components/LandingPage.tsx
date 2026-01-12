@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { activateSelfR5Code, createKingdomWithCode, fetchMyKingdom, fetchMyR5Codes } from '../api';
+import { activateSelfR5Code, createKingdomWithCode, fetchMyKingdom, fetchMyR5Codes, fetchShopVisibility } from '../api';
 import { R5Code } from '../types';
 import { useAuth } from './AuthContext';
 import LoginPrompt from './LoginPrompt';
@@ -88,6 +88,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
   const [codesLoading, setCodesLoading] = useState(false);
   const [activatingCode, setActivatingCode] = useState<string | null>(null);
   const [activateMessage, setActivateMessage] = useState<string | null>(null);
+  const [shopVisible, setShopVisible] = useState(true);
 
   const [displayName, setDisplayName] = useState('');
   const [accessCode, setAccessCode] = useState('');
@@ -105,7 +106,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
     return params.get('shop') === 'true';
   }, []);
   const isAccountPage = !!accountSlug;
-  const showShopPage = isShopPage && !isAccountPage;
+  const showShopPage = isShopPage && !isAccountPage && shopVisible;
 
   useEffect(() => {
     if (!user) return;
@@ -135,6 +136,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
     loadKingdom();
     loadCodes();
   }, [user]);
+
+  useEffect(() => {
+    const loadShopVisibility = async () => {
+      try {
+        const data = await fetchShopVisibility();
+        setShopVisible(!!data.enabled);
+      } catch {
+        setShopVisible(true);
+      }
+    };
+    loadShopVisibility();
+  }, []);
 
   const handleGoToDashboard = () => {
     if (!kingdomInfo?.slug) return;
@@ -322,12 +335,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={onStartShop}
-                  className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 transition text-sm font-semibold shadow-lg shadow-amber-900/40 text-slate-950"
-                >
-                  Shop
-                </button>
+                {shopVisible && (
+                  <button
+                    onClick={onStartShop}
+                    className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 transition text-sm font-semibold shadow-lg shadow-amber-900/40 text-slate-950"
+                  >
+                    Shop
+                  </button>
+                )}
                 <button
                   onClick={handleGoToAccount}
                   className="px-5 py-3 rounded-xl border border-slate-700 text-sm font-semibold text-slate-200 hover:border-slate-400 hover:text-white transition"
@@ -510,7 +525,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
                   </div>
                 )}
 
-                {user && (
+                {user && shopVisible && (
                   <button
                     onClick={onStartShop}
                     className="w-full px-4 py-3 rounded-xl border border-amber-400/70 text-sm font-semibold text-amber-100 hover:border-amber-300 hover:text-white transition"
@@ -553,12 +568,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSeeDefault, onStartShop }) 
               >
                 Launch demo kingdom
               </button>
-              <button
-                onClick={onStartShop}
-                className="px-5 py-3 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400 text-sm font-semibold"
-              >
-                Secure access
-              </button>
+              {shopVisible && (
+                <button
+                  onClick={onStartShop}
+                  className="px-5 py-3 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400 text-sm font-semibold"
+                >
+                  Secure access
+                </button>
+              )}
             </div>
           </section>
         )}
