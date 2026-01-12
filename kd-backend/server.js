@@ -1598,7 +1598,17 @@ app.put('/api/migration-list', authenticateToken, requireMigrationListAccess, as
         `INSERT INTO migration_list_entries
           (kingdom_id, player_id, reason, contacted, info, manually_added, excluded, migrated_override, updated_by_user_id, updated_at)
          VALUES
-          ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())`,
+          ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+         ON CONFLICT (kingdom_id, player_id)
+         DO UPDATE SET
+           reason = EXCLUDED.reason,
+           contacted = EXCLUDED.contacted,
+           info = EXCLUDED.info,
+           manually_added = EXCLUDED.manually_added,
+           excluded = EXCLUDED.excluded,
+           migrated_override = EXCLUDED.migrated_override,
+           updated_by_user_id = EXCLUDED.updated_by_user_id,
+           updated_at = NOW()`,
         [
           kingdomId,
           playerId,
