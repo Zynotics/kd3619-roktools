@@ -49,6 +49,17 @@ interface MigrationListProps {
 
 const parseAnyNumber = (val: any): number => parseGermanNumber(val);
 
+type SortKey =
+  | 'name'
+  | 'alliance'
+  | 'basePower'
+  | 'dkpPercent'
+  | 'deadPercent'
+  | 'reason'
+  | 'contacted'
+  | 'migrated';
+type SortDirection = 'asc' | 'desc';
+
 const getSnapshotData = (file: UploadedFile): SnapshotDataMap => {
   const getIdx = (keys: string[]) => findColumnIndex(file.headers, keys);
   const idIdx = getIdx(['id', 'governor id', 'user id']);
@@ -231,6 +242,11 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
   const [manualUnmigratedIds, setManualUnmigratedIds] = useState<string[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, MigrationMeta>>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [allianceFilter, setAllianceFilter] = useState('all');
+  const [reasonFilter, setReasonFilter] = useState('all');
+  const [contactedFilter, setContactedFilter] = useState('all');
+  const [migratedFilter, setMigratedFilter] = useState('all');
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -266,6 +282,11 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
       setManualMigratedIds([]);
       setManualUnmigratedIds([]);
       setDetailsById({});
+      setAllianceFilter('all');
+      setReasonFilter('all');
+      setContactedFilter('all');
+      setMigratedFilter('all');
+      setSortConfig(null);
       try {
         const response = await fetch(`${API_BASE_URL}/api/public/kingdom/${kingdomSlug}/overview-files`);
         if (!response.ok) {
@@ -374,6 +395,93 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     return [...manualOrdered, ...rest];
   }, [manualMigrationPlayers, autoMigrationPlayers, autoMigratedPlayers, excludedIds]);
 
+  const allianceOptions = useMemo(() => {
+    const alliances = new Set<string>();
+    migrationPlayers.forEach(player => {
+      alliances.add(player.alliance || '');
+    });
+    return Array.from(alliances).sort();
+  }, [migrationPlayers]);
+
+  const filteredPlayers = useMemo(() => {
+    return migrationPlayers.filter(player => {
+      const details = detailsById[player.id];
+      const isAutoMigrated = autoMigratedIds.has(player.id);
+      const isManuallyMigrated = manualMigratedIds.includes(player.id);
+      const isManuallyUnmigrated = manualUnmigratedIds.includes(player.id);
+      const isMigrated = isManuallyMigrated ? true : isManuallyUnmigrated ? false : isAutoMigrated;
+
+      if (allianceFilter !== 'all' && (player.alliance || '') !== allianceFilter) return false;
+      if (reasonFilter !== 'all' && details?.reason !== reasonFilter) return false;
+      if (contactedFilter !== 'all' && details?.contacted !== contactedFilter) return false;
+      if (migratedFilter !== 'all' && (migratedFilter === 'yes') !== isMigrated) return false;
+      return true;
+    });
+  }, [
+    migrationPlayers,
+    detailsById,
+    allianceFilter,
+    reasonFilter,
+    contactedFilter,
+    migratedFilter,
+    autoMigratedIds,
+    manualMigratedIds,
+    manualUnmigratedIds
+  ]);
+
+  const sortedPlayers = useMemo(() => {
+    if (!sortConfig) return filteredPlayers;
+    const { key, direction } = sortConfig;
+    const dir = direction === 'asc' ? 1 : -1;
+    const sorted = [...filteredPlayers];
+
+    const getString = (val?: string) => (val || '').toLowerCase();
+    const getNumber = (val?: number) => (val ?? -1);
+
+    sorted.sort((a, b) => {
+      const detailsA = detailsById[a.id];
+      const detailsB = detailsById[b.id];
+      const migratedA =
+        manualMigratedIds.includes(a.id) ? true :
+        manualUnmigratedIds.includes(a.id) ? false :
+        autoMigratedIds.has(a.id);
+      const migratedB =
+        manualMigratedIds.includes(b.id) ? true :
+        manualUnmigratedIds.includes(b.id) ? false :
+        autoMigratedIds.has(b.id);
+
+      switch (key) {
+        case 'name':
+          return getString(a.name).localeCompare(getString(b.name)) * dir;
+        case 'alliance':
+          return getString(a.alliance).localeCompare(getString(b.alliance)) * dir;
+        case 'basePower':
+          return (getNumber(a.basePower) - getNumber(b.basePower)) * dir;
+        case 'dkpPercent':
+          return (getNumber(a.dkpPercent) - getNumber(b.dkpPercent)) * dir;
+        case 'deadPercent':
+          return (getNumber(a.deadPercent) - getNumber(b.deadPercent)) * dir;
+        case 'reason':
+          return getString(detailsA?.reason).localeCompare(getString(detailsB?.reason)) * dir;
+        case 'contacted':
+          return getString(detailsA?.contacted).localeCompare(getString(detailsB?.contacted)) * dir;
+        case 'migrated':
+          return ((migratedA ? 1 : 0) - (migratedB ? 1 : 0)) * dir;
+        default:
+          return 0;
+      }
+    });
+
+    return sorted;
+  }, [
+    filteredPlayers,
+    sortConfig,
+    detailsById,
+    autoMigratedIds,
+    manualMigratedIds,
+    manualUnmigratedIds
+  ]);
+
   useEffect(() => {
     if (migrationPlayers.length === 0) return;
     setDetailsById(prev => {
@@ -424,6 +532,19 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     }
     setManualUnmigratedIds(prev => (prev.includes(id) ? prev : [...prev, id]));
     setManualMigratedIds(prev => prev.filter(existing => existing !== id));
+  };
+
+  const requestSort = (key: SortKey) => {
+    setSortConfig(prev => {
+      if (!prev || prev.key !== key) return { key, direction: 'asc' };
+      if (prev.direction === 'asc') return { key, direction: 'desc' };
+      return null;
+    });
+  };
+
+  const sortIndicator = (key: SortKey) => {
+    if (!sortConfig || sortConfig.key !== key) return null;
+    return sortConfig.direction === 'asc' ? ' ▲' : ' ▼';
   };
 
   const updateDetails = (id: string, updates: Partial<MigrationMeta>) => {
@@ -498,23 +619,92 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
         {loading && <p className="text-slate-400">Loading migration data...</p>}
         {error && <p className="text-rose-300">{error}</p>}
         {!loading && !error && (
-          <Table frame={false} className="table-fixed min-w-full [&_td]:px-2 [&_td]:py-2">
+          <>
+            <div className="flex flex-wrap gap-3 mb-4">
+              <div className="flex flex-col">
+                <label className="text-xs text-slate-400">Alliance</label>
+                <select
+                  value={allianceFilter}
+                  onChange={(event) => setAllianceFilter(event.target.value)}
+                  className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                >
+                  <option value="all">All</option>
+                  {allianceOptions.map(alliance => (
+                    <option key={alliance || 'none'} value={alliance}>
+                      {alliance || '(No Alliance)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col">
+                <label className="text-xs text-slate-400">Reason</label>
+                <select
+                  value={reasonFilter}
+                  onChange={(event) => setReasonFilter(event.target.value)}
+                  className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                >
+                  <option value="all">All</option>
+                  <option value="dkp-deads">DKP/Deads not reached</option>
+                  <option value="rule-breaker">Rule breaker</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div className="flex flex-col">
+                <label className="text-xs text-slate-400">Contacted</label>
+                <select
+                  value={contactedFilter}
+                  onChange={(event) => setContactedFilter(event.target.value)}
+                  className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                >
+                  <option value="all">All</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+              <div className="flex flex-col">
+                <label className="text-xs text-slate-400">Migrated</label>
+                <select
+                  value={migratedFilter}
+                  onChange={(event) => setMigratedFilter(event.target.value)}
+                  className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                >
+                  <option value="all">All</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+            </div>
+            <Table frame={false} className="table-fixed min-w-full [&_td]:px-2 [&_td]:py-2">
             <TableHeader>
               <tr>
                 <TableCell header className="w-[90px]">Gov ID</TableCell>
-                <TableCell header className="w-[150px] whitespace-normal">Name</TableCell>
-                <TableCell header className="w-[100px] whitespace-normal">Alliance</TableCell>
-                <TableCell header className="w-[110px]">Base Power</TableCell>
-                <TableCell header className="w-[120px]">DKP</TableCell>
-                <TableCell header className="w-[120px]">Deads</TableCell>
+                <TableCell header className="w-[150px] whitespace-normal cursor-pointer select-none" onClick={() => requestSort('name')}>
+                  Name{sortIndicator('name')}
+                </TableCell>
+                <TableCell header className="w-[100px] whitespace-normal cursor-pointer select-none" onClick={() => requestSort('alliance')}>
+                  Alliance{sortIndicator('alliance')}
+                </TableCell>
+                <TableCell header className="w-[110px] cursor-pointer select-none" onClick={() => requestSort('basePower')}>
+                  Base Power{sortIndicator('basePower')}
+                </TableCell>
+                <TableCell header className="w-[120px] cursor-pointer select-none" onClick={() => requestSort('dkpPercent')}>
+                  DKP{sortIndicator('dkpPercent')}
+                </TableCell>
+                <TableCell header className="w-[120px] cursor-pointer select-none" onClick={() => requestSort('deadPercent')}>
+                  Deads{sortIndicator('deadPercent')}
+                </TableCell>
                 <TableCell header className="w-[170px] whitespace-normal">Reason for migration</TableCell>
-                <TableCell header className="w-[90px]">Contacted</TableCell>
-                <TableCell header className="w-[100px]">Migrated</TableCell>
+                <TableCell header className="w-[90px] cursor-pointer select-none" onClick={() => requestSort('contacted')}>
+                  Contacted{sortIndicator('contacted')}
+                </TableCell>
+                <TableCell header className="w-[100px] cursor-pointer select-none" onClick={() => requestSort('migrated')}>
+                  Migrated{sortIndicator('migrated')}
+                </TableCell>
                 <TableCell header className="w-[60px]">Actions</TableCell>
               </tr>
             </TableHeader>
             <tbody>
-              {migrationPlayers.map(player => {
+              {sortedPlayers.map(player => {
                 const details = detailsById[player.id];
                 const infoText = details?.info || '';
                 const isAutoMigrated = autoMigratedIds.has(player.id);
@@ -637,7 +827,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                     </TableRow>
                 );
               })}
-              {migrationPlayers.length === 0 && (
+              {sortedPlayers.length === 0 && (
                 <TableRow>
                   <td colSpan={11} className="px-4 py-3 text-center text-slate-400">
                     No players currently missing KvK goals.
@@ -646,6 +836,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
               )}
             </tbody>
           </Table>
+          </>
         )}
       </Card>
     </div>
