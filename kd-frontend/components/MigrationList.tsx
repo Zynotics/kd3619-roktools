@@ -523,8 +523,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                 const isMigrated = isManuallyMigrated ? true : isManuallyUnmigrated ? false : isAutoMigrated;
                 const migratedValue: 'yes' | 'no' = isMigrated ? 'yes' : 'no';
                 return (
-                  <React.Fragment key={player.id}>
-                    <TableRow>
+                  <TableRow key={player.id}>
                       <TableCell>{player.id}</TableCell>
                       <TableCell className="whitespace-normal">{player.name}</TableCell>
                       <TableCell className="whitespace-normal">{player.alliance || '-'}</TableCell>
@@ -558,29 +557,44 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                           <option value="other">Other</option>
                         </select>
                       </TableCell>
-                      <TableCell>
-                        <select
-                          value={details?.contacted || 'no'}
-                          onChange={(event) => updateDetails(player.id, { contacted: event.target.value as MigrationMeta['contacted'] })}
-                          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
-                        >
-                          <option value="yes">Yes</option>
-                          <option value="no">No</option>
-                        </select>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={migratedValue}
-                            onChange={(event) => handleMigratedChange(player.id, event.target.value as 'yes' | 'no')}
-                            className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
-                          >
-                            <option value="yes">Yes</option>
-                            <option value="no">No</option>
-                          </select>
-                          {isAutoMigrated && !isManuallyMigrated && !isManuallyUnmigrated && (
-                            <span className="text-[10px] uppercase tracking-wide text-emerald-300">Auto</span>
-                          )}
+                      <TableCell colSpan={2}>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] uppercase tracking-wide text-slate-500">Contacted</span>
+                            <select
+                              value={details?.contacted || 'no'}
+                              onChange={(event) => updateDetails(player.id, { contacted: event.target.value as MigrationMeta['contacted'] })}
+                              className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                            >
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] uppercase tracking-wide text-slate-500">Migrated</span>
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={migratedValue}
+                                onChange={(event) => handleMigratedChange(player.id, event.target.value as 'yes' | 'no')}
+                                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                              >
+                                <option value="yes">Yes</option>
+                                <option value="no">No</option>
+                              </select>
+                              {isAutoMigrated && !isManuallyMigrated && !isManuallyUnmigrated && (
+                                <span className="text-[10px] uppercase tracking-wide text-emerald-300">Auto</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="col-span-2">
+                            <textarea
+                              value={infoText}
+                              onChange={(event) => updateDetails(player.id, { info: event.target.value })}
+                              rows={2}
+                              className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white resize-none"
+                              placeholder="Notes"
+                            />
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -610,22 +624,6 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                         </button>
                       </TableCell>
                     </TableRow>
-                    <TableRow>
-                      <TableCell colSpan={7} className="py-2 text-xs text-slate-500">
-                        Notes
-                      </TableCell>
-                      <TableCell colSpan={2} className="py-2">
-                        <textarea
-                          value={infoText}
-                          onChange={(event) => updateDetails(player.id, { info: event.target.value })}
-                          rows={2}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white resize-none"
-                          placeholder="Notes"
-                        />
-                      </TableCell>
-                      <TableCell />
-                    </TableRow>
-                  </React.Fragment>
                 );
               })}
               {migrationPlayers.length === 0 && (
