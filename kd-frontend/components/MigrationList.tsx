@@ -494,7 +494,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
         </div>
       </Card>
 
-      <Card className="p-0 border-0 shadow-none bg-transparent">
+      <Card className="p-6">
         {loading && <p className="text-slate-400">Loading migration data...</p>}
         {error && <p className="text-rose-300">{error}</p>}
         {!loading && !error && (
@@ -545,8 +545,9 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                           <div>{formatNumber(player.deadDiff || 0)}</div>
                           <div>{formatNumber(player.deadGoal || 0)}</div>
                         </div>
-                      </TableCell>
-                      <TableCell>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-2">
                         <select
                           value={details?.reason || 'dkp-deads'}
                           onChange={(event) => updateDetails(player.id, { reason: event.target.value as MigrationMeta['reason'] })}
@@ -556,7 +557,15 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
                           <option value="rule-breaker">Rule breaker</option>
                           <option value="other">Other</option>
                         </select>
-                      </TableCell>
+                        <textarea
+                          value={infoText}
+                          onChange={(event) => updateDetails(player.id, { info: event.target.value })}
+                          rows={2}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white resize-none"
+                          placeholder="Notes"
+                        />
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <select
                         value={details?.contacted || 'no'}
