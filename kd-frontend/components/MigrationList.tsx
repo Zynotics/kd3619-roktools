@@ -230,7 +230,7 @@ const isMissingGoal = (player: StatProgressRow) => {
 };
 
 const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [overviewFiles, setOverviewFiles] = useState<UploadedFile[]>([]);
@@ -304,13 +304,15 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     loadOverviewFiles();
   }, [kingdomSlug, selectedEventId, events]);
 
+  const apiSlug = user?.role === 'admin' ? kingdomSlug || undefined : undefined;
+
   useEffect(() => {
     if (!token) return;
     let isMounted = true;
     const loadPersisted = async () => {
       try {
         setPersistLoadError(null);
-        const entries = await fetchMigrationList(kingdomSlug || undefined);
+        const entries = await fetchMigrationList(apiSlug);
         if (!isMounted) return;
         const details: Record<string, MigrationMeta> = {};
         const manualIdsNext: string[] = [];
@@ -348,7 +350,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     return () => {
       isMounted = false;
     };
-  }, [token, kingdomSlug]);
+  }, [token, apiSlug]);
 
   useEffect(() => {
     if (!activeEvent || !activeEvent.fights?.length || overviewFiles.length === 0) {
@@ -627,7 +629,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     if (!isPersistLoaded || !token || persistLoadError) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      saveMigrationList(migrationEntries, kingdomSlug || undefined).catch(err => {
+      saveMigrationList(migrationEntries, apiSlug).catch(err => {
         console.error(err);
       });
     }, 300);
@@ -635,12 +637,12 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [isPersistLoaded, token, persistLoadError, kingdomSlug, migrationEntries]);
+  }, [isPersistLoaded, token, persistLoadError, apiSlug, migrationEntries]);
 
   useEffect(() => {
     if (!isPersistLoaded || !token || persistLoadError) return;
     const handleBeforeUnload = () => {
-      const query = kingdomSlug ? `?slug=${encodeURIComponent(kingdomSlug)}` : '';
+      const query = apiSlug ? `?slug=${encodeURIComponent(apiSlug)}` : '';
       const url = `${API_BASE_URL}/api/migration-list${query}`;
       fetch(url, {
         method: 'PUT',
@@ -657,7 +659,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [isPersistLoaded, token, persistLoadError, kingdomSlug, migrationEntries]);
+  }, [isPersistLoaded, token, persistLoadError, apiSlug, migrationEntries]);
 
   const updateDetails = (id: string, updates: Partial<MigrationMeta>) => {
     setDetailsById(prev => ({
