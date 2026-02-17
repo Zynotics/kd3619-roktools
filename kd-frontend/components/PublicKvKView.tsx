@@ -332,7 +332,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         let pName = 'Unknown';
         if (nameIdx !== undefined && row[nameIdx]) pName = String(row[nameIdx]);
         return { governorId: String(row[govIdIdx]), name: pName, honorPoint: points };
-    }).filter(p => p.honorPoint > 0);
+    }).filter(p => p.governorId && p.governorId !== 'undefined');
   };
 
   const processHonorData = (files: UploadedFile[]): {
@@ -555,15 +555,16 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
           return;
       }
 
-      setActiveHonorFiles(rangeFiles);
-      const { history, totalHistory } = processHonorData(rangeFiles);
+      const timelineFiles = [...rangeFiles].reverse();
+      setActiveHonorFiles(timelineFiles);
+      const { history, totalHistory } = processHonorData(timelineFiles);
       setHonorHistory(history);
       setTotalHonorHistory(totalHistory);
   }, [activeEvent, allHonorFiles, honorStartSelection, honorEndSelection]);
 
   const comparisonHonorTableData = useMemo(() => {
-      if (honorHistory.length === 0 || activeHonorFiles.length < 2) return [];
-      
+      if (honorHistory.length === 0 || activeHonorFiles.length === 0) return [];
+
       const startFileId = activeHonorFiles[0].id;
       const endFileId = activeHonorFiles[activeHonorFiles.length - 1].id;
 
@@ -574,7 +575,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         const startVal = startEntry ? startEntry.honorPoint : 0;
         const endVal = endEntry ? endEntry.honorPoint : 0;
         let diff = endVal - startVal;
-        
+
         return {
             governorId: h.id,
             name: h.name,
@@ -583,7 +584,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
             diffHonor: diff
         };
       })
-      .filter(p => p.newHonor > 0 || p.diffHonor !== 0)
+      .filter(p => p.name && p.name !== 'Unknown')
       .sort((a, b) => b.diffHonor - a.diffHonor);
   }, [honorHistory, activeHonorFiles]);
 

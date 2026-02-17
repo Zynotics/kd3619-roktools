@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 interface FileUploadProps {
-  onUploadComplete: () => void;
+  onUploadComplete: () => void | Promise<void>;
   uploadUrl: string;
   children?: React.ReactNode;
 }
@@ -61,7 +61,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete, uploadUrl, ch
       if (event.target) {
           event.target.value = ''; // Reset input
       }
-      onUploadComplete();
+      await onUploadComplete();
     }
   };
 

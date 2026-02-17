@@ -3,7 +3,7 @@ import FileUpload from './FileUpload';
 import FileList from './FileList';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { useAuth } from './AuthContext';
-import { cleanFileName, parseGermanNumber, findColumnIndex } from '../utils';
+import { cleanFileName, parseGermanNumber, findColumnIndex, mergeNewUploadsOnTop, hasSameFileOrder } from '../utils';
 import type { UploadedFile, ActivityPlayerInfo } from '../types';
 
 interface ActivityDashboardProps {
@@ -34,6 +34,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
   const { user } = useAuth();
   const role = user?.role;
   const [files, setFiles] = useState<UploadedFile[]>([]);
+  const filesRef = useRef<UploadedFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string>('');
   const [activityData, setActivityData] = useState<ActivityPlayerInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -74,6 +75,9 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   
   const filterRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
   
   useOutsideAlerter(filterRef, () => setIsFilterOpen(false));
 
@@ -83,7 +87,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // 1. Dateien laden
-  const fetchFiles = useCallback(async () => {
+  const fetchFiles = useCallback(async (options?: { placeNewUploadsOnTop?: boolean }) => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem('authToken');
@@ -92,14 +96,31 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
       });
       if (res.ok) {
         const data: UploadedFile[] = await res.json();
-        setFiles(data);
-        if (data.length > 0 && !selectedFileId) {
-             setSelectedFileId(data[data.length - 1].id);
-        } else if (data.length > 0 && selectedFileId) {
-             if (!data.find(f => f.id === selectedFileId)) {
-                 setSelectedFileId(data[data.length - 1].id);
+        const fetchedFiles = data || [];
+        const nextFiles = options?.placeNewUploadsOnTop
+          ? mergeNewUploadsOnTop(filesRef.current, fetchedFiles)
+          : fetchedFiles;
+
+        if (
+          options?.placeNewUploadsOnTop &&
+          canManageFiles &&
+          !hasSameFileOrder(nextFiles, fetchedFiles)
+        ) {
+          await fetch(`${backendUrl}/activity/files/reorder${adminSlugQuery}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ order: nextFiles.map((f) => f.id) }),
+          });
+        }
+
+        setFiles(nextFiles);
+        if (nextFiles.length > 0 && !selectedFileId) {
+             setSelectedFileId(nextFiles[0].id);
+        } else if (nextFiles.length > 0 && selectedFileId) {
+             if (!nextFiles.find(f => f.id === selectedFileId)) {
+                 setSelectedFileId(nextFiles[0].id);
              }
-        } else if (data.length === 0) {
+        } else if (nextFiles.length === 0) {
             setActivityData([]);
             setSelectedFileId('');
         }
@@ -109,7 +130,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
     } finally { 
         setIsLoading(false); 
     }
-  }, [backendUrl, selectedFileId, adminSlugQuery]);
+  }, [backendUrl, selectedFileId, adminSlugQuery, canManageFiles]);
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
@@ -268,7 +289,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                       Upload Weekly Activity
                    </h3>
                    <p className="text-sm text-gray-400 mb-4">Upload .xlsx or .csv files containing weekly activity data.</p>
-                   <FileUpload uploadUrl={`${backendUrl}/activity/upload${adminSlugQuery}`} onUploadComplete={fetchFiles} />
+                   <FileUpload uploadUrl={`${backendUrl}/activity/upload${adminSlugQuery}`} onUploadComplete={() => fetchFiles({ placeNewUploadsOnTop: true })} />
                 </div>
 
                 <div>

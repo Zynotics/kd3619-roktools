@@ -993,5 +993,3 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug }) => {
 };
 
 export default MigrationList;
-
-

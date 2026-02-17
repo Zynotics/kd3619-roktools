@@ -1,0 +1,17 @@
+
+> kd-backend@1.0.0 start
+> node init-pg.js && node server.js
+
+WARNING: DATABASE_URL is not set. DB operations will fail.
+Initializing Postgres schema...
+Error initializing Postgres schema: Error: DB Config missing
+    at query (C:\Users\Julian\Desktop\VSCoding\kd3619-roktools-main\kd-backend\db-pg.js:20:40)
+    at init (C:\Users\Julian\Desktop\VSCoding\kd3619-roktools-main\kd-backend\init-pg.js:9:9)
+    at Object.<anonymous> (C:\Users\Julian\Desktop\VSCoding\kd3619-roktools-main\kd-backend\init-pg.js:260:3)
+    at Module._compile (node:internal/modules/cjs/loader:1761:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1481:32)
+    at Module._load (node:internal/modules/cjs/loader:1300:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)

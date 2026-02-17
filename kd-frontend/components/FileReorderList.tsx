@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UploadedFile } from '../types';
 import { reorderFiles, deleteFile } from '../api';
+import { sortUploadedFilesByUploadDateAsc } from '../utils';
 
 interface FileReorderListProps {
   type: 'overview' | 'honor' | 'activity';
@@ -41,11 +42,7 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
 
   const handleAutoSort = async () => {
     if (!window.confirm('Automatically sort the list by upload date? (Oldest first)')) return;
-    const sorted = [...files].sort((a, b) => {
-        const dA = a.uploadDate ? new Date(a.uploadDate).getTime() : 0;
-        const dB = b.uploadDate ? new Date(b.uploadDate).getTime() : 0;
-        return dA - dB;
-    });
+    const sorted = sortUploadedFilesByUploadDateAsc(files);
     await saveOrder(sorted);
   };
 

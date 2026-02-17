@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import FileUpload from './FileUpload';
 import FileList from './FileList';
 import ComparisonSection from './ComparisonSection';
 import PowerHistoryChart from './PowerHistoryChart';
 import PlayerSearch from './PlayerSearch';
 import { useAuth } from '../components/AuthContext';
-import { cleanFileName, parseGermanNumber, findColumnIndex } from '../utils';
+import { cleanFileName, parseGermanNumber, findColumnIndex, mergeNewUploadsOnTop, hasSameFileOrder } from '../utils';
 import type { UploadedFile, ComparisonStats, PlayerInfo, PlayerStatChange } from '../types';
 
 interface OverviewDashboardProps {
@@ -36,6 +36,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   const isMinimalView = (isPublicView || isBasicUser) && !isAdminOverride && !canManageFiles;
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const uploadedFilesRef = useRef<UploadedFile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,10 +56,14 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     null
   );
 
+  useEffect(() => {
+    uploadedFilesRef.current = uploadedFiles;
+  }, [uploadedFiles]);
+
   // ---------------------------------------------------
   // FETCH FILES LOGIK
   // ---------------------------------------------------
-  const fetchFiles = useCallback(async () => {
+  const fetchFiles = useCallback(async (options?: { placeNewUploadsOnTop?: boolean }) => {
     const shouldUsePublicEndpoint = !!publicSlug;
     const adminSlugQuery = isAdminOverride && publicSlug ? `?slug=${publicSlug}` : '';
 
@@ -85,14 +90,34 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       }
       
       const data: UploadedFile[] = await response.json();
-      setUploadedFiles(data || []);
+      const fetchedFiles = data || [];
+      const nextFiles = options?.placeNewUploadsOnTop
+        ? mergeNewUploadsOnTop(uploadedFilesRef.current, fetchedFiles)
+        : fetchedFiles;
 
-      if (data.length >= 2) {
-        setStartFileId(data[data.length - 2].id);
-        setEndFileId(data[data.length - 1].id);
-      } else if (data.length === 1) {
-        setStartFileId(data[0].id);
-        setEndFileId(data[0].id);
+      if (
+        options?.placeNewUploadsOnTop &&
+        canManageFiles &&
+        !hasSameFileOrder(nextFiles, fetchedFiles)
+      ) {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+          await fetch(`${backendUrl}/overview/files/reorder${adminSlugQuery}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ order: nextFiles.map((f) => f.id) }),
+          });
+        }
+      }
+
+      setUploadedFiles(nextFiles);
+
+      if (nextFiles.length >= 2) {
+        setStartFileId(nextFiles[1].id);
+        setEndFileId(nextFiles[0].id);
+      } else if (nextFiles.length === 1) {
+        setStartFileId(nextFiles[0].id);
+        setEndFileId(nextFiles[0].id);
       } else {
         setStartFileId('');
         setEndFileId('');
@@ -108,7 +133,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [backendUrl, publicSlug, userLoggedIn, isAdminOverride]);
+  }, [backendUrl, publicSlug, userLoggedIn, isAdminOverride, canManageFiles]);
 
   useEffect(() => {
     fetchFiles();
@@ -117,7 +142,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   // ---------------------------------------------------
   // ACTIONS
   // ---------------------------------------------------
-  const handleUploadComplete = () => { fetchFiles(); };
+  const handleUploadComplete = async () => { await fetchFiles({ placeNewUploadsOnTop: true }); };
   const uploadUrl = `${backendUrl}/overview/upload${isAdminOverride && publicSlug ? `?slug=${publicSlug}` : ''}`;
 
   const handleDeleteFile = async (id: string) => {

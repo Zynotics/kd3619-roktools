@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext';
 import { KvkEvent, UploadedFile, CreateKvkEventPayload, KvkFight, DkpFormula, GoalsFormula, GoalsPowerBracket } from '../types';
 import { fetchKvkEvents, createKvkEvent, updateKvkEvent, deleteKvkEvent, API_BASE_URL } from '../api';
 import FileReorderList from './FileReorderList';
+import { mergeNewUploadsOnTop, hasSameFileOrder } from '../utils';
 
 const generateTempId = () => Math.random().toString(36).substring(2, 11);
 
@@ -156,6 +157,7 @@ const KvkManager: React.FC = () => {
       
       const formData = new FormData();
       formData.append('file', file);
+      const previousFiles = type === 'overview' ? overviewFiles : honorFiles;
       
       const endpoint = type === 'overview' ? '/overview/upload' : '/honor/upload';
       const label = type === 'overview' ? 'Overview' : 'Honor';
@@ -169,7 +171,25 @@ const KvkManager: React.FC = () => {
           });
           
           if (!res.ok) throw new Error('Upload failed');
-          
+
+          const filesRes = await fetch(`${API_BASE_URL}/${type}/files-data${adminSlugQuery}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (filesRes.ok) {
+            const fetchedFiles: UploadedFile[] = await filesRes.json();
+            const nextFiles = mergeNewUploadsOnTop(previousFiles, fetchedFiles);
+            if (!hasSameFileOrder(nextFiles, fetchedFiles)) {
+              await fetch(`${API_BASE_URL}/${type}/files/reorder${adminSlugQuery}`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ order: nextFiles.map((f) => f.id) })
+              });
+            }
+          }
+
           await loadData(); // Refresh lists
           alert(`${label} file uploaded successfully!`);
       } catch (e) {

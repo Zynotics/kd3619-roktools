@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import FileUpload from './FileUpload';
 import FileList from './FileList';
 import HonorHistoryChart from './HonorHistoryChart';
 import HonorOverviewTable from './HonorOverviewTable';
 import HonorPlayerSearch from './HonorPlayerSearch';
 import { useAuth } from '../components/AuthContext';
-import { cleanFileName, findColumnIndex, parseGermanNumber } from '../utils';
+import { cleanFileName, findColumnIndex, parseGermanNumber, sortUploadedFilesByUploadDateAsc, mergeNewUploadsOnTop, hasSameFileOrder } from '../utils';
 import type { UploadedFile, HonorPlayerInfo, PlayerHonorChange, HonorComparisonStats, PlayerHonorHistory } from '../types';
 
 interface HonorDashboardProps { isAdmin: boolean; backendUrl: string; publicSlug: string | null; isAdminOverride: boolean; }
@@ -20,6 +20,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
     (role === 'r4' && (user?.canManageAnalyticsFiles || user?.canManageHonorFiles));
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const uploadedFilesRef = useRef<UploadedFile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,8 +33,12 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
   const [searchResults, setSearchResults] = useState<HonorPlayerInfo[] | 'not_found' | null>(null);
   const [selectedPlayerHistory, setSelectedPlayerHistory] = useState<PlayerHonorHistory | null>(null);
 
+  useEffect(() => {
+    uploadedFilesRef.current = uploadedFiles;
+  }, [uploadedFiles]);
 
-  const fetchFiles = useCallback(async () => {
+
+  const fetchFiles = useCallback(async (options?: { placeNewUploadsOnTop?: boolean }) => {
     const shouldUsePublic = !!publicSlug;
     const adminSlugQuery = isAdminOverride && publicSlug ? `?slug=${publicSlug}` : '';
 
@@ -55,14 +60,34 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
         throw new Error(errorData.error || 'Fetch failed');
       }
       const data = await response.json();
-      setUploadedFiles(data || []);
+      const fetchedFiles = data || [];
+      const nextFiles = options?.placeNewUploadsOnTop
+        ? mergeNewUploadsOnTop(uploadedFilesRef.current, fetchedFiles)
+        : fetchedFiles;
 
-      if (data.length >= 2) { setStartFileId(data[data.length-2].id); setEndFileId(data[data.length-1].id); }
-      else if (data.length === 1) { setStartFileId(data[0].id); setEndFileId(data[0].id); }
+      if (
+        options?.placeNewUploadsOnTop &&
+        canManageFiles &&
+        !hasSameFileOrder(nextFiles, fetchedFiles)
+      ) {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+          await fetch(`${backendUrl}/honor/files/reorder${adminSlugQuery}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ order: nextFiles.map((f: UploadedFile) => f.id) }),
+          });
+        }
+      }
+
+      setUploadedFiles(nextFiles);
+
+      if (nextFiles.length >= 2) { setStartFileId(nextFiles[1].id); setEndFileId(nextFiles[0].id); }
+      else if (nextFiles.length === 1) { setStartFileId(nextFiles[0].id); setEndFileId(nextFiles[0].id); }
     } catch (err: any) {
        setError(err.message);
     } finally { setIsLoading(false); }
-  }, [backendUrl, publicSlug, isAdminOverride]);
+  }, [backendUrl, publicSlug, isAdminOverride, canManageFiles]);
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
@@ -135,7 +160,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
   const handleSelectPlayer = (player: HonorPlayerInfo) => { setSelectedPlayerHistory(honorHistories.get(player.governorId) || null); setSearchResults(null); };
 
   const uploadUrl = `${backendUrl}/honor/upload${isAdminOverride && publicSlug ? `?slug=${publicSlug}` : ''}`;
-  const handleUploadComplete = () => fetchFiles();
+  const handleUploadComplete = async () => { await fetchFiles({ placeNewUploadsOnTop: true }); };
   
   const handleDeleteFile = async (id: string) => {
       if(!canManageFiles) return;

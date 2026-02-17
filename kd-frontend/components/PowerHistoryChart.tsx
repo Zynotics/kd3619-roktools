@@ -24,14 +24,16 @@ const PowerHistoryChart: React.FC<PowerHistoryChartProps> = ({ files }) => {
       return null;
     }
 
-    const labels = files.map(file => cleanFileName(file.name));
+    // File list is shown newest-first; for charts we need oldest -> newest on X axis.
+    const timelineFiles = [...files].reverse();
+    const labels = timelineFiles.map(file => cleanFileName(file.name));
 
     const totalPowerData: number[] = [];
     const troopsPowerData: number[] = [];
     const totalKillPointsData: number[] = [];
     const totalDeadTroopsData: number[] = [];
 
-    files.forEach(file => {
+    timelineFiles.forEach(file => {
       const getIdx = (candidates: string[]) => findColumnIndex(file.headers, candidates);
 
       const powerIdx = getIdx(['power', 'macht']);

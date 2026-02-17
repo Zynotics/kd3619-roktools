@@ -153,8 +153,8 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   const playerHistories = useMemo(() => {
       const map = new Map<string, PlayerAnalyticsHistory>();
       if (!uploadedFiles.length) return map;
-      // Preserve the order received from the overview data so the chart matches the updated overview sequence
-      for (const file of uploadedFiles) {
+      // File list is newest-first; chart/timeline should be oldest -> newest.
+      for (const file of [...uploadedFiles].reverse()) {
           const fileName = cleanFileName(file.name);
           parseFileToPlayers(file).forEach(p => {
               const key = p.id || p.name;
