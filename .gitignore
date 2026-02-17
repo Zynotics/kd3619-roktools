@@ -1,0 +1,7 @@
+# Local secrets
+.env
+**/.env
+
+# Keep templates
+!.env.example
+!**/.env.example
