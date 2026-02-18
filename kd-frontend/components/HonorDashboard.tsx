@@ -26,6 +26,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
 
   const [startFileId, setStartFileId] = useState<string>('');
   const [endFileId, setEndFileId] = useState<string>('');
+  const selectedRangeRef = useRef<{ start: string; end: string }>({ start: '', end: '' });
   const [comparisonStats, setComparisonStats] = useState<HonorComparisonStats | null>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
 
@@ -36,6 +37,23 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
   useEffect(() => {
     uploadedFilesRef.current = uploadedFiles;
   }, [uploadedFiles]);
+
+  useEffect(() => {
+    selectedRangeRef.current = { start: startFileId, end: endFileId };
+  }, [startFileId, endFileId]);
+
+  const selectionStorageKey = useMemo(() => {
+    const scope = publicSlug || user?.kingdomId || user?.id || 'global';
+    return `honor_dashboard_selection:${scope}`;
+  }, [publicSlug, user?.kingdomId, user?.id]);
+
+  useEffect(() => {
+    if (!startFileId && !endFileId) return;
+    localStorage.setItem(
+      selectionStorageKey,
+      JSON.stringify({ startFileId, endFileId })
+    );
+  }, [startFileId, endFileId, selectionStorageKey]);
 
 
   const fetchFiles = useCallback(async (options?: { placeNewUploadsOnTop?: boolean }) => {
@@ -81,13 +99,49 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       }
 
       setUploadedFiles(nextFiles);
+      const defaultSelection =
+        nextFiles.length >= 2
+          ? { startFileId: nextFiles[1].id, endFileId: nextFiles[0].id }
+          : nextFiles.length === 1
+            ? { startFileId: nextFiles[0].id, endFileId: nextFiles[0].id }
+            : { startFileId: '', endFileId: '' };
 
-      if (nextFiles.length >= 2) { setStartFileId(nextFiles[1].id); setEndFileId(nextFiles[0].id); }
-      else if (nextFiles.length === 1) { setStartFileId(nextFiles[0].id); setEndFileId(nextFiles[0].id); }
+      const fileIds = new Set(nextFiles.map((f) => f.id));
+      const currentSelection = selectedRangeRef.current;
+      const hasValidCurrentSelection =
+        !!currentSelection.start &&
+        !!currentSelection.end &&
+        fileIds.has(currentSelection.start) &&
+        fileIds.has(currentSelection.end);
+
+      let persistedSelection: { startFileId?: string; endFileId?: string } = {};
+      try {
+        const raw = localStorage.getItem(selectionStorageKey);
+        if (raw) persistedSelection = JSON.parse(raw);
+      } catch {
+        persistedSelection = {};
+      }
+
+      const hasValidPersistedSelection =
+        !!persistedSelection.startFileId &&
+        !!persistedSelection.endFileId &&
+        fileIds.has(persistedSelection.startFileId) &&
+        fileIds.has(persistedSelection.endFileId);
+
+      if (hasValidCurrentSelection) {
+        setStartFileId(currentSelection.start);
+        setEndFileId(currentSelection.end);
+      } else if (hasValidPersistedSelection) {
+        setStartFileId(persistedSelection.startFileId!);
+        setEndFileId(persistedSelection.endFileId!);
+      } else {
+        setStartFileId(defaultSelection.startFileId);
+        setEndFileId(defaultSelection.endFileId);
+      }
     } catch (err: any) {
        setError(err.message);
     } finally { setIsLoading(false); }
-  }, [backendUrl, publicSlug, isAdminOverride, canManageFiles]);
+  }, [backendUrl, publicSlug, isAdminOverride, canManageFiles, selectionStorageKey]);
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
