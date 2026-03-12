@@ -184,6 +184,34 @@ export async function saveMigrationList(
   return res.json();
 }
 
+// ==================== WATCHLIST API ====================
+
+export async function fetchWatchlist(slug?: string): Promise<string[]> {
+  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/watchlist${query}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to load watchlist');
+  }
+  return res.json();
+}
+
+export async function saveWatchlist(playerIds: string[], slug?: string): Promise<{ success: boolean; count: number }> {
+  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/watchlist${query}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ playerIds }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to save watchlist');
+  }
+  return res.json();
+}
+
 // ==================== FILE MANAGEMENT API ====================
 
 /**

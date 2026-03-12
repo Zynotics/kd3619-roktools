@@ -14,7 +14,7 @@ import R5CodeAdmin from './components/R5CodeAdmin';
 import ShopWidget from './components/ShopWidget';
 import LandingPage from './components/LandingPage';
 import MigrationList from './components/MigrationList';
-import { fetchShopVisibility } from './api';
+import { fetchShopVisibility, fetchWatchlist, saveWatchlist } from './api';
 import { ToastProvider } from './components/Toast';
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
@@ -71,22 +71,18 @@ const NavItem: React.FC<{
   );
 };
 const AppContent: React.FC = () => {
-  const { user, logout, isLoading } = useAuth();
+  const { user, token, logout, isLoading } = useAuth();
   const [activeView, setActiveView] = useState<ActiveView>('overview');
   const [headerTitle, setHeaderTitle] = useState<string>('Rise of Stats');
   const [slugKingdomId, setSlugKingdomId] = useState<string | null>(null);
   const [r5ShopEnabled, setR5ShopEnabled] = useState(false);
   const [isShopVisibilityLoading, setIsShopVisibilityLoading] = useState(true);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const [watchlistedIds, setWatchlistedIds] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('watchlist') || '[]'); } catch { return []; }
-  });
+  const [watchlistedIds, setWatchlistedIds] = useState<string[]>([]);
+  const [watchlistLoaded, setWatchlistLoaded] = useState(false);
+  const watchlistSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [migrationPlayerIds, setMigrationPlayerIds] = useState<Set<string>>(new Set());
   const migrationListSaveRef = useRef<(() => void) | null>(null);
-
-  useEffect(() => {
-    localStorage.setItem('watchlist', JSON.stringify(watchlistedIds));
-  }, [watchlistedIds]);
 
   const watchlistIds = useMemo(() => new Set(watchlistedIds), [watchlistedIds]);
 
@@ -97,6 +93,7 @@ const AppContent: React.FC = () => {
   const handleRemoveFromWatchlist = useCallback((id: string) => {
     setWatchlistedIds(prev => prev.filter(x => x !== id));
   }, []);
+
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
   const accountSlug = queryParams.get('account');
@@ -140,6 +137,28 @@ const AppContent: React.FC = () => {
   const showSuperadminKingdomOverview = isSuperAdminWithoutSlug;
   const showDashboardInterface =
     (user || isAdminOverrideView || effectivePublicView) && !(forceLogin && !user);
+
+  const watchlistApiSlug = isSuperAdmin ? publicSlug || undefined : undefined;
+
+  // Load watchlist from backend when user logs in
+  useEffect(() => {
+    if (!token) return;
+    fetchWatchlist(watchlistApiSlug)
+      .then((ids) => {
+        setWatchlistedIds(ids);
+        setWatchlistLoaded(true);
+      })
+      .catch(() => setWatchlistLoaded(true));
+  }, [token, watchlistApiSlug]);
+
+  // Save watchlist to backend on changes (debounced)
+  useEffect(() => {
+    if (!watchlistLoaded || !token) return;
+    if (watchlistSaveTimeoutRef.current) clearTimeout(watchlistSaveTimeoutRef.current);
+    watchlistSaveTimeoutRef.current = setTimeout(() => {
+      saveWatchlist(watchlistedIds, watchlistApiSlug).catch(() => {});
+    }, 400);
+  }, [watchlistLoaded, token, watchlistedIds, watchlistApiSlug]);
 
   const renderMainNavigation = (onNavigate?: () => void) => {
     if (hideStandardNavigation) return null;

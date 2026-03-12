@@ -423,12 +423,29 @@ async function initMigrationListTable() {
   }
 }
 
+async function initWatchlistTable() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS watchlist_entries (
+        kingdom_id TEXT NOT NULL,
+        player_id TEXT NOT NULL,
+        PRIMARY KEY (kingdom_id, player_id),
+        FOREIGN KEY (kingdom_id) REFERENCES kingdoms(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Postgres: watchlist_entries table checked/updated.');
+  } catch (e) {
+    console.error('Error initializing watchlist_entries table:', e.message);
+  }
+}
+
 if (process.env.DATABASE_URL) {
     initKvkTable();
     initR5CodesTable();
     initAppSettingsTable();
     initUsersColumns();
     initMigrationListTable();
+    initWatchlistTable();
 }
 
 /**
@@ -619,6 +636,7 @@ module.exports = {
   getAppSetting,
   setAppSetting,
   initMigrationListTable,
+  initWatchlistTable,
   // KvK Exports
   createKvkEvent,
   getKvkEvents,

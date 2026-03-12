@@ -4,7 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { init: initPgSchema } = require('./init-pg');
-const { initMigrationListTable } = require('./db-pg');
+const { initMigrationListTable, initWatchlistTable } = require('./db-pg');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -69,6 +69,7 @@ app.put('/api/admin/r5-shop-visibility', authenticateToken, requireAdmin, async 
 });
 app.use('/api/admin/kvk/events', require('./routes/kvk'));
 app.use('/api/migration-list', require('./routes/migration'));
+app.use('/api/watchlist', require('./routes/watchlist'));
 app.use('/api/public', require('./routes/public'));
 app.use('/', require('./routes/files')); // /overview/*, /honor/*, /activity/*
 
@@ -82,6 +83,7 @@ async function startServer() {
     try {
       await initPgSchema();
       await initMigrationListTable();
+      await initWatchlistTable();
     } catch (err) {
       console.error('Postgres schema init failed:', err);
     }
