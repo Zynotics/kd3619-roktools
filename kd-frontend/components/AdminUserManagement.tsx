@@ -1,5 +1,5 @@
 // AdminUserManagement.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { useAuth } from './AuthContext';
@@ -114,6 +114,20 @@ const AdminUserManagement: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // -------- Debounced Server-Side Search (nur Superadmin) --------
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInitialSearchMount = useRef(true);
+  useEffect(() => {
+    if (isInitialSearchMount.current) { isInitialSearchMount.current = false; return; }
+    if (currentUser?.role !== 'admin') return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchUsersWithParams({ search: searchTerm, role: roleFilter, approved: approvalFilter });
+    }, 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, roleFilter, approvalFilter]);
+
   // -------- Helper: Token holen --------
   const getTokenOrThrow = () => {
     const token = localStorage.getItem('authToken');
@@ -125,45 +139,55 @@ const AdminUserManagement: React.FC = () => {
 
   // ==================== USER-MANAGEMENT ====================
 
-  const fetchUsers = useCallback(async () => {
+  const normalizeUsers = (data: User[]) =>
+    data.map((u) => ({
+      ...u,
+      canManageOverviewFiles: u.canManageOverviewFiles ?? false,
+      canManageHonorFiles: u.canManageHonorFiles ?? false,
+      canManageActivityFiles: u.canManageActivityFiles ?? false,
+      canManageAnalyticsFiles: u.canManageAnalyticsFiles ?? false,
+      canAccessKvkManager: u.canAccessKvkManager ?? false,
+      canAccessMigrationList: u.canAccessMigrationList ?? false,
+    }));
+
+  const fetchUsersWithParams = useCallback(async (params: {
+    search?: string;
+    role?: string;
+    approved?: string;
+  } = {}) => {
     setIsLoadingUsers(true);
     setUserError(null);
     try {
       const token = getTokenOrThrow();
+      const qs = new URLSearchParams();
+      if (params.search?.trim()) qs.set('search', params.search.trim());
+      if (params.role && params.role !== 'all') qs.set('role', params.role);
+      if (params.approved && params.approved !== 'all')
+        qs.set('approved', params.approved === 'approved' ? 'true' : 'false');
 
-      const response = await fetch(`${BACKEND_URL}/api/admin/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const url = `${BACKEND_URL}/api/admin/users${qs.toString() ? `?${qs}` : ''}`;
+      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 
       if (response.ok) {
         const userData: User[] = await response.json();
-
-        // 📝 Hinzufügen von Default-Werten für die neuen Flags (falls Backend sie noch nicht liefert)
-        const normalizedUsers = userData.map(u => ({
-            ...u,
-            canManageOverviewFiles: u.canManageOverviewFiles ?? false,
-            canManageHonorFiles: u.canManageHonorFiles ?? false,
-            canManageActivityFiles: u.canManageActivityFiles ?? false,
-            canManageAnalyticsFiles: u.canManageAnalyticsFiles ?? false,
-            canAccessKvkManager: u.canAccessKvkManager ?? false,
-            canAccessMigrationList: u.canAccessMigrationList ?? false,
-        }));
-        
-        setUsers(normalizedUsers);
+        setUsers(normalizeUsers(userData));
       } else if (response.status === 403) {
         setUserError('No admin privileges');
       } else {
-        const errorText = await response.text();
-        console.log('❌ Users fetch failed:', errorText);
-        setUserError('Error loading users. Server reported an issue.');
+        setUserError('Error loading users.');
       }
     } catch (err) {
-      console.error('💥 Error loading users:', err);
       setUserError('Could not load users');
     } finally {
       setIsLoadingUsers(false);
     }
-  }, [currentUser]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
+    return fetchUsersWithParams();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchUsersWithParams]);
 
 
   const toggleApproval = async (userId: string, approved: boolean) => {
@@ -828,28 +852,11 @@ const AdminUserManagement: React.FC = () => {
 
   const showFilePermissionColumns = isSuperAdmin || currentUser?.role === 'r5';
 
+  // search/role/approved wird server-seitig gefiltert; kingdomFilter bleibt client-seitig
   const filteredUsers = users.filter((u) => {
-    const term = searchTerm.trim().toLowerCase();
-    const matchesSearch = !isSuperAdmin || !term
-      ? true
-      : [u.username, u.email, u.governorId || ''].some((field) => field?.toLowerCase().includes(term));
-
-    const matchesRole = roleFilter === 'all' ? true : u.role === roleFilter;
-
-    const matchesKingdom = (() => {
-      if (kingdomFilter === 'all') return true;
-      if (kingdomFilter === 'none') return !u.kingdomId;
-      return u.kingdomId === kingdomFilter;
-    })();
-
-    const matchesApproval =
-      approvalFilter === 'all'
-        ? true
-        : approvalFilter === 'approved'
-          ? u.isApproved
-          : !u.isApproved;
-
-    return matchesSearch && matchesRole && matchesKingdom && matchesApproval;
+    if (kingdomFilter === 'all') return true;
+    if (kingdomFilter === 'none') return !u.kingdomId;
+    return u.kingdomId === kingdomFilter;
   });
 
   const displayedUsers = isSuperAdmin ? filteredUsers : users;

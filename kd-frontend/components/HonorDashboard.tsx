@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import FileUpload from './FileUpload';
 import FileList from './FileList';
+import { SkeletonFileList, SkeletonCard } from './Skeleton';
 import HonorHistoryChart from './HonorHistoryChart';
 import HonorOverviewTable from './HonorOverviewTable';
 import HonorPlayerSearch from './HonorPlayerSearch';
@@ -236,7 +237,13 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
   };
 
 
-  if (isLoading) return <div>Loading...</div>;
+  if (isLoading) return (
+    <div className="space-y-6 p-2">
+      <SkeletonCard rows={2} />
+      <SkeletonFileList />
+      <SkeletonCard rows={4} />
+    </div>
+  );
 
   return (
     <div className="space-y-8">

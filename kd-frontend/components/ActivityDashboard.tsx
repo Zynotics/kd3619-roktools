@@ -3,6 +3,7 @@ import FileUpload from './FileUpload';
 import FileList from './FileList';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { useAuth } from './AuthContext';
+import { useToast } from './Toast';
 import { cleanFileName, parseGermanNumber, findColumnIndex, mergeNewUploadsOnTop, hasSameFileOrder } from '../utils';
 import type { UploadedFile, ActivityPlayerInfo } from '../types';
 
@@ -32,6 +33,7 @@ function useOutsideAlerter(ref: React.RefObject<HTMLElement>, onOutside: () => v
 
 const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendUrl, publicSlug, isAdminOverride }) => {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const role = user?.role;
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const filesRef = useRef<UploadedFile[]>([]);
@@ -297,10 +299,12 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                       title="Activity History"
                       files={files}
                       onDeleteFile={async (id) => {
-                          if(!window.confirm('Delete this file?')) return;
-                          const token = localStorage.getItem('authToken');
-                          await fetch(`${backendUrl}/activity/files/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` }});
-                          fetchFiles();
+                          try {
+                            const token = localStorage.getItem('authToken');
+                            await fetch(`${backendUrl}/activity/files/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` }});
+                            addToast('File deleted.', 'success');
+                            fetchFiles();
+                          } catch { addToast('Failed to delete file.', 'error'); }
                       }}
                       onReorder={async (newFiles) => {
                           setFiles(newFiles);

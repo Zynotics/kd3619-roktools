@@ -4,6 +4,8 @@ import { KvkEvent, UploadedFile, CreateKvkEventPayload, KvkFight, DkpFormula, Go
 import { fetchKvkEvents, createKvkEvent, updateKvkEvent, deleteKvkEvent, API_BASE_URL } from '../api';
 import FileReorderList from './FileReorderList';
 import { mergeNewUploadsOnTop, hasSameFileOrder } from '../utils';
+import { useToast } from './Toast';
+import ConfirmDialog from './ConfirmDialog';
 
 const generateTempId = () => Math.random().toString(36).substring(2, 11);
 
@@ -44,6 +46,7 @@ const parseDecimalInput = (value: string) => {
 
 const KvkManager: React.FC = () => {
   const { token, user } = useAuth();
+  const { addToast } = useToast();
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
   const adminSlugQuery = user?.role === 'admin' && publicSlug ? `?slug=${publicSlug}` : '';
@@ -54,7 +57,7 @@ const KvkManager: React.FC = () => {
   const [honorFiles, setHonorFiles] = useState<UploadedFile[]>([]);
   
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // --- Editing State ---
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -105,7 +108,7 @@ const KvkManager: React.FC = () => {
 
     } catch (err: any) {
       console.error(err);
-      setError('Failed to load data from server.');
+      addToast('Failed to load data from server.', 'error');
     } finally {
       setLoading(false);
     }
@@ -331,19 +334,19 @@ const KvkManager: React.FC = () => {
         }
         loadData();
     } catch (err: any) {
-        alert(err.message || 'Error saving event');
+        addToast(err.message || 'Error saving event', 'error');
     } finally {
         setLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this event?')) return;
     try {
       await deleteKvkEvent(id);
+      addToast('Event deleted.', 'success');
       loadData();
     } catch (err) {
-      alert('Error deleting event');
+      addToast('Error deleting event.', 'error');
     }
   };
 
@@ -381,7 +384,7 @@ const KvkManager: React.FC = () => {
         </div>
       </div>
 
-      {error && <div className="mb-4 p-3 bg-red-900/50 border border-red-500 text-red-200 rounded">{error}</div>}
+
 
       <div className="flex justify-end mb-4">
         <button
@@ -910,8 +913,8 @@ const KvkManager: React.FC = () => {
                             >
                               Edit
                             </button>
-                            <button 
-                              onClick={() => handleDelete(ev.id)}
+                            <button
+                              onClick={() => setDeleteConfirmId(ev.id)}
                               className="bg-red-900/40 hover:bg-red-800 text-red-200 px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors"
                             >
                               Delete
@@ -945,6 +948,14 @@ const KvkManager: React.FC = () => {
               />
           </div>
       </div>
+      <ConfirmDialog
+        open={!!deleteConfirmId}
+        title="Delete event?"
+        message="This KvK event will be permanently deleted. This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteConfirmId) handleDelete(deleteConfirmId); setDeleteConfirmId(null); }}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 };

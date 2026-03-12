@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vite build)",
+      "Bash(curl:*)",
+      "Bash(where:*)",
+      "Bash(winget search:*)",
+      "Bash(winget install:*)",
+      "Bash(export PATH=\"$PATH:/c/Program Files/PostgreSQL/17/bin\")",
+      "Bash(psql:*)",
+      "Bash(PGPASSWORD=postgres psql:*)",
+      "Bash(npm install:*)",
+      "Bash(node init-pg.js:*)",
+      "Bash(DATABASE_URL=\"postgresql://postgres:postgres@localhost:5432/kd3619\" node:*)",
+      "Bash(node -e:*)",
+      "Bash(PGPASSWORD=ppIuELqsrFfsAzyCNxxvVWhizUWSTEOs psql:*)",
+      "Bash(node:*)",
+      "Bash(pkill:*)",
+      "Bash(taskkill:*)"
+    ]
+  }
+}

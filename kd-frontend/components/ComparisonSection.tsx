@@ -1,5 +1,6 @@
 // ComparisonSection.tsx - KORRIGIERT
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import ConfirmDialog from './ConfirmDialog';
 import type { ComparisonStats, PlayerInfo, PlayerStatChange } from '../types';
 import StatCard from './StatCard';
 import ColumnFilter from './ColumnFilter';
@@ -102,6 +103,10 @@ interface ComparisonSectionProps {
   onStartChange?: (value: string) => void;
   onEndChange?: (value: string) => void;
   onCompare?: () => void;
+  watchlistIds?: Set<string>;
+  onAddToWatchlist?: (id: string, name: string) => void;
+  historicalPlayerIds?: Set<string>;
+  migrationPlayerIds?: Set<string>;
 }
 
 interface SortableTableProps<T> {
@@ -189,6 +194,12 @@ interface PlayerTableProps extends SortableTableProps<PlayerInfo> {
     onAllianceChange: (alliance: string) => void;
     accentClass?: string;
     titleClass?: string;
+    badgeClass?: string;
+    emptyMessage?: string;
+    watchlistIds?: Set<string>;
+    onAddToWatchlist?: (id: string, name: string) => void;
+    historicalPlayerIds?: Set<string>;
+    migrationPlayerIds?: Set<string>;
 }
 
 const PlayerTable: React.FC<PlayerTableProps> = ({
@@ -205,72 +216,143 @@ const PlayerTable: React.FC<PlayerTableProps> = ({
     selectedAlliance,
     onAllianceChange,
     accentClass,
-    titleClass
+    titleClass,
+    badgeClass,
+    emptyMessage,
+    watchlistIds,
+    onAddToWatchlist,
+    historicalPlayerIds,
+    migrationPlayerIds,
 }) => (
-    <Card className={`p-6 ${accentClass || ''}`}>
-        <div className="flex justify-between items-center mb-4">
-            <h3 className={`text-lg font-semibold text-gray-200 ${titleClass || ''}`}>
-                {title} ({count})
-            </h3>
-            <div className="flex items-center gap-4">
-                <AllianceFilter 
-                    alliances={alliances}
-                    selectedAlliance={selectedAlliance}
-                    onAllianceChange={onAllianceChange}
-                />
-                <ColumnFilter 
-                    allColumns={PLAYER_INFO_COLUMNS}
-                    visibleColumns={visibleColumns}
-                    setVisibleColumns={setVisibleColumns}
-                />
-                <button 
-                    onClick={onToggleExpand} 
-                    className="text-gray-400 hover:text-white transition-colors p-1 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    aria-label={isExpanded ? 'Collapse table' : 'Expand table'}
-                >
-                    {isExpanded ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    )}
-                </button>
+    <Card className={`overflow-hidden ${accentClass || ''}`}>
+        <div className="px-6 py-4 border-b border-gray-700/60">
+            <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                    <h3 className={`text-lg font-semibold ${titleClass || 'text-gray-200'}`}>
+                        {title}
+                    </h3>
+                    <span className={`inline-flex items-center justify-center min-w-[1.75rem] h-7 px-2 rounded-full text-sm font-bold ${
+                        count > 0
+                            ? (badgeClass || 'bg-amber-500/20 text-amber-300 border border-amber-500/40')
+                            : 'bg-gray-700 text-gray-400 border border-gray-600'
+                    }`}>
+                        {count}
+                    </span>
+                </div>
+                <div className="flex items-center gap-3">
+                    <AllianceFilter
+                        alliances={alliances}
+                        selectedAlliance={selectedAlliance}
+                        onAllianceChange={onAllianceChange}
+                    />
+                    <ColumnFilter
+                        allColumns={PLAYER_INFO_COLUMNS}
+                        visibleColumns={visibleColumns}
+                        setVisibleColumns={setVisibleColumns}
+                    />
+                    <button
+                        onClick={onToggleExpand}
+                        className="text-gray-400 hover:text-white transition-colors p-1 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label={isExpanded ? 'Collapse table' : 'Expand table'}
+                    >
+                        {isExpanded ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        )}
+                    </button>
+                </div>
             </div>
         </div>
-        <Table maxHeight={isExpanded ? '75vh' : '72'}>
-            <TableHeader>
-                <tr>
-                    {visibleColumns.map(key => {
-                        const col = PLAYER_INFO_COLUMNS.find(c => c.key === key);
-                        if (!col) return null;
-                        return (
-                            <TableCell key={key} align={col.align as 'left' | 'center' | 'right'} header className="cursor-pointer select-none whitespace-nowrap" onClick={() => requestSort(key)}>
-                                {col.title}
-                                {sortConfig?.key === key && <SortIndicator direction={sortConfig.direction} />}
-                            </TableCell>
-                        )
-                    })}
-                </tr>
-            </TableHeader>
-            <tbody>
-                {players.map(p => (
-                    <TableRow key={p.id}>
-                        {visibleColumns.map(key => {
-                            const col = PLAYER_INFO_COLUMNS.find(c => c.key === key);
-                            if (!col) return null;
+        {players.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-gray-500">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mb-2 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-sm">{emptyMessage || 'No players found.'}</p>
+            </div>
+        ) : (
+            <div className="p-4">
+                <Table maxHeight={isExpanded ? '75vh' : '72'}>
+                    <TableHeader>
+                        <tr>
+                            {visibleColumns.map(key => {
+                                const col = PLAYER_INFO_COLUMNS.find(c => c.key === key);
+                                if (!col) return null;
+                                return (
+                                    <TableCell key={key} align={col.align as 'left' | 'center' | 'right'} header className="cursor-pointer select-none whitespace-nowrap" onClick={() => requestSort(key)}>
+                                        {col.title}
+                                        {sortConfig?.key === key && <SortIndicator direction={sortConfig.direction} />}
+                                    </TableCell>
+                                )
+                            })}
+                        </tr>
+                    </TableHeader>
+                    <tbody>
+                        {players.map(p => {
+                            const isWatchlist = watchlistIds?.has(p.id) ?? false;
+                            const isReturning = historicalPlayerIds?.has(p.id) ?? false;
+                            const isOnMigrationList = migrationPlayerIds?.has(p.id) ?? false;
                             return (
-                                <TableCell key={key} align={col.align as 'left' | 'center' | 'right'} className={key === 'name' ? 'font-medium text-white' : ''}>
-                                    {renderPlayerInfoCell(p, key)}
-                                </TableCell>
-                            )
+                            <TableRow key={p.id} className={`group ${isWatchlist ? 'bg-amber-900/20' : ''}`}>
+                                {visibleColumns.map(key => {
+                                    const col = PLAYER_INFO_COLUMNS.find(c => c.key === key);
+                                    if (!col) return null;
+                                    return (
+                                        <TableCell key={key} align={col.align as 'left' | 'center' | 'right'} className={key === 'name' ? 'font-medium text-white' : ''}>
+                                            {key === 'name' ? (
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    {renderPlayerInfoCell(p, key)}
+                                                    {isWatchlist && (
+                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                                            <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                                                            </svg>
+                                                            Watchlist
+                                                        </span>
+                                                    )}
+                                                    {isReturning && (
+                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-sky-500/20 text-sky-300 border border-sky-500/40" title="This player was seen in older scans — likely a reactivated account">
+                                                            <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/>
+                                                            </svg>
+                                                            Returning
+                                                        </span>
+                                                    )}
+                                                    {isOnMigrationList && (
+                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-orange-500/20 text-orange-300 border border-orange-500/40" title="This player is on the Migration List">
+                                                            ML
+                                                        </span>
+                                                    )}
+                                                    {onAddToWatchlist && !isWatchlist && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onAddToWatchlist(p.id, p.name || p.id)}
+                                                            title="Add to Watchlist"
+                                                            className="opacity-0 group-hover:opacity-100 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-slate-700 text-slate-400 hover:bg-amber-500/20 hover:text-amber-300 transition-all"
+                                                        >
+                                                            <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                                                            </svg>
+                                                            +Watch
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ) : renderPlayerInfoCell(p, key)}
+                                        </TableCell>
+                                    )
+                                })}
+                            </TableRow>
+                            );
                         })}
-                    </TableRow>
-                ))}
-            </tbody>
-        </Table>
+                    </tbody>
+                </Table>
+            </div>
+        )}
     </Card>
 );
 
@@ -286,6 +368,8 @@ interface PlayerStatChangesTableProps extends SortableTableProps<PlayerStatChang
     onAllianceChange: (alliance: string) => void;
     accentClass?: string;
     titleClass?: string;
+    watchlistIds?: Set<string>;
+    onAddToWatchlist?: (id: string, name: string) => void;
 }
 
 const PlayerStatChangesTable: React.FC<PlayerStatChangesTableProps> = ({
@@ -301,7 +385,9 @@ const PlayerStatChangesTable: React.FC<PlayerStatChangesTableProps> = ({
     selectedAlliance,
     onAllianceChange,
     accentClass,
-    titleClass
+    titleClass,
+    watchlistIds,
+    onAddToWatchlist,
 }) => {
 
     return (
@@ -354,19 +440,52 @@ const PlayerStatChangesTable: React.FC<PlayerStatChangesTableProps> = ({
                     </tr>
                 </TableHeader>
                 <tbody>
-                    {changes.map(c => (
-                        <TableRow key={c.id}>
+                    {changes.map(c => {
+                        const isWatchlist = watchlistIds?.has(c.id) ?? false;
+                        const hasPowerIncrease = isWatchlist && ((c.diffPower ?? 0) > 0 || (c.diffTroopsPower ?? 0) > 0);
+                        return (
+                        <TableRow key={c.id} className={`group ${hasPowerIncrease ? 'bg-red-900/20' : isWatchlist ? 'bg-amber-900/10' : ''}`}>
                             {visibleColumns.map(key => {
                                 const col = PLAYER_STAT_CHANGE_COLUMNS.find(c => c.key === key);
                                 if (!col) return null;
                                 return (
                                     <TableCell key={key} align={col.align as 'left' | 'center' | 'right'} className={key === 'name' ? 'font-medium text-white' : ''}>
-                                        {renderPlayerStatChangeCell(c, key)}
+                                        {key === 'name' ? (
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                {renderPlayerStatChangeCell(c, key)}
+                                                {isWatchlist && (
+                                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${
+                                                        hasPowerIncrease
+                                                            ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                                                            : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                                    }`}>
+                                                        <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                                                        </svg>
+                                                        {hasPowerIncrease ? 'Watchlist ⚠' : 'Watchlist'}
+                                                    </span>
+                                                )}
+                                                {onAddToWatchlist && !isWatchlist && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onAddToWatchlist(c.id, c.name || c.id)}
+                                                        title="Add to Watchlist"
+                                                        className="opacity-0 group-hover:opacity-100 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-slate-700 text-slate-400 hover:bg-amber-500/20 hover:text-amber-300 transition-all"
+                                                    >
+                                                        <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                                                        </svg>
+                                                        +Watch
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ) : renderPlayerStatChangeCell(c, key)}
                                     </TableCell>
                                 );
                             })}
                         </TableRow>
-                    ))}
+                        );
+                    })}
                 </tbody>
             </Table>
         </Card>
@@ -384,8 +503,18 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
   endFileId = '',
   onStartChange,
   onEndChange,
-  onCompare
+  onCompare,
+  watchlistIds,
+  onAddToWatchlist,
+  historicalPlayerIds,
+  migrationPlayerIds,
 }) => {
+  const [pendingWatchlistAdd, setPendingWatchlistAdd] = useState<{ id: string; name: string } | null>(null);
+
+  const handleWatchlistRequest = useCallback((id: string, name: string) => {
+    setPendingWatchlistAdd({ id, name });
+  }, []);
+
   // State for column visibility
   const [visibleStatChangeCols, setVisibleStatChangeCols] = useState<PlayerStatChangeKey[]>([
     'id',
@@ -593,6 +722,50 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
           </div>
       </Card>
 
+      <PlayerTable
+          title="New CH25 Players"
+          players={sortedNewPlayers}
+          count={filteredNewPlayers.length}
+          requestSort={requestNewPlayersSort}
+          sortConfig={newPlayersSortConfig}
+          isExpanded={expandedTables.newPlayers}
+          onToggleExpand={() => handleToggleExpand('newPlayers')}
+          visibleColumns={visibleNewPlayerCols}
+          setVisibleColumns={setVisibleNewPlayerCols}
+          alliances={newPlayerAlliances}
+          selectedAlliance={newPlayerAlliance}
+          onAllianceChange={setNewPlayerAlliance}
+          accentClass="border-l-4 border-rose-500"
+          titleClass="text-rose-300"
+          badgeClass="bg-rose-500/20 text-rose-300 border border-rose-500/50"
+          emptyMessage="No new players detected."
+          watchlistIds={watchlistIds}
+          onAddToWatchlist={onAddToWatchlist ? handleWatchlistRequest : undefined}
+          historicalPlayerIds={historicalPlayerIds}
+      />
+
+      <PlayerTable
+          title="Disappeared CH25 Players"
+          players={sortedDisappearedPlayers}
+          count={filteredDisappearedPlayers.length}
+          requestSort={requestDisappearedPlayersSort}
+          sortConfig={disappearedPlayersSortConfig}
+          isExpanded={expandedTables.disappearedPlayers}
+          onToggleExpand={() => handleToggleExpand('disappearedPlayers')}
+          visibleColumns={visibleDisappearedPlayerCols}
+          setVisibleColumns={setVisibleDisappearedPlayerCols}
+          alliances={disappearedPlayerAlliances}
+          selectedAlliance={disappearedPlayerAlliance}
+          onAllianceChange={setDisappearedPlayerAlliance}
+          accentClass="border-l-4 border-emerald-500"
+          titleClass="text-emerald-300"
+          badgeClass="bg-emerald-500/20 text-emerald-300 border border-emerald-500/50"
+          emptyMessage="No players have left the kingdom."
+          watchlistIds={watchlistIds}
+          onAddToWatchlist={onAddToWatchlist ? handleWatchlistRequest : undefined}
+          migrationPlayerIds={migrationPlayerIds}
+      />
+
       <PlayerStatChangesTable
           changes={sortedPlayerStatChanges}
           count={filteredStatChanges.length}
@@ -607,40 +780,21 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
           onAllianceChange={setStatChangeAlliance}
           accentClass="border-l-4 border-sky-400/40"
           titleClass="text-sky-200"
+          watchlistIds={watchlistIds}
+          onAddToWatchlist={onAddToWatchlist ? handleWatchlistRequest : undefined}
       />
 
-      <PlayerTable
-          title="New CH25 Players"
-          players={sortedNewPlayers}
-          count={filteredNewPlayers.length}
-          requestSort={requestNewPlayersSort}
-          sortConfig={newPlayersSortConfig}
-          isExpanded={expandedTables.newPlayers}
-          onToggleExpand={() => handleToggleExpand('newPlayers')}
-          visibleColumns={visibleNewPlayerCols}
-          setVisibleColumns={setVisibleNewPlayerCols}
-          alliances={newPlayerAlliances}
-          selectedAlliance={newPlayerAlliance}
-          onAllianceChange={setNewPlayerAlliance}
-          accentClass="border-l-4 border-emerald-400/40"
-          titleClass="text-emerald-200"
-      />
-      
-      <PlayerTable
-          title="Disappeared CH25 Players"
-          players={sortedDisappearedPlayers}
-          count={filteredDisappearedPlayers.length}
-          requestSort={requestDisappearedPlayersSort}
-          sortConfig={disappearedPlayersSortConfig}
-          isExpanded={expandedTables.disappearedPlayers}
-          onToggleExpand={() => handleToggleExpand('disappearedPlayers')}
-          visibleColumns={visibleDisappearedPlayerCols}
-          setVisibleColumns={setVisibleDisappearedPlayerCols}
-          alliances={disappearedPlayerAlliances}
-          selectedAlliance={disappearedPlayerAlliance}
-          onAllianceChange={setDisappearedPlayerAlliance}
-          accentClass="border-l-4 border-rose-400/40"
-          titleClass="text-rose-200"
+      <ConfirmDialog
+        open={!!pendingWatchlistAdd}
+        title="Add to Watchlist?"
+        message={pendingWatchlistAdd ? `Add "${pendingWatchlistAdd.name}" to the watchlist? The player will be monitored for power changes and disappearance.` : ''}
+        confirmLabel="Add"
+        danger={false}
+        onConfirm={() => {
+          if (pendingWatchlistAdd) onAddToWatchlist?.(pendingWatchlistAdd.id, pendingWatchlistAdd.name);
+          setPendingWatchlistAdd(null);
+        }}
+        onCancel={() => setPendingWatchlistAdd(null)}
       />
     </div>
   );

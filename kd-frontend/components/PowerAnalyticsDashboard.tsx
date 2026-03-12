@@ -55,7 +55,18 @@ const PlayerAnalyticsHistoryChart: React.FC<{ history: PlayerAnalyticsHistory }>
                 responsive: true, maintainAspectRatio: false,
                 plugins: { legend: { labels: { color: '#e5e7eb' } } },
                 scales: {
-                    x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                    x: {
+                        ticks: {
+                            color: '#9ca3af',
+                            maxRotation: 45,
+                            callback: function(val, index) {
+                                const total = history.history.length;
+                                const step = total <= 6 ? 1 : total <= 12 ? 2 : total <= 24 ? 3 : Math.ceil(total / 8);
+                                return index % step === 0 ? history.history[index]?.fileName : null;
+                            }
+                        },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
                     y: { type: 'linear', display: true, position: 'left', ticks: { color: 'rgba(59, 130, 246, 1)', callback: (v: any) => abbreviateNumber(v) }, grid: { color: 'rgba(59, 130, 246, 0.2)' } },
                     y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: 'rgba(16, 185, 129, 1)', callback: (v: any) => abbreviateNumber(v) } }
                 }

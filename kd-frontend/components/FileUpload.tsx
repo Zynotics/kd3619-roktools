@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useToast } from './Toast';
 
 interface FileUploadProps {
   onUploadComplete: () => void | Promise<void>;
@@ -6,61 +7,87 @@ interface FileUploadProps {
   children?: React.ReactNode;
 }
 
+interface FileProgress {
+  name: string;
+  percent: number;
+  done: boolean;
+}
+
+function uploadFileWithProgress(
+  file: File,
+  url: string,
+  token: string | null,
+  onProgress: (percent: number) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress(100);
+        resolve();
+      } else if (xhr.status === 401 || xhr.status === 403) {
+        reject(`Permission denied for "${file.name}". Are you logged in?`);
+      } else {
+        let msg = xhr.statusText;
+        try { msg = JSON.parse(xhr.responseText)?.error || msg; } catch {}
+        reject(`Error uploading "${file.name}": ${msg}`);
+      }
+    });
+
+    xhr.addEventListener('error', () => reject(`Network error uploading "${file.name}"`));
+    xhr.open('POST', url);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.send(formData);
+  });
+}
+
 const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete, uploadUrl, children }) => {
-  const [error, setError] = useState<string | null>(null);
+  const { addToast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
+  const [fileProgresses, setFileProgresses] = useState<FileProgress[]>([]);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    setError(null);
     setIsUploading(true);
-
-    // 🔑 NEU: Token holen
     const token = localStorage.getItem('authToken');
 
-    const uploadPromises = Array.from(files).map(file => {
-      const formData = new FormData();
-      formData.append('file', file);
+    setFileProgresses(Array.from(files).map((f) => ({ name: f.name, percent: 0, done: false })));
 
-      // Fetch mit Token Header
-      return fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-            // WICHTIG: Bei FormData kein 'Content-Type' setzen (macht der Browser automatisch),
-            // aber der Authorization Header ist Pflicht!
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: formData,
-      }).then(async response => {
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({ message: 'Upload failed.' }));
-          // Spezifische Errormeldung für 401/403
-          if (response.status === 401 || response.status === 403) {
-              return Promise.reject(`Permission denied for file "${file.name}". Are you logged in?`);
-          }
-          return Promise.reject(`Error uploading "${file.name}": ${errData.message || response.statusText}`);
-        }
-        return response.json();
-      });
-    });
-
-    const results = await Promise.allSettled(uploadPromises);
+    const results = await Promise.allSettled(
+      Array.from(files).map((file, idx) =>
+        uploadFileWithProgress(file, uploadUrl, token, (percent) => {
+          setFileProgresses((prev) =>
+            prev.map((p, i) => (i === idx ? { ...p, percent, done: percent === 100 } : p))
+          );
+        })
+      )
+    );
 
     setIsUploading(false);
 
-    const errorMessages = results
-      .filter(res => res.status === 'rejected')
-      .map(res => (res as PromiseRejectedResult).reason);
+    const errors = results
+      .filter((r) => r.status === 'rejected')
+      .map((r) => (r as PromiseRejectedResult).reason as string);
 
-    if (errorMessages.length > 0) {
-      setError(errorMessages.join(', '));
+    if (errors.length > 0) {
+      errors.forEach((msg) => addToast(msg, 'error'));
+      setFileProgresses([]);
     } else {
-      // Erfolg
-      if (event.target) {
-          event.target.value = ''; // Reset input
-      }
+      const count = files.length;
+      addToast(`${count} file${count > 1 ? 's' : ''} uploaded successfully.`, 'success');
+      setFileProgresses([]);
+      if (event.target) event.target.value = '';
       await onUploadComplete();
     }
   };
@@ -92,20 +119,16 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete, uploadUrl, ch
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth="2"
-                  d="M13 13h3a3 3 0 000-6h-.025A5.56 
-                     5.56 0 0016 6.5a5.5 5.5 0 00-10.793-1.48C5.137 
-                     5.017 5.071 5 5 5a4 4 0 000 8h2.167M10 
+                  d="M13 13h3a3 3 0 000-6h-.025A5.56
+                     5.56 0 0016 6.5a5.5 5.5 0 00-10.793-1.48C5.137
+                     5.017 5.071 5 5 5a4 4 0 000 8h2.167M10
                      15V6m0 0L8 8m2-2 2 2"
                 />
               </svg>
-
               <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
                 <span className="font-semibold">Click to upload</span>
               </p>
-
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                XLSX, XLS, or CSV
-              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">XLSX, XLS, or CSV</p>
             </div>
           )}
 
@@ -120,13 +143,28 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete, uploadUrl, ch
           />
         </label>
       </div>
-      
-      {error && (
-        <div className="mt-4 p-3 bg-red-900/50 text-red-200 text-sm rounded border border-red-700">
-          {error}
+
+      {fileProgresses.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {fileProgresses.map((fp, i) => (
+            <div key={i}>
+              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span className="truncate max-w-[80%]">{fp.name}</span>
+                <span>{fp.percent}%</span>
+              </div>
+              <div className="w-full bg-gray-600 rounded-full h-1.5">
+                <div
+                  className={`h-1.5 rounded-full transition-all duration-200 ${
+                    fp.done ? 'bg-green-500' : 'bg-blue-500'
+                  }`}
+                  style={{ width: `${fp.percent}%` }}
+                />
+              </div>
+            </div>
+          ))}
         </div>
       )}
-      
+
       {children}
     </div>
   );

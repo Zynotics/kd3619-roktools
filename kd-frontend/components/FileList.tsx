@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import type { UploadedFile } from '../types';
+import ConfirmDialog from './ConfirmDialog';
 
 interface FileListProps {
   files: UploadedFile[];
@@ -21,6 +22,7 @@ const FileList: React.FC<FileListProps> = ({
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [confirmFile, setConfirmFile] = useState<UploadedFile | null>(null);
 
   // Wenn keine Dateien vorhanden -> gar nichts anzeigen
   if (!files || files.length === 0) return null;
@@ -114,7 +116,7 @@ const FileList: React.FC<FileListProps> = ({
 
               {canDelete && (
                 <button
-                  onClick={() => onDeleteFile && onDeleteFile(file.id)}
+                  onClick={() => setConfirmFile(file)}
                   className="ml-3 inline-flex items-center justify-center p-1 rounded-md text-gray-400 hover:text-red-300 hover:bg-red-900/40 transition-colors"
                   title="Delete file"
                   type="button"
@@ -138,6 +140,17 @@ const FileList: React.FC<FileListProps> = ({
           );
         })}
       </div>
+      <ConfirmDialog
+        open={!!confirmFile}
+        title="Delete file?"
+        message={`"${confirmFile?.name}" will be permanently deleted. This cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (confirmFile && onDeleteFile) onDeleteFile(confirmFile.id);
+          setConfirmFile(null);
+        }}
+        onCancel={() => setConfirmFile(null)}
+      />
     </div>
   );
 };

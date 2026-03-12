@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { UploadedFile } from '../types';
 import { reorderFiles, deleteFile } from '../api';
 import { sortUploadedFilesByUploadDateAsc } from '../utils';
+import ConfirmDialog from './ConfirmDialog';
+import { useToast } from './Toast';
 
 interface FileReorderListProps {
   type: 'overview' | 'honor' | 'activity';
@@ -11,10 +13,13 @@ interface FileReorderListProps {
 }
 
 const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate, headerAction }) => {
+  const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [editValue, setEditValue] = useState<string>('');
-  
+  const [confirmFile, setConfirmFile] = useState<UploadedFile | null>(null);
+  const [confirmAutoSort, setConfirmAutoSort] = useState(false);
+
   // 🆕 State für Drag & Drop
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
@@ -25,7 +30,7 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
           await reorderFiles(type, orderIds);
           onUpdate();
       } catch (e) {
-          alert('Error saving the order');
+          addToast('Error saving the order', 'error');
       } finally {
           setLoading(false);
       }
@@ -40,11 +45,7 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
     await saveOrder(newFiles);
   };
 
-  const handleAutoSort = async () => {
-    if (!window.confirm('Automatically sort the list by upload date? (Oldest first)')) return;
-    const sorted = sortUploadedFilesByUploadDateAsc(files);
-    await saveOrder(sorted);
-  };
+  const handleAutoSort = () => setConfirmAutoSort(true);
 
   const handlePositionChange = async (index: number, newPosStr: string) => {
       const newPos = parseInt(newPosStr);
@@ -86,17 +87,17 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
   };
 
   const handleDelete = async (id: string) => {
-      if (!window.confirm('Really delete this file?')) return;
       setLoading(true);
       try {
           await deleteFile(type, id);
+          addToast('File deleted.', 'success');
           onUpdate();
       } catch (e) {
-          alert('Error deleting file');
+          addToast('Error deleting file.', 'error');
       } finally {
           setLoading(false);
       }
-  }
+  };
 
   const titleMap: Record<FileReorderListProps['type'], string> = {
     overview: 'Analytics Data',
@@ -193,8 +194,8 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
                 >
                     ▼
                 </button>
-                <button 
-                    onClick={() => handleDelete(file.id)}
+                <button
+                    onClick={() => setConfirmFile(file)}
                     disabled={loading}
                     className="ml-2 p-1 hover:bg-red-900/30 rounded text-red-400 disabled:opacity-30"
                     title="Delete"
@@ -205,6 +206,28 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmFile}
+        title="Delete file?"
+        message={`"${confirmFile?.name}" will be permanently deleted. This cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={() => { if (confirmFile) handleDelete(confirmFile.id); setConfirmFile(null); }}
+        onCancel={() => setConfirmFile(null)}
+      />
+      <ConfirmDialog
+        open={confirmAutoSort}
+        title="Sort by upload date?"
+        message="This will automatically reorder all files oldest first."
+        confirmLabel="Sort"
+        danger={false}
+        onConfirm={async () => {
+          setConfirmAutoSort(false);
+          const sorted = sortUploadedFilesByUploadDateAsc(files);
+          await saveOrder(sorted);
+        }}
+        onCancel={() => setConfirmAutoSort(false)}
+      />
     </div>
   );
 };

@@ -110,13 +110,10 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
       setSelectedFightId('all');
       setEventStartSelection(evt.eventStartFileId || '');
 
-      const honorRangeConfigured = evt.honorStartFileId && evt.honorEndFileId;
-      const honorRange = honorRangeConfigured
-        ? getHonorFilesWithinEventRange(allHonorFiles, evt.honorStartFileId, evt.honorEndFileId)
-        : [];
+      const honorRangeConfigured = !!evt.honorStartFileId;
 
-      setHonorStartSelection(honorRangeConfigured ? honorRange[0]?.id || evt.honorStartFileId || '' : '');
-      setHonorEndSelection(honorRangeConfigured ? honorRange[honorRange.length - 1]?.id || evt.honorEndFileId || '' : '');
+      setHonorStartSelection(honorRangeConfigured ? evt.honorStartFileId || '' : '');
+      setHonorEndSelection(honorRangeConfigured ? evt.honorEndFileId || '' : '');
     }
   }, [events, selectedEventId, allHonorFiles]);
 
@@ -173,17 +170,8 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
       const defaultEventStart = event.eventStartFileId || loadedOverview[0]?.id || '';
 
-      const honorRangeConfigured = event.honorStartFileId && event.honorEndFileId;
-      const honorRange = honorRangeConfigured
-        ? getHonorFilesWithinEventRange(
-            loadedHonor,
-            event.honorStartFileId,
-            event.honorEndFileId
-          )
-        : [];
-
-      const defaultHonorStart = honorRangeConfigured ? honorRange[0]?.id || '' : '';
-      const defaultHonorEnd = honorRangeConfigured ? honorRange[honorRange.length - 1]?.id || defaultHonorStart : '';
+      const defaultHonorStart = event.honorStartFileId || '';
+      const defaultHonorEnd = event.honorEndFileId || '';
 
       setEventStartSelection(defaultEventStart);
       setHonorStartSelection(defaultHonorStart);

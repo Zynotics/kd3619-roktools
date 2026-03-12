@@ -1,10 +1,12 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import FileUpload from './FileUpload';
 import FileList from './FileList';
+import { SkeletonFileList, SkeletonCard } from './Skeleton';
 import ComparisonSection from './ComparisonSection';
 import PowerHistoryChart from './PowerHistoryChart';
 import PlayerSearch from './PlayerSearch';
 import { useAuth } from '../components/AuthContext';
+import { useToast } from './Toast';
 import { cleanFileName, parseGermanNumber, findColumnIndex, mergeNewUploadsOnTop, hasSameFileOrder } from '../utils';
 import type { UploadedFile, ComparisonStats, PlayerInfo, PlayerStatChange } from '../types';
 
@@ -13,6 +15,9 @@ interface OverviewDashboardProps {
   backendUrl: string;
   publicSlug: string | null;
   isAdminOverride: boolean;
+  watchlistIds?: Set<string>;
+  onAddToWatchlist?: (id: string, name: string) => void;
+  migrationPlayerIds?: Set<string>;
 }
 
 const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
@@ -20,8 +25,12 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   backendUrl,
   publicSlug,
   isAdminOverride,
+  watchlistIds,
+  onAddToWatchlist,
+  migrationPlayerIds,
 }) => {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const role = user?.role;
   const isBasicUser = role === 'user';
   
@@ -38,7 +47,6 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const uploadedFilesRef = useRef<UploadedFile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [startFileId, setStartFileId] = useState<string>('');
   const [endFileId, setEndFileId] = useState<string>('');
@@ -69,7 +77,6 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
     try {
       setIsLoading(true);
-      setError(null);
       let response: Response;
       
       if (shouldUsePublicEndpoint) {
@@ -128,7 +135,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       if (shouldUsePublicEndpoint && (msg.includes('403') || msg.includes('404'))) {
           setUploadedFiles([]);
       } else {
-          setError(msg);
+          addToast(msg, 'error');
       }
     } finally {
       setIsLoading(false);
@@ -153,7 +160,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       
       await fetch(`${backendUrl}/overview/files/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
       setUploadedFiles((prev) => (prev || []).filter((f) => f.id !== id));
-    } catch (err) { alert('Failed to delete file.'); }
+    } catch (err) { addToast('Failed to delete file.', 'error'); }
   };
 
   const handleReorderFiles = async (reorderedFiles: UploadedFile[]) => {
@@ -253,25 +260,51 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   };
   const handleClearSearch = () => { setSearchQuery(''); setSearchResults(null); setSelectedPlayer(null); };
   const handleSelectPlayer = (p: PlayerStatChange) => { setSelectedPlayer(p); };
-  
-  if (isLoading) return <div className="p-6 text-center text-gray-300">Loading files...</div>;
+
+  const historicalPlayerIds = useMemo(() => {
+    // Files are sorted newest-first (index 0 = newest)
+    // The scan just before endFile (older) is at endIdx + 1
+    if (!endFileId || uploadedFiles.length < 3) return new Set<string>();
+    const endIdx = uploadedFiles.findIndex(f => f.id === endFileId);
+    if (endIdx < 0 || endIdx + 2 >= uploadedFiles.length) return new Set<string>();
+
+    // IDs in the scan immediately preceding endFile (the "2nd newest" relative to endFile)
+    const prevIds = new Set<string>();
+    parseFileToPlayers(uploadedFiles[endIdx + 1]).forEach(p => { if (p.id) prevIds.add(p.id); });
+
+    // IDs seen in any scan older than that
+    const olderIds = new Set<string>();
+    uploadedFiles.slice(endIdx + 2).forEach(file => {
+      parseFileToPlayers(file).forEach(p => { if (p.id) olderIds.add(p.id); });
+    });
+
+    // Returning = was in an older scan but NOT in the scan just before endFile
+    const returning = new Set<string>();
+    olderIds.forEach(id => { if (!prevIds.has(id)) returning.add(id); });
+    return returning;
+  }, [endFileId, uploadedFiles]);
+
+  if (isLoading) return (
+    <div className="space-y-6 p-2">
+      <SkeletonCard rows={2} />
+      <SkeletonFileList />
+      <SkeletonCard rows={4} />
+    </div>
+  );
 
   if (isMinimalView) {
     return (
       <div className="space-y-8">
-        {error && <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">{error}</div>}
         <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
           <PowerHistoryChart files={uploadedFiles || []} />
         </div>
-        {!error && uploadedFiles.length === 0 && (<div className="text-center p-8 text-yellow-400 bg-gray-800 rounded-xl"><h3 className="text-xl font-bold mb-2">No Data Available</h3><p>The selected Kingdom has not uploaded any files yet.</p></div>)}
+        {uploadedFiles.length === 0 && (<div className="text-center p-8 text-yellow-400 bg-gray-800 rounded-xl"><h3 className="text-xl font-bold mb-2">No Data Available</h3><p>The selected Kingdom has not uploaded any files yet.</p></div>)}
       </div>
     );
   }
 
   return (
     <div className="space-y-8">
-      {error && <div className="text-center p-4 text-red-400 bg-red-900/50 rounded-lg">{error}</div>}
-
       {canManageFiles && (
         <div className="space-y-4">
           <button
@@ -301,8 +334,8 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           isComparisonLoaded={!!comparisonStats}
       />
 
-      <ComparisonSection 
-          stats={comparisonStats} error={comparisonError} 
+      <ComparisonSection
+          stats={comparisonStats} error={comparisonError}
           file1Name={cleanFileName(uploadedFiles.find(f => f.id === startFileId)?.name || '')}
           file2Name={cleanFileName(uploadedFiles.find(f => f.id === endFileId)?.name || '')}
           fileOptions={uploadedFiles.map(f => ({ id: f.id, label: cleanFileName(f.name) }))}
@@ -311,6 +344,10 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           onStartChange={setStartFileId}
           onEndChange={setEndFileId}
           onCompare={handleCompare}
+          watchlistIds={watchlistIds}
+          onAddToWatchlist={onAddToWatchlist}
+          historicalPlayerIds={historicalPlayerIds}
+          migrationPlayerIds={migrationPlayerIds}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminUserManagement from './components/AdminUserManagement';
@@ -15,6 +15,7 @@ import ShopWidget from './components/ShopWidget';
 import LandingPage from './components/LandingPage';
 import MigrationList from './components/MigrationList';
 import { fetchShopVisibility } from './api';
+import { ToastProvider } from './components/Toast';
 const BACKEND_URL =
   process.env.NODE_ENV === 'production'
     ? 'https://api.rise-of-stats.com'
@@ -77,6 +78,25 @@ const AppContent: React.FC = () => {
   const [r5ShopEnabled, setR5ShopEnabled] = useState(false);
   const [isShopVisibilityLoading, setIsShopVisibilityLoading] = useState(true);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [watchlistedIds, setWatchlistedIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('watchlist') || '[]'); } catch { return []; }
+  });
+  const [migrationPlayerIds, setMigrationPlayerIds] = useState<Set<string>>(new Set());
+  const migrationListSaveRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('watchlist', JSON.stringify(watchlistedIds));
+  }, [watchlistedIds]);
+
+  const watchlistIds = useMemo(() => new Set(watchlistedIds), [watchlistedIds]);
+
+  const handleAddToWatchlist = useCallback((id: string) => {
+    setWatchlistedIds(prev => prev.includes(id) ? prev : [...prev, id]);
+  }, []);
+
+  const handleRemoveFromWatchlist = useCallback((id: string) => {
+    setWatchlistedIds(prev => prev.filter(x => x !== id));
+  }, []);
   const queryParams = new URLSearchParams(window.location.search);
   const publicSlug = queryParams.get('slug');
   const accountSlug = queryParams.get('account');
@@ -390,6 +410,15 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(activeViewStorageKey, activeView);
   }, [activeView, activeViewStorageKey]);
+
+  // Trigger immediate save when navigating away from migration-list
+  const prevActiveViewRef = useRef(activeView);
+  useEffect(() => {
+    if (prevActiveViewRef.current === 'migration-list' && activeView !== 'migration-list') {
+      migrationListSaveRef.current?.();
+    }
+    prevActiveViewRef.current = activeView;
+  }, [activeView]);
   useEffect(() => {
     let isMounted = true;
     const loadShopVisibility = async () => {
@@ -616,6 +645,9 @@ const AppContent: React.FC = () => {
                         backendUrl={BACKEND_URL}
                         publicSlug={publicSlug}
                         isAdminOverride={isAdminOverrideView}
+                        watchlistIds={watchlistIds}
+                        onAddToWatchlist={handleAddToWatchlist}
+                        migrationPlayerIds={migrationPlayerIds}
                     />
                     </PublicOrProtectedRoute>
                 )}
@@ -671,14 +703,23 @@ const AppContent: React.FC = () => {
                     />
                 </PublicOrProtectedRoute>
             )}
-                {activeView === 'migration-list' && canAccessMigrationList && (
+                {canAccessMigrationList && (
                     <PublicOrProtectedRoute
                     isPublic={false}
                     publicSlug={null}
                     accessType="migration"
                     isAdminOverride={false}
                     >
-                      <MigrationList kingdomSlug={publicSlug} />
+                      <div className={activeView !== 'migration-list' ? 'hidden' : ''}>
+                        <MigrationList
+                          kingdomSlug={publicSlug}
+                          watchlistedIds={watchlistedIds}
+                          onAddToWatchlist={handleAddToWatchlist}
+                          onRemoveFromWatchlist={handleRemoveFromWatchlist}
+                          onMigrationPlayerIdsChange={setMigrationPlayerIds}
+                          triggerSaveRef={migrationListSaveRef}
+                        />
+                      </div>
                     </PublicOrProtectedRoute>
                 )}
                 {activeView === 'shop' && canAccessShop && (
@@ -740,9 +781,11 @@ const PublicOrProtectedRoute: React.FC<PublicOrProtectedRouteProps> = ({
 };
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ToastProvider>
   );
 };
 export default App;

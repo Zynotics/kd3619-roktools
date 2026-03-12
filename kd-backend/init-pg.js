@@ -229,6 +229,13 @@ async function init() {
     END$$;
   `);
 
+  // Migration list: zeroed columns
+  await query(`
+    ALTER TABLE migration_list_entries
+      ADD COLUMN IF NOT EXISTS zeroed BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS zeroed_at TIMESTAMPTZ;
+  `);
+
   // Migration list: kingdom_id guardrail
   await query(`
     DO $$
