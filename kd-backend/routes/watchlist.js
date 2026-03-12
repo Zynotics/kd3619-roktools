@@ -17,10 +17,10 @@ router.get('/', authenticateToken, requireMigrationListAccess, async (req, res) 
     }
 
     const rows = await all(
-      `SELECT player_id FROM watchlist_entries WHERE kingdom_id = $1`,
+      `SELECT player_id, location FROM watchlist_entries WHERE kingdom_id = $1`,
       [kingdomId]
     );
-    res.json(rows.map((row) => row.player_id));
+    res.json(rows.map((row) => ({ id: row.player_id, location: row.location || '' })));
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to load watchlist.' });
@@ -37,23 +37,27 @@ router.put('/', authenticateToken, requireMigrationListAccess, async (req, res) 
       return res.status(400).json({ error: error.message || 'Invalid kingdom context.' });
     }
 
-    const playerIds = Array.isArray(req.body?.playerIds) ? req.body.playerIds : [];
+    const players = Array.isArray(req.body?.players) ? req.body.players : [];
 
     await query('BEGIN');
     transactionStarted = true;
 
     await query('DELETE FROM watchlist_entries WHERE kingdom_id = $1', [kingdomId]);
 
-    if (playerIds.length > 0) {
-      const values = playerIds.map((_, i) => `($1, $${i + 2})`).join(',');
+    if (players.length > 0) {
+      const values = players.map((_, i) => `($1, $${i * 2 + 2}, $${i * 2 + 3})`).join(',');
+      const params = [kingdomId];
+      for (const p of players) {
+        params.push(String(p.id), p.location || null);
+      }
       await query(
-        `INSERT INTO watchlist_entries (kingdom_id, player_id) VALUES ${values} ON CONFLICT DO NOTHING`,
-        [kingdomId, ...playerIds.map(String)]
+        `INSERT INTO watchlist_entries (kingdom_id, player_id, location) VALUES ${values} ON CONFLICT DO NOTHING`,
+        params
       );
     }
 
     await query('COMMIT');
-    res.json({ success: true, count: playerIds.length });
+    res.json({ success: true, count: players.length });
   } catch (error) {
     console.error(error);
     if (transactionStarted) {

@@ -50,8 +50,10 @@ type MigrationMeta = {
 interface MigrationListProps {
   kingdomSlug: string | null;
   watchlistedIds: string[];
+  watchlistLocations?: Record<string, string>;
   onAddToWatchlist: (id: string) => void;
   onRemoveFromWatchlist: (id: string) => void;
+  onUpdateWatchlistLocation?: (id: string, location: string) => void;
   onMigrationPlayerIdsChange?: (ids: Set<string>) => void;
   triggerSaveRef?: React.MutableRefObject<(() => void) | null>;
 }
@@ -245,7 +247,7 @@ const isMissingGoal = (player: StatProgressRow) => {
   return dkpMissed || deadMissed;
 };
 
-const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedIds, onAddToWatchlist, onRemoveFromWatchlist, onMigrationPlayerIdsChange, triggerSaveRef }) => {
+const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedIds, watchlistLocations = {}, onAddToWatchlist, onRemoveFromWatchlist, onUpdateWatchlistLocation, onMigrationPlayerIdsChange, triggerSaveRef }) => {
   const { token, user } = useAuth();
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -1303,6 +1305,7 @@ const requestSort = (key: SortKey) => {
                     <TableCell header className="w-[120px]">Δ Power</TableCell>
                     <TableCell header className="w-[120px]">Troop Power</TableCell>
                     <TableCell header className="w-[60px]">Zeroed</TableCell>
+                    <TableCell header className="w-[150px]">Location</TableCell>
                     <TableCell header className="w-[60px]"></TableCell>
                   </tr>
                 </TableHeader>
@@ -1405,6 +1408,15 @@ const requestSort = (key: SortKey) => {
                               </span>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <input
+                            type="text"
+                            value={watchlistLocations[entry.id] || ''}
+                            onChange={(e) => onUpdateWatchlistLocation?.(entry.id, e.target.value)}
+                            placeholder="z.B. KD1234"
+                            className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60"
+                          />
                         </TableCell>
                         <TableCell>
                           <button

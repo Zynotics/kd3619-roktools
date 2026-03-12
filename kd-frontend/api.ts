@@ -186,7 +186,7 @@ export async function saveMigrationList(
 
 // ==================== WATCHLIST API ====================
 
-export async function fetchWatchlist(slug?: string): Promise<string[]> {
+export async function fetchWatchlist(slug?: string): Promise<{ id: string; location: string }[]> {
   const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
   const res = await fetch(`${API_BASE_URL}/api/watchlist${query}`, {
     headers: getAuthHeaders(),
@@ -198,12 +198,15 @@ export async function fetchWatchlist(slug?: string): Promise<string[]> {
   return res.json();
 }
 
-export async function saveWatchlist(playerIds: string[], slug?: string): Promise<{ success: boolean; count: number }> {
+export async function saveWatchlist(
+  players: { id: string; location?: string }[],
+  slug?: string
+): Promise<{ success: boolean; count: number }> {
   const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
   const res = await fetch(`${API_BASE_URL}/api/watchlist${query}`, {
     method: 'PUT',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ playerIds }),
+    body: JSON.stringify({ players }),
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));

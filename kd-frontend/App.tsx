@@ -79,6 +79,7 @@ const AppContent: React.FC = () => {
   const [isShopVisibilityLoading, setIsShopVisibilityLoading] = useState(true);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [watchlistedIds, setWatchlistedIds] = useState<string[]>([]);
+  const [watchlistLocations, setWatchlistLocations] = useState<Record<string, string>>({});
   const [watchlistLoaded, setWatchlistLoaded] = useState(false);
   const watchlistSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [migrationPlayerIds, setMigrationPlayerIds] = useState<Set<string>>(new Set());
@@ -92,6 +93,10 @@ const AppContent: React.FC = () => {
 
   const handleRemoveFromWatchlist = useCallback((id: string) => {
     setWatchlistedIds(prev => prev.filter(x => x !== id));
+  }, []);
+
+  const handleUpdateWatchlistLocation = useCallback((id: string, location: string) => {
+    setWatchlistLocations(prev => ({ ...prev, [id]: location }));
   }, []);
 
   const queryParams = new URLSearchParams(window.location.search);
@@ -144,8 +149,11 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (!token) return;
     fetchWatchlist(watchlistApiSlug)
-      .then((ids) => {
-        setWatchlistedIds(ids);
+      .then((entries) => {
+        setWatchlistedIds(entries.map(e => e.id));
+        const locs: Record<string, string> = {};
+        for (const e of entries) if (e.location) locs[e.id] = e.location;
+        setWatchlistLocations(locs);
         setWatchlistLoaded(true);
       })
       .catch(() => setWatchlistLoaded(true));
@@ -156,9 +164,10 @@ const AppContent: React.FC = () => {
     if (!watchlistLoaded || !token) return;
     if (watchlistSaveTimeoutRef.current) clearTimeout(watchlistSaveTimeoutRef.current);
     watchlistSaveTimeoutRef.current = setTimeout(() => {
-      saveWatchlist(watchlistedIds, watchlistApiSlug).catch(() => {});
+      const players = watchlistedIds.map(id => ({ id, location: watchlistLocations[id] || '' }));
+      saveWatchlist(players, watchlistApiSlug).catch(() => {});
     }, 400);
-  }, [watchlistLoaded, token, watchlistedIds, watchlistApiSlug]);
+  }, [watchlistLoaded, token, watchlistedIds, watchlistLocations, watchlistApiSlug]);
 
   const renderMainNavigation = (onNavigate?: () => void) => {
     if (hideStandardNavigation) return null;
@@ -733,8 +742,10 @@ const AppContent: React.FC = () => {
                         <MigrationList
                           kingdomSlug={publicSlug}
                           watchlistedIds={watchlistedIds}
+                          watchlistLocations={watchlistLocations}
                           onAddToWatchlist={handleAddToWatchlist}
                           onRemoveFromWatchlist={handleRemoveFromWatchlist}
+                          onUpdateWatchlistLocation={handleUpdateWatchlistLocation}
                           onMigrationPlayerIdsChange={setMigrationPlayerIds}
                           triggerSaveRef={migrationListSaveRef}
                         />

@@ -429,9 +429,20 @@ async function initWatchlistTable() {
       CREATE TABLE IF NOT EXISTS watchlist_entries (
         kingdom_id TEXT NOT NULL,
         player_id TEXT NOT NULL,
+        location TEXT,
         PRIMARY KEY (kingdom_id, player_id),
         FOREIGN KEY (kingdom_id) REFERENCES kingdoms(id) ON DELETE CASCADE
       )
+    `);
+    await query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'watchlist_entries' AND column_name = 'location'
+        ) THEN
+          ALTER TABLE watchlist_entries ADD COLUMN location TEXT;
+        END IF;
+      END$$;
     `);
     console.log('Postgres: watchlist_entries table checked/updated.');
   } catch (e) {
