@@ -1414,7 +1414,7 @@ const requestSort = (key: SortKey) => {
                             type="text"
                             value={watchlistLocations[entry.id] || ''}
                             onChange={(e) => onUpdateWatchlistLocation?.(entry.id, e.target.value)}
-                            placeholder="z.B. KD1234"
+                            placeholder=""
                             className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60"
                           />
                         </TableCell>
