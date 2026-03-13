@@ -200,6 +200,8 @@ interface PlayerTableProps extends SortableTableProps<PlayerInfo> {
     onAddToWatchlist?: (id: string, name: string) => void;
     historicalPlayerIds?: Set<string>;
     migrationPlayerIds?: Set<string>;
+    rangeFile1?: string | null;
+    rangeFile2?: string | null;
 }
 
 const PlayerTable: React.FC<PlayerTableProps> = ({
@@ -223,6 +225,8 @@ const PlayerTable: React.FC<PlayerTableProps> = ({
     onAddToWatchlist,
     historicalPlayerIds,
     migrationPlayerIds,
+    rangeFile1,
+    rangeFile2,
 }) => (
     <Card className={`overflow-hidden ${accentClass || ''}`}>
         <div className="px-6 py-4 border-b border-gray-700/60">
@@ -267,6 +271,13 @@ const PlayerTable: React.FC<PlayerTableProps> = ({
                     </button>
                 </div>
             </div>
+            {rangeFile1 && rangeFile2 && (
+                <p className="mt-1.5 text-sm font-medium text-slate-400">
+                    Changes since: <span className="text-white font-semibold">{rangeFile1}</span>
+                    <span className="text-slate-500 mx-1">→</span>
+                    <span className="text-white font-semibold">{rangeFile2}</span>
+                </p>
+            )}
         </div>
         {players.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-gray-500">
@@ -742,6 +753,8 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
           watchlistIds={watchlistIds}
           onAddToWatchlist={onAddToWatchlist ? handleWatchlistRequest : undefined}
           historicalPlayerIds={historicalPlayerIds}
+          rangeFile1={file1Name}
+          rangeFile2={file2Name}
       />
 
       <PlayerTable
@@ -764,6 +777,8 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({
           watchlistIds={watchlistIds}
           onAddToWatchlist={onAddToWatchlist ? handleWatchlistRequest : undefined}
           migrationPlayerIds={migrationPlayerIds}
+          rangeFile1={file1Name}
+          rangeFile2={file2Name}
       />
 
       <PlayerStatChangesTable
