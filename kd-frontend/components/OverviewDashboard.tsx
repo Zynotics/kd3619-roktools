@@ -18,6 +18,7 @@ interface OverviewDashboardProps {
   watchlistIds?: Set<string>;
   onAddToWatchlist?: (id: string, name: string) => void;
   migrationPlayerIds?: Set<string>;
+  onFileUploaded?: () => void;
 }
 
 const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
@@ -28,6 +29,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   watchlistIds,
   onAddToWatchlist,
   migrationPlayerIds,
+  onFileUploaded,
 }) => {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -149,7 +151,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   // ---------------------------------------------------
   // ACTIONS
   // ---------------------------------------------------
-  const handleUploadComplete = async () => { await fetchFiles({ placeNewUploadsOnTop: true }); };
+  const handleUploadComplete = async () => { await fetchFiles({ placeNewUploadsOnTop: true }); onFileUploaded?.(); };
   const uploadUrl = `${backendUrl}/overview/upload${isAdminOverride && publicSlug ? `?slug=${publicSlug}` : ''}`;
 
   const handleDeleteFile = async (id: string) => {

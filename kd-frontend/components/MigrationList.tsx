@@ -55,6 +55,7 @@ interface MigrationListProps {
   onRemoveFromWatchlist: (id: string) => void;
   onUpdateWatchlistLocation?: (id: string, location: string) => void;
   onMigrationPlayerIdsChange?: (ids: Set<string>) => void;
+  overviewFileVersion?: number;
   triggerSaveRef?: React.MutableRefObject<(() => void) | null>;
 }
 
@@ -247,7 +248,7 @@ const isMissingGoal = (player: StatProgressRow) => {
   return dkpMissed || deadMissed;
 };
 
-const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedIds, watchlistLocations = {}, onAddToWatchlist, onRemoveFromWatchlist, onUpdateWatchlistLocation, onMigrationPlayerIdsChange, triggerSaveRef }) => {
+const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedIds, watchlistLocations = {}, onAddToWatchlist, onRemoveFromWatchlist, onUpdateWatchlistLocation, onMigrationPlayerIdsChange, triggerSaveRef, overviewFileVersion }) => {
   const { token, user } = useAuth();
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -335,7 +336,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
       }
     };
     loadOverviewFiles();
-  }, [kingdomSlug, selectedEventId, events]);
+  }, [kingdomSlug, selectedEventId, events, overviewFileVersion]);
 
   const apiSlug = user?.role === 'admin' ? kingdomSlug || undefined : undefined;
 

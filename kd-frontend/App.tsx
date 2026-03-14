@@ -84,6 +84,8 @@ const AppContent: React.FC = () => {
   const watchlistSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [migrationPlayerIds, setMigrationPlayerIds] = useState<Set<string>>(new Set());
   const migrationListSaveRef = useRef<(() => void) | null>(null);
+  const [overviewFileVersion, setOverviewFileVersion] = useState(0);
+  const handleFileUploaded = useCallback(() => setOverviewFileVersion(v => v + 1), []);
 
   const watchlistIds = useMemo(() => new Set(watchlistedIds), [watchlistedIds]);
 
@@ -676,6 +678,7 @@ const AppContent: React.FC = () => {
                         watchlistIds={watchlistIds}
                         onAddToWatchlist={handleAddToWatchlist}
                         migrationPlayerIds={migrationPlayerIds}
+                        onFileUploaded={handleFileUploaded}
                     />
                     </PublicOrProtectedRoute>
                 )}
@@ -748,6 +751,7 @@ const AppContent: React.FC = () => {
                           onUpdateWatchlistLocation={handleUpdateWatchlistLocation}
                           onMigrationPlayerIdsChange={setMigrationPlayerIds}
                           triggerSaveRef={migrationListSaveRef}
+                          overviewFileVersion={overviewFileVersion}
                         />
                       </div>
                     </PublicOrProtectedRoute>
