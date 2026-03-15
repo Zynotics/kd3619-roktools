@@ -403,6 +403,7 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
 
         // Iterate over endData because it represents active players at the end of the phase
         endData.forEach((curr, playerId) => {
+            if (baseSnapshotData && !baseSnapshotData.has(playerId)) return;
             const prev = startData.get(playerId);
             const prevPower = prev ? prev.power : 0;
             const prevT4 = prev ? prev.t4 : 0;
