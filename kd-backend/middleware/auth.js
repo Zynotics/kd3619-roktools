@@ -120,6 +120,25 @@ function requireKvkManager(req, res, next) {
   return res.status(403).json({ error: 'Admin, R5 or KvK Manager rights required' });
 }
 
+function requireWatchlistAccess(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+  const { role, kingdomId, canAccessMigrationList } = req.user;
+
+  if (role === 'admin') return next();
+
+  if (role === 'r5') {
+    if (!kingdomId) return res.status(403).json({ error: 'R5 user is not assigned to a kingdom.' });
+    return next();
+  }
+
+  if (role === 'r4' && canAccessMigrationList) {
+    if (!kingdomId) return res.status(403).json({ error: 'R4 user is not assigned to a kingdom.' });
+    return next();
+  }
+
+  return res.status(403).json({ error: 'Admin, R5 or authorized R4 required' });
+}
+
 function requireMigrationListAccess(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
   const { role, kingdomId, canAccessMigrationList } = req.user;
@@ -166,5 +185,6 @@ module.exports = {
   requireAdmin,
   requireKvkManager,
   requireMigrationListAccess,
+  requireWatchlistAccess,
   hasFileManagementAccess,
 };

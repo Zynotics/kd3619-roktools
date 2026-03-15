@@ -80,7 +80,7 @@ const AppContent: React.FC = () => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [watchlistedIds, setWatchlistedIds] = useState<string[]>([]);
   const [watchlistLocations, setWatchlistLocations] = useState<Record<string, string>>({});
-  const [watchlistLoaded, setWatchlistLoaded] = useState(false);
+  const watchlistSaveEnabledRef = useRef(false);
   const watchlistSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [migrationPlayerIds, setMigrationPlayerIds] = useState<Set<string>>(new Set());
   const migrationListSaveRef = useRef<(() => void) | null>(null);
@@ -150,26 +150,29 @@ const AppContent: React.FC = () => {
   // Load watchlist from backend when user logs in
   useEffect(() => {
     if (!token) return;
+    watchlistSaveEnabledRef.current = false;
     fetchWatchlist(watchlistApiSlug)
       .then((entries) => {
         setWatchlistedIds(entries.map(e => e.id));
         const locs: Record<string, string> = {};
         for (const e of entries) if (e.location) locs[e.id] = e.location;
         setWatchlistLocations(locs);
-        setWatchlistLoaded(true);
+        watchlistSaveEnabledRef.current = true;
       })
-      .catch(() => setWatchlistLoaded(true));
+      .catch(() => {
+        // Load failed — do NOT enable saving to avoid overwriting DB with empty data
+      });
   }, [token, watchlistApiSlug]);
 
-  // Save watchlist to backend on changes (debounced)
+  // Save watchlist to backend on changes (debounced, only after successful load)
   useEffect(() => {
-    if (!watchlistLoaded || !token) return;
+    if (!watchlistSaveEnabledRef.current || !token) return;
     if (watchlistSaveTimeoutRef.current) clearTimeout(watchlistSaveTimeoutRef.current);
     watchlistSaveTimeoutRef.current = setTimeout(() => {
       const players = watchlistedIds.map(id => ({ id, location: watchlistLocations[id] || '' }));
       saveWatchlist(players, watchlistApiSlug).catch(() => {});
     }, 400);
-  }, [watchlistLoaded, token, watchlistedIds, watchlistLocations, watchlistApiSlug]);
+  }, [token, watchlistedIds, watchlistLocations, watchlistApiSlug]);
 
   const renderMainNavigation = (onNavigate?: () => void) => {
     if (hideStandardNavigation) return null;

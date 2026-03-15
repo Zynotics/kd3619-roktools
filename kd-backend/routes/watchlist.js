@@ -2,12 +2,12 @@
 
 const express = require('express');
 const { query, all } = require('../db-pg');
-const { authenticateToken, requireMigrationListAccess } = require('../middleware/auth');
+const { authenticateToken, requireWatchlistAccess } = require('../middleware/auth');
 const { resolveKingdomIdFromRequest } = require('../helpers');
 
 const router = express.Router();
 
-router.get('/', authenticateToken, requireMigrationListAccess, async (req, res) => {
+router.get('/', authenticateToken, requireWatchlistAccess, async (req, res) => {
   try {
     let kingdomId;
     try {
@@ -27,7 +27,7 @@ router.get('/', authenticateToken, requireMigrationListAccess, async (req, res) 
   }
 });
 
-router.put('/', authenticateToken, requireMigrationListAccess, async (req, res) => {
+router.put('/', authenticateToken, requireWatchlistAccess, async (req, res) => {
   let transactionStarted = false;
   try {
     let kingdomId;
