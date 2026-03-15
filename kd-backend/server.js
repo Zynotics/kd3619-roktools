@@ -4,7 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { init: initPgSchema } = require('./init-pg');
-const { initMigrationListTable, initWatchlistTable } = require('./db-pg');
+const { initMigrationListTable, initWatchlistTable, initActivityLogsTable } = require('./db-pg');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -68,6 +68,7 @@ app.put('/api/admin/r5-shop-visibility', authenticateToken, requireAdmin, async 
   catch (e) { res.status(500).json({ error: 'Failed to save shop settings' }); }
 });
 app.use('/api/admin/kvk/events', require('./routes/kvk'));
+app.use('/api/admin/logs', require('./routes/admin/logs'));
 app.use('/api/migration-list', require('./routes/migration'));
 app.use('/api/watchlist', require('./routes/watchlist'));
 app.use('/api/public', require('./routes/public'));
@@ -84,6 +85,7 @@ async function startServer() {
       await initPgSchema();
       await initMigrationListTable();
       await initWatchlistTable();
+      await initActivityLogsTable();
     } catch (err) {
       console.error('Postgres schema init failed:', err);
     }

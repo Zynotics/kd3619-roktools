@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const { query, get, getActiveR5Access } = require('../db-pg');
 const { JWT_SECRET, authenticateToken } = require('../middleware/auth');
 const { userGovIdExists, findKingdomBySlug } = require('../helpers');
+const { logActivity } = require('../helpers/logger');
 
 const router = express.Router();
 
@@ -106,6 +107,8 @@ router.post('/login', async (req, res) => {
       kingdomId: user.kingdom_id || null,
     };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
+
+    logActivity({ userId: user.id, username: user.username, role: user.role, action: 'login', kingdomId: user.kingdom_id || null });
 
     res.json({
       token,

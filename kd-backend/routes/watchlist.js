@@ -4,6 +4,7 @@ const express = require('express');
 const { query, all } = require('../db-pg');
 const { authenticateToken, requireWatchlistAccess } = require('../middleware/auth');
 const { resolveKingdomIdFromRequest } = require('../helpers');
+const { logActivity } = require('../helpers/logger');
 
 const router = express.Router();
 
@@ -57,6 +58,7 @@ router.put('/', authenticateToken, requireWatchlistAccess, async (req, res) => {
     }
 
     await query('COMMIT');
+    logActivity({ userId: req.user.id, username: req.user.username, role: req.user.role, action: 'watchlist_save', entityType: 'watchlist', details: { count: players.length }, kingdomId });
     res.json({ success: true, count: players.length });
   } catch (error) {
     console.error(error);

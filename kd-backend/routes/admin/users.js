@@ -4,6 +4,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { query, get, all, assignR5, activateR5Code } = require('../../db-pg');
 const { authenticateToken, requireAdmin, getKingdomId } = require('../../middleware/auth');
+const { logActivity } = require('../../helpers/logger');
 
 const router = express.Router();
 
@@ -124,6 +125,7 @@ router.post('/approve', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     await query('UPDATE users SET is_approved = $1 WHERE id = $2', [approved, userId]);
+    logActivity({ userId: req.user.id, username: req.user.username, role: req.user.role, action: approved ? 'user_approve' : 'user_reject', entityType: 'user', entityId: userId, kingdomId: req.user.kingdomId || null });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update user approval' });
@@ -176,6 +178,7 @@ router.post('/access-files', authenticateToken, requireAdmin, async (req, res) =
       `UPDATE users SET can_manage_overview_files=$1, can_manage_honor_files=$2, can_manage_activity_files=$3, can_manage_analytics_files=$4, can_access_kvk_manager=$5, can_access_migration_list=$6 WHERE id=$7`,
       [analyticsFlag, analyticsFlag, !!canManageActivityFiles, analyticsFlag, !!canAccessKvkManager, !!canAccessMigrationList, userId]
     );
+    logActivity({ userId: req.user.id, username: req.user.username, role: req.user.role, action: 'user_access_files_update', entityType: 'user', entityId: userId, details: { canManageActivityFiles: !!canManageActivityFiles, canManageAnalyticsFiles: analyticsFlag, canAccessKvkManager: !!canAccessKvkManager, canAccessMigrationList: !!canAccessMigrationList }, kingdomId: req.user.kingdomId || null });
     res.json({ success: true });
   } catch (e) {
     console.error('Error in /access-files:', e);
@@ -215,6 +218,7 @@ router.post('/role', authenticateToken, requireAdmin, async (req, res) => {
 
       await assignR5(userId, targetK);
       await query('UPDATE users SET is_approved = TRUE WHERE id = $1', [userId]);
+      logActivity({ userId: req.user.id, username: req.user.username, role: req.user.role, action: 'user_role_change', entityType: 'user', entityId: userId, details: { newRole: 'r5', kingdomId: targetK }, kingdomId: targetK });
       return res.json({ success: true, expiresAt: null });
     }
 
@@ -228,6 +232,7 @@ router.post('/role', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     await query(sql, p);
+    logActivity({ userId: req.user.id, username: req.user.username, role: req.user.role, action: 'user_role_change', entityType: 'user', entityId: userId, details: { newRole: role }, kingdomId: req.user.kingdomId || null });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: 'Failed to update user role' });
@@ -249,6 +254,7 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
 
     if (currentUserRole === 'admin') {
       await query('DELETE FROM users WHERE id = $1', [userId]);
+      logActivity({ userId: req.user.id, username: req.user.username, role: req.user.role, action: 'user_delete', entityType: 'user', entityId: userId, kingdomId: req.user.kingdomId || null });
       return res.json({ success: true, deleted: true });
     }
 
@@ -260,6 +266,7 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
         'UPDATE users SET role = $1, kingdom_id = NULL, is_approved = FALSE, can_access_honor = FALSE, can_access_analytics = FALSE, can_access_overview = FALSE, can_manage_overview_files = FALSE, can_manage_honor_files = FALSE, can_manage_activity_files = FALSE, can_manage_analytics_files = FALSE, can_access_kvk_manager = FALSE, can_access_migration_list = FALSE WHERE id = $2',
         ['user', userId]
       );
+      logActivity({ userId: req.user.id, username: req.user.username, role: req.user.role, action: 'user_remove_from_kingdom', entityType: 'user', entityId: userId, kingdomId: currentUserKingdomId || null });
       return res.json({ success: true, removedFromKingdom: true });
     }
 

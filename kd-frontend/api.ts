@@ -215,6 +215,60 @@ export async function saveWatchlist(
   return res.json();
 }
 
+// ==================== ACTIVITY LOGS API ====================
+
+export interface ActivityLog {
+  id: number;
+  user_id: string | null;
+  username: string | null;
+  role: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  details: Record<string, unknown> | null;
+  kingdom_id: string | null;
+  created_at: string;
+}
+
+export interface ActivityLogsResponse {
+  data: ActivityLog[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export async function fetchActivityLogs(filters?: {
+  userId?: string;
+  username?: string;
+  action?: string;
+  kingdomId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  limit?: number;
+}): Promise<ActivityLogsResponse> {
+  const params = new URLSearchParams();
+  if (filters?.userId) params.append('userId', filters.userId);
+  if (filters?.username) params.append('username', filters.username);
+  if (filters?.action) params.append('action', filters.action);
+  if (filters?.kingdomId) params.append('kingdomId', filters.kingdomId);
+  if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom);
+  if (filters?.dateTo) params.append('dateTo', filters.dateTo);
+  if (filters?.page) params.append('page', String(filters.page));
+  if (filters?.limit) params.append('limit', String(filters.limit));
+
+  const qs = params.toString();
+  const res = await fetch(`${API_BASE_URL}/api/admin/logs${qs ? `?${qs}` : ''}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to load activity logs');
+  }
+  return res.json();
+}
+
 // ==================== FILE MANAGEMENT API ====================
 
 /**

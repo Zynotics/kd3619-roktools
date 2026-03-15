@@ -14,6 +14,7 @@ import R5CodeAdmin from './components/R5CodeAdmin';
 import ShopWidget from './components/ShopWidget';
 import LandingPage from './components/LandingPage';
 import MigrationList from './components/MigrationList';
+import LogsView from './components/LogsView';
 import { fetchShopVisibility, fetchWatchlist, saveWatchlist } from './api';
 import { ToastProvider } from './components/Toast';
 const BACKEND_URL =
@@ -32,7 +33,8 @@ type ActiveView =
   | 'r5-access'
   | 'r5-codes'
   | 'migration-list'
-  | 'shop';
+  | 'shop'
+  | 'logs';
 // Sidebar Navigation Item
 const NavItem: React.FC<{
   view: ActiveView;
@@ -296,6 +298,16 @@ const AppContent: React.FC = () => {
             onNavigate={onNavigate}
           />
         )}
+        {isSuperAdmin && (
+          <NavItem
+            view="logs"
+            currentActiveView={activeView}
+            setActiveView={setActiveView}
+            label="Logs"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>}
+            onNavigate={onNavigate}
+          />
+        )}
       </div>
     );
   };
@@ -406,7 +418,7 @@ const AppContent: React.FC = () => {
         return;
     }
     if (isSuperAdminWithoutSlug) {
-        if (activeView !== 'kingdoms-overview' && activeView !== 'admin' && activeView !== 'r5-codes' && activeView !== 'r5-access') {
+        if (activeView !== 'kingdoms-overview' && activeView !== 'admin' && activeView !== 'r5-codes' && activeView !== 'r5-access' && activeView !== 'logs') {
             setActiveView('kingdoms-overview');
         }
         if (activeView === 'kvk-manager') {
@@ -777,6 +789,11 @@ const AppContent: React.FC = () => {
                 {activeView === 'r5-codes' && user && isSuperAdmin && (
                   <ProtectedRoute accessType='admin'>
                     <R5CodeAdmin />
+                  </ProtectedRoute>
+                )}
+                {activeView === 'logs' && user && isSuperAdmin && (
+                  <ProtectedRoute accessType='admin'>
+                    <LogsView />
                   </ProtectedRoute>
                 )}
                 {activeView === 'admin' && user && hasAdminAccess && (

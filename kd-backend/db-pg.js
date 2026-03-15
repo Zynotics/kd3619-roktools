@@ -450,6 +450,31 @@ async function initWatchlistTable() {
   }
 }
 
+async function initActivityLogsTable() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS activity_logs (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT,
+        username TEXT,
+        role TEXT,
+        action TEXT NOT NULL,
+        entity_type TEXT,
+        entity_id TEXT,
+        details JSONB,
+        kingdom_id TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs (created_at DESC)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON activity_logs (user_id)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_kingdom_id ON activity_logs (kingdom_id)`);
+    console.log('Postgres: activity_logs table checked/updated.');
+  } catch (e) {
+    console.error('Error initializing activity_logs table:', e.message);
+  }
+}
+
 if (process.env.DATABASE_URL) {
     initKvkTable();
     initR5CodesTable();
@@ -457,6 +482,7 @@ if (process.env.DATABASE_URL) {
     initUsersColumns();
     initMigrationListTable();
     initWatchlistTable();
+    initActivityLogsTable();
 }
 
 /**
@@ -648,6 +674,7 @@ module.exports = {
   setAppSetting,
   initMigrationListTable,
   initWatchlistTable,
+  initActivityLogsTable,
   // KvK Exports
   createKvkEvent,
   getKvkEvents,

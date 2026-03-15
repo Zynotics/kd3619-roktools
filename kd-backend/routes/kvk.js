@@ -6,6 +6,7 @@ const {
 } = require('../db-pg');
 const { authenticateToken, requireKvkManager } = require('../middleware/auth');
 const { findKingdomBySlug, ensureFilesBelongToKingdom } = require('../helpers');
+const { logActivity } = require('../helpers/logger');
 
 const router = express.Router();
 
@@ -95,6 +96,7 @@ router.post('/', authenticateToken, requireKvkManager, async (req, res) => {
     };
 
     const created = await createKvkEvent(newEvent);
+    logActivity({ userId: req.user.id, username: req.user.username, role: req.user.role, action: 'kvk_event_create', entityType: 'kvk_event', entityId: newEvent.id, details: { name }, kingdomId: targetKingdomId });
     res.json(created);
   } catch (error) {
     console.error(error);
@@ -134,6 +136,7 @@ router.put('/:id', authenticateToken, requireKvkManager, async (req, res) => {
       isRankingPublic: resolvedRankingPublic ?? existing.isRankingPublic ?? existing.isPublic,
       isHonorPublic: resolvedHonorPublic ?? existing.isHonorPublic ?? existing.isPublic,
     });
+    logActivity({ userId: req.user.id, username: req.user.username, role: req.user.role, action: 'kvk_event_update', entityType: 'kvk_event', entityId: eventId, details: { name }, kingdomId: existing.kingdomId });
     res.json(updated);
   } catch (error) {
     console.error(error);
@@ -150,6 +153,7 @@ router.delete('/:id', authenticateToken, requireKvkManager, async (req, res) => 
       return res.status(403).json({ error: 'Access denied' });
     }
     await deleteKvkEvent(req.params.id);
+    logActivity({ userId: req.user.id, username: req.user.username, role: req.user.role, action: 'kvk_event_delete', entityType: 'kvk_event', entityId: req.params.id, details: { name: existing.name }, kingdomId: existing.kingdomId });
     res.json({ success: true });
   } catch (error) {
     console.error(error);
