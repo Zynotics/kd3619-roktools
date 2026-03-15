@@ -78,6 +78,18 @@ app.use('/', require('./routes/files')); // /overview/*, /honor/*, /activity/*
 app.get('/health', (req, res) => res.json({ status: 'Backend running', time: new Date() }));
 app.get('/', (req, res) => res.json({ message: 'KD3619 Backend API', version: '2.7.0' }));
 
+// ==================== WEEKLY LOG CLEANUP ====================
+const { query: dbQuery } = require('./db-pg');
+
+async function deleteOldActivityLogs() {
+  try {
+    const res = await dbQuery(`DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL '7 days'`);
+    console.log(`[Log Cleanup] Deleted ${res.rowCount} activity log entries older than 7 days.`);
+  } catch (e) {
+    console.error('[Log Cleanup] Failed:', e.message);
+  }
+}
+
 // ==================== START ====================
 async function startServer() {
   if (process.env.DATABASE_URL) {
@@ -89,6 +101,10 @@ async function startServer() {
     } catch (err) {
       console.error('Postgres schema init failed:', err);
     }
+
+    // Run log cleanup once on startup, then every 7 days
+    deleteOldActivityLogs();
+    setInterval(deleteOldActivityLogs, 7 * 24 * 60 * 60 * 1000);
   }
 
   app.listen(PORT, '0.0.0.0', () => {
