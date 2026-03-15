@@ -1403,10 +1403,9 @@ const requestSort = (key: SortKey) => {
                               0
                             </button>
                             {details.zeroed && details.zeroedAt && (
-                              <span className="text-[10px] text-slate-500 leading-tight whitespace-nowrap">
-                                {new Date(details.zeroedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })}
-                                {' '}
-                                {new Date(details.zeroedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })} UTC
+                              <span className="text-[10px] text-slate-500 leading-tight flex flex-col">
+                                <span>{new Date(details.zeroedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+                                <span>{new Date(details.zeroedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })} UTC</span>
                               </span>
                             )}
                           </div>
