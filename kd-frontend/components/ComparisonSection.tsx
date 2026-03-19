@@ -105,7 +105,7 @@ interface ComparisonSectionProps {
   onCompare?: () => void;
   watchlistIds?: Set<string>;
   onAddToWatchlist?: (id: string, name: string) => void;
-  historicalPlayerIds?: Set<string>;
+  historicalPlayerIds?: Map<string, string>;
   migrationPlayerIds?: Set<string>;
 }
 
@@ -198,7 +198,7 @@ interface PlayerTableProps extends SortableTableProps<PlayerInfo> {
     emptyMessage?: string;
     watchlistIds?: Set<string>;
     onAddToWatchlist?: (id: string, name: string) => void;
-    historicalPlayerIds?: Set<string>;
+    historicalPlayerIds?: Map<string, string>;
     migrationPlayerIds?: Set<string>;
     rangeFile1?: string | null;
     rangeFile2?: string | null;
@@ -306,7 +306,8 @@ const PlayerTable: React.FC<PlayerTableProps> = ({
                     <tbody>
                         {players.map(p => {
                             const isWatchlist = watchlistIds?.has(p.id) ?? false;
-                            const isReturning = historicalPlayerIds?.has(p.id) ?? false;
+                            const returningLastSeen = historicalPlayerIds?.get(p.id) ?? null;
+                            const isReturning = returningLastSeen !== null;
                             const isOnMigrationList = migrationPlayerIds?.has(p.id) ?? false;
                             return (
                             <TableRow key={p.id} className={`group ${isWatchlist ? 'bg-amber-900/20' : ''}`}>
@@ -327,11 +328,20 @@ const PlayerTable: React.FC<PlayerTableProps> = ({
                                                         </span>
                                                     )}
                                                     {isReturning && (
-                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-sky-500/20 text-sky-300 border border-sky-500/40" title="This player was seen in older scans — likely a reactivated account">
+                                                        <span
+                                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-sky-500/20 text-sky-300 border border-sky-500/40 cursor-pointer relative group/ret"
+                                                            title={`Last seen: ${returningLastSeen}`}
+                                                        >
                                                             <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                                                 <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/>
                                                             </svg>
                                                             Returning
+                                                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/ret:flex flex-col items-center z-50">
+                                                                <span className="bg-slate-900 border border-slate-600 text-slate-200 text-[10px] font-normal normal-case tracking-normal rounded px-2 py-1 whitespace-nowrap shadow-lg">
+                                                                    Last seen: {returningLastSeen}
+                                                                </span>
+                                                                <span className="w-2 h-2 bg-slate-900 border-r border-b border-slate-600 rotate-45 -mt-1"></span>
+                                                            </span>
                                                         </span>
                                                     )}
                                                     {isOnMigrationList && (

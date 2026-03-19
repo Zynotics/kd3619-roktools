@@ -264,27 +264,42 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   const handleSelectPlayer = (p: PlayerStatChange) => { setSelectedPlayer(p); };
 
   const historicalPlayerIds = useMemo(() => {
-    // Files are sorted newest-first (index 0 = newest)
-    // The scan just before endFile (older) is at endIdx + 1
-    if (!endFileId || uploadedFiles.length < 3) return new Set<string>();
+    // Returning = was in a scan before start, NOT in start scan, but IS in end scan
+    // Map: playerId -> last-seen filename (most recent scan before start where they appeared)
+    if (!startFileId || !endFileId || uploadedFiles.length < 2) return new Map<string, string>();
+    const startIdx = uploadedFiles.findIndex(f => f.id === startFileId);
     const endIdx = uploadedFiles.findIndex(f => f.id === endFileId);
-    if (endIdx < 0 || endIdx + 2 >= uploadedFiles.length) return new Set<string>();
+    if (startIdx < 0 || endIdx < 0) return new Map<string, string>();
 
-    // IDs in the scan immediately preceding endFile (the "2nd newest" relative to endFile)
-    const prevIds = new Set<string>();
-    parseFileToPlayers(uploadedFiles[endIdx + 1]).forEach(p => { if (p.id) prevIds.add(p.id); });
+    // IDs in start scan
+    const startIds = new Set<string>();
+    parseFileToPlayers(uploadedFiles[startIdx]).forEach(p => { if (p.id) startIds.add(p.id); });
 
-    // IDs seen in any scan older than that
-    const olderIds = new Set<string>();
-    uploadedFiles.slice(endIdx + 2).forEach(file => {
-      parseFileToPlayers(file).forEach(p => { if (p.id) olderIds.add(p.id); });
+    // IDs in end scan
+    const endIds = new Set<string>();
+    parseFileToPlayers(uploadedFiles[endIdx]).forEach(p => { if (p.id) endIds.add(p.id); });
+
+    // Scans before start (higher index = older, files sorted newest-first)
+    // Track last-seen filename per player (newest scan before start where they appeared)
+    const lastSeenIn = new Map<string, string>();
+    for (let i = startIdx + 1; i < uploadedFiles.length; i++) {
+      const file = uploadedFiles[i];
+      parseFileToPlayers(file).forEach(p => {
+        if (p.id && !lastSeenIn.has(p.id)) {
+          lastSeenIn.set(p.id, cleanFileName(file.name));
+        }
+      });
+    }
+
+    // Returning = seen before start, NOT in start, but in end
+    const returning = new Map<string, string>();
+    lastSeenIn.forEach((fileName, id) => {
+      if (!startIds.has(id) && endIds.has(id)) {
+        returning.set(id, fileName);
+      }
     });
-
-    // Returning = was in an older scan but NOT in the scan just before endFile
-    const returning = new Set<string>();
-    olderIds.forEach(id => { if (!prevIds.has(id)) returning.add(id); });
     return returning;
-  }, [endFileId, uploadedFiles]);
+  }, [startFileId, endFileId, uploadedFiles]);
 
   if (isLoading) return (
     <div className="space-y-6 p-2">
