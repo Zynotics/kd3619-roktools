@@ -45,6 +45,7 @@ type MigrationMeta = {
   info: string;
   zeroed?: boolean;
   zeroedAt?: string; // ISO UTC timestamp
+  inactive?: boolean;
 };
 
 interface MigrationListProps {
@@ -75,7 +76,8 @@ type SortKey =
   | 'deadPercent'
   | 'reason'
   | 'contacted'
-  | 'migrated';
+  | 'migrated'
+  | 'inactive';
 type SortDirection = 'asc' | 'desc';
 
 const getSnapshotData = (file: UploadedFile): SnapshotDataMap => {
@@ -268,6 +270,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   const [reasonFilter, setReasonFilter] = useState('all');
   const [contactedFilter, setContactedFilter] = useState('all');
   const [migratedFilter, setMigratedFilter] = useState('all');
+  const [inactiveFilter, setInactiveFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
   const [isPersistLoaded, setIsPersistLoaded] = useState(false);
   const [persistLoadError, setPersistLoadError] = useState<string | null>(null);
@@ -363,8 +366,9 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
           const info = entry.info || '';
           const zeroed = entry.zeroed === true;
           const zeroedAt = entry.zeroedAt || undefined;
-          if (reason !== defaultMigrationMeta.reason || contacted !== defaultMigrationMeta.contacted || info || zeroed) {
-            details[id] = { reason, contacted, info, zeroed, zeroedAt };
+          const inactive = entry.inactive === true;
+          if (reason !== defaultMigrationMeta.reason || contacted !== defaultMigrationMeta.contacted || info || zeroed || inactive) {
+            details[id] = { reason, contacted, info, zeroed, zeroedAt, inactive };
           }
           if (entry.manuallyAdded) manualIdsNext.push(id);
           if (entry.excluded) excludedIdsNext.push(id);
@@ -536,6 +540,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
       if (reasonFilter !== 'all' && details.reason !== reasonFilter) return false;
       if (contactedFilter !== 'all' && details.contacted !== contactedFilter) return false;
       if (migratedFilter !== 'all' && (migratedFilter === 'yes') !== isMigrated) return false;
+      const isInactive = !!details.inactive;
+      if (inactiveFilter !== 'all' && (inactiveFilter === 'yes') !== isInactive) return false;
       return true;
     });
   }, [
@@ -544,7 +550,9 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
     reasonFilter,
     contactedFilter,
     migratedFilter,
+    inactiveFilter,
     manualMigratedIds,
+    detailsById,
   ]);
 
   const sortedPlayers = useMemo(() => {
@@ -581,6 +589,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
           return getString(detailsA.contacted).localeCompare(getString(detailsB.contacted)) * dir;
         case 'migrated':
           return ((migratedA ? 1 : 0) - (migratedB ? 1 : 0)) * dir;
+        case 'inactive':
+          return ((detailsA.inactive ? 1 : 0) - (detailsB.inactive ? 1 : 0)) * dir;
         default:
           return 0;
       }
@@ -608,7 +618,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
         details.reason === defaultMigrationMeta.reason &&
         details.contacted === defaultMigrationMeta.contacted &&
         details.info === defaultMigrationMeta.info &&
-        !details.zeroed;
+        !details.zeroed &&
+        !details.inactive;
       const manuallyAdded = manualIds.includes(id);
       const excluded = excludedIds.includes(id);
       const migratedOverride = manualMigratedIds.includes(id)
@@ -625,6 +636,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
           info: details.info,
           zeroed: details.zeroed || false,
           zeroedAt: details.zeroedAt || null,
+          inactive: details.inactive || false,
           manuallyAdded,
           excluded,
           migratedOverride
@@ -638,6 +650,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
       info: string;
       zeroed: boolean;
       zeroedAt: string | null;
+      inactive: boolean;
       manuallyAdded: boolean;
       excluded: boolean;
       migratedOverride: boolean | null;
@@ -995,6 +1008,25 @@ const requestSort = (key: SortKey) => {
                   ))}
                 </div>
               </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-slate-400">Inactive</label>
+                <div className="flex rounded overflow-hidden border border-slate-700">
+                  {(['all', 'yes', 'no'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setInactiveFilter(v)}
+                      className={`px-2 py-1 text-xs font-medium transition-colors ${
+                        inactiveFilter === v
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-slate-900 text-slate-400 hover:bg-slate-700 hover:text-white'
+                      }`}
+                    >
+                      {v === 'all' ? 'All' : v === 'yes' ? 'Yes' : 'No'}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             <Table frame={false} className="table-fixed min-w-full [&_td]:px-2 [&_td]:py-2">
             <TableHeader>
@@ -1021,6 +1053,9 @@ const requestSort = (key: SortKey) => {
                 </TableCell>
                 <TableCell header className="w-[100px] cursor-pointer select-none" onClick={() => requestSort('migrated')}>
                   Migrated{sortIndicator('migrated')}
+                </TableCell>
+                <TableCell header className="w-[90px] cursor-pointer select-none" onClick={() => requestSort('inactive')}>
+                  Inactive{sortIndicator('inactive')}
                 </TableCell>
                 <TableCell header className="w-[110px]">Actions</TableCell>
               </tr>
@@ -1062,6 +1097,14 @@ const requestSort = (key: SortKey) => {
                                 <path d="M5 13l4 4L19 7" />
                               </svg>
                               Migrated
+                            </span>
+                          )}
+                          {details.inactive && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-orange-500/20 text-orange-300 border border-orange-500/40">
+                              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+                              </svg>
+                              Inactive
                             </span>
                           )}
                         </div>
@@ -1166,6 +1209,20 @@ const requestSort = (key: SortKey) => {
                         </button>
                       </div>
                     </TableCell>
+                    <TableCell>
+                      <button
+                        type="button"
+                        onClick={() => updateDetails(player.id, { inactive: !details.inactive })}
+                        aria-label={details.inactive ? 'Mark as active' : 'Mark as inactive'}
+                        className={`w-8 h-4 rounded-full transition-colors duration-200 relative flex-shrink-0 ${
+                          details.inactive ? 'bg-orange-500' : 'bg-slate-700'
+                        }`}
+                      >
+                        <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all duration-200 ${
+                          details.inactive ? 'left-[18px]' : 'left-0.5'
+                        }`} />
+                      </button>
+                    </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                         <button
@@ -1227,7 +1284,7 @@ const requestSort = (key: SortKey) => {
               })}
               {sortedPlayers.length === 0 && (
                 <TableRow>
-                  <td colSpan={11} className="px-4 py-3 text-center text-slate-400">
+                  <td colSpan={12} className="px-4 py-3 text-center text-slate-400">
                     No players currently missing KvK goals.
                   </td>
                 </TableRow>
