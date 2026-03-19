@@ -67,6 +67,7 @@ const defaultMigrationMeta: MigrationMeta = {
 };
 
 type SortKey =
+  | 'govId'
   | 'name'
   | 'alliance'
   | 'basePower'
@@ -533,6 +534,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
       const migratedB = manualMigratedIds.includes(b.id);
 
       switch (key) {
+        case 'govId':
+          return getString(a.id).localeCompare(getString(b.id), undefined, { numeric: true }) * dir;
         case 'name':
           return getString(a.name).localeCompare(getString(b.name)) * dir;
         case 'alliance':
@@ -942,7 +945,7 @@ const requestSort = (key: SortKey) => {
             <Table frame={false} className="table-fixed min-w-full [&_td]:px-2 [&_td]:py-2">
             <TableHeader>
               <tr>
-                <TableCell header className="w-[90px]">Gov ID</TableCell>
+                <TableCell header className="w-[90px] cursor-pointer select-none" onClick={() => requestSort('govId')}>Gov ID{sortIndicator('govId')}</TableCell>
                 <TableCell header className="w-[150px] whitespace-normal cursor-pointer select-none" onClick={() => requestSort('name')}>
                   Name{sortIndicator('name')}
                 </TableCell>
