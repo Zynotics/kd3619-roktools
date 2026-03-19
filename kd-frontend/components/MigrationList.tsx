@@ -416,8 +416,26 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   );
 
   const manualMigrationPlayers = useMemo(
-    () => manualIds.map(id => statsData.find(player => player.id === id)).filter(Boolean) as StatProgressRow[],
-    [manualIds, statsData]
+    () => manualIds.map(id => {
+      const fromStats = statsData.find(player => player.id === id);
+      if (fromStats) return fromStats;
+      // Player not in statsData — build row from snapshot data
+      const snap = allSnapshotPlayers.get(id);
+      if (!snap) return null;
+      return {
+        id,
+        name: snap.name,
+        alliance: snap.alliance,
+        basePower: snap.power,
+        powerDiff: 0,
+        t4KillsDiff: 0,
+        t5KillsDiff: 0,
+        t4t5KillsDiff: 0,
+        deadDiff: 0,
+        killPointsDiff: 0,
+      } as StatProgressRow;
+    }).filter(Boolean) as StatProgressRow[],
+    [manualIds, statsData, allSnapshotPlayers]
   );
 
   const migrationPlayers = useMemo(() => {
@@ -455,6 +473,17 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   const prevSnapshotData = useMemo(() => {
     if (overviewFiles.length < 2) return new Map<string, SnapshotEntry>();
     return getSnapshotData(overviewFiles[1]);
+  }, [overviewFiles]);
+
+  // All players from all overview files (for search / manual add)
+  const allSnapshotPlayers = useMemo(() => {
+    const merged = new Map<string, SnapshotEntry>();
+    // Iterate oldest-first so newest data wins on conflicts
+    for (let i = overviewFiles.length - 1; i >= 0; i--) {
+      const snap = getSnapshotData(overviewFiles[i]);
+      snap.forEach((entry, id) => merged.set(id, entry));
+    }
+    return merged;
   }, [overviewFiles]);
 
   const watchlistEntries = useMemo(() => {
@@ -628,14 +657,39 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const query = searchQuery.toLowerCase();
-    return statsData.filter(player => {
-      return (
-        player.name.toLowerCase().includes(query) ||
-        player.id.toLowerCase().includes(query) ||
-        player.alliance.toLowerCase().includes(query)
-      );
-    }).slice(0, 6);
-  }, [searchQuery, statsData]);
+    const results: StatProgressRow[] = [];
+    const seen = new Set<string>();
+    // Search statsData first (has full KvK stats)
+    for (const player of statsData) {
+      if (player.name.toLowerCase().includes(query) || player.id.toLowerCase().includes(query) || player.alliance.toLowerCase().includes(query)) {
+        results.push(player);
+        seen.add(player.id);
+      }
+      if (results.length >= 10) break;
+    }
+    // Then search all snapshot players for those not already found
+    if (results.length < 10) {
+      allSnapshotPlayers.forEach((snap, id) => {
+        if (seen.has(id) || results.length >= 10) return;
+        if (snap.name.toLowerCase().includes(query) || id.toLowerCase().includes(query) || snap.alliance.toLowerCase().includes(query)) {
+          results.push({
+            id,
+            name: snap.name,
+            alliance: snap.alliance,
+            basePower: snap.power,
+            powerDiff: 0,
+            t4KillsDiff: 0,
+            t5KillsDiff: 0,
+            t4t5KillsDiff: 0,
+            deadDiff: 0,
+            killPointsDiff: 0,
+          });
+          seen.add(id);
+        }
+      });
+    }
+    return results;
+  }, [searchQuery, statsData, allSnapshotPlayers]);
 
   const watchlistSearchResults = useMemo(() => {
     if (!watchlistSearchQuery.trim()) return [];
