@@ -415,6 +415,17 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
     [statsData]
   );
 
+  // All players from all overview files (for search / manual add)
+  const allSnapshotPlayers = useMemo(() => {
+    const merged = new Map<string, SnapshotEntry>();
+    // Iterate oldest-first so newest data wins on conflicts
+    for (let i = overviewFiles.length - 1; i >= 0; i--) {
+      const snap = getSnapshotData(overviewFiles[i]);
+      snap.forEach((entry, id) => merged.set(id, entry));
+    }
+    return merged;
+  }, [overviewFiles]);
+
   const manualMigrationPlayers = useMemo(
     () => manualIds.map(id => {
       const fromStats = statsData.find(player => player.id === id);
@@ -473,17 +484,6 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   const prevSnapshotData = useMemo(() => {
     if (overviewFiles.length < 2) return new Map<string, SnapshotEntry>();
     return getSnapshotData(overviewFiles[1]);
-  }, [overviewFiles]);
-
-  // All players from all overview files (for search / manual add)
-  const allSnapshotPlayers = useMemo(() => {
-    const merged = new Map<string, SnapshotEntry>();
-    // Iterate oldest-first so newest data wins on conflicts
-    for (let i = overviewFiles.length - 1; i >= 0; i--) {
-      const snap = getSnapshotData(overviewFiles[i]);
-      snap.forEach((entry, id) => merged.set(id, entry));
-    }
-    return merged;
   }, [overviewFiles]);
 
   const watchlistEntries = useMemo(() => {
