@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import FileUpload from './FileUpload';
 import FileList from './FileList';
-import { SkeletonFileList, SkeletonCard } from './Skeleton';
 import ComparisonSection from './ComparisonSection';
 import PowerHistoryChart from './PowerHistoryChart';
 import PlayerSearch from './PlayerSearch';
@@ -302,10 +301,12 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   }, [startFileId, endFileId, uploadedFiles]);
 
   if (isLoading) return (
-    <div className="space-y-6 p-2">
-      <SkeletonCard rows={2} />
-      <SkeletonFileList />
-      <SkeletonCard rows={4} />
+    <div className="flex flex-col items-center justify-center py-24 gap-4">
+      <div className="relative h-12 w-12">
+        <div className="absolute inset-0 rounded-full border-4 border-slate-700"></div>
+        <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-sky-400 animate-spin"></div>
+      </div>
+      <p className="text-slate-400 text-sm font-medium animate-pulse">Loading Analytics...</p>
     </div>
   );
 
