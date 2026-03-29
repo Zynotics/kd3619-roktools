@@ -251,7 +251,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
           }
       }
       // Default Werte
-      return { helps: 2, tech: 1, building: 1 };
+      return { helps: 2, tech: 1, building: 1, rss: 0, fort: 0, armory: 0 };
   });
 
   // Speichern der Weights bei Änderung
@@ -387,7 +387,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
       // 2. Score berechnen
       const scored: ScoredPlayerInfo[] = filtered.map(p => ({
           ...p,
-          score: (p.helpTimes * weights.helps) + (p.buildingScore * weights.building) + (p.techDonation * weights.tech)
+          score: (p.helpTimes * (weights.helps || 0)) + (p.buildingScore * (weights.building || 0)) + (p.techDonation * (weights.tech || 0)) + (p.rssTrading * (weights.rss || 0)) + (p.fortDestroy * (weights.fort || 0)) + (p.armoryPoints * (weights.armory || 0))
       }));
 
       // 3. Sortieren
@@ -547,28 +547,37 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                     
                     {/* Score Weights */}
                     <div className="flex flex-wrap items-center gap-2 bg-gray-900/50 p-2 rounded-lg border border-gray-700">
-                        <span className="text-xs font-semibold text-gray-500 uppercase mr-1">Weights:</span>
-                        <div className="flex items-center gap-1" title="Multiplier for Help Times">
-                            <span className="text-xs text-blue-300">Helps</span>
-                            <input type="number" min="0" step="0.1" value={weights.helps}
-                                onChange={(e) => setWeights(p => ({ ...p, helps: parseFloat(e.target.value) || 0 }))}
-                                className="w-10 bg-gray-800 border border-gray-600 rounded text-center text-xs text-white p-0.5 focus:border-blue-500 outline-none"
-                            />
-                        </div>
-                        <div className="flex items-center gap-1" title="Multiplier for Building Score">
-                            <span className="text-xs text-green-300">Build</span>
-                            <input type="number" min="0" step="0.1" value={weights.building}
-                                onChange={(e) => setWeights(p => ({ ...p, building: parseFloat(e.target.value) || 0 }))}
-                                className="w-10 bg-gray-800 border border-gray-600 rounded text-center text-xs text-white p-0.5 focus:border-green-500 outline-none"
-                            />
-                        </div>
-                        <div className="flex items-center gap-1" title="Multiplier for Tech Donation">
-                            <span className="text-xs text-purple-300">Tech</span>
-                            <input type="number" min="0" step="0.1" value={weights.tech}
-                                onChange={(e) => setWeights(p => ({ ...p, tech: parseFloat(e.target.value) || 0 }))}
-                                className="w-10 bg-gray-800 border border-gray-600 rounded text-center text-xs text-white p-0.5 focus:border-purple-500 outline-none"
-                            />
-                        </div>
+                        <span className="text-xs font-semibold text-gray-500 uppercase mr-1">Score:</span>
+                        {([
+                          { key: 'helps', label: 'Helps', active: 'bg-blue-500/20 text-blue-300 border-blue-500/40', focus: 'focus:border-blue-500' },
+                          { key: 'building', label: 'Build', active: 'bg-green-500/20 text-green-300 border-green-500/40', focus: 'focus:border-green-500' },
+                          { key: 'tech', label: 'Tech', active: 'bg-purple-500/20 text-purple-300 border-purple-500/40', focus: 'focus:border-purple-500' },
+                          { key: 'rss', label: 'RSS', active: 'bg-amber-500/20 text-amber-300 border-amber-500/40', focus: 'focus:border-amber-500' },
+                          { key: 'fort', label: 'Fort', active: 'bg-rose-500/20 text-rose-300 border-rose-500/40', focus: 'focus:border-rose-500' },
+                          { key: 'armory', label: 'Armory', active: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40', focus: 'focus:border-cyan-500' },
+                        ] as const).map(({ key, label, active, focus }) => {
+                          const val = weights[key] ?? 0;
+                          const isActive = val > 0;
+                          return (
+                            <div key={key} className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setWeights((p: any) => ({ ...p, [key]: isActive ? 0 : 1 }))}
+                                className={`text-xs px-1.5 py-0.5 rounded font-medium border transition-colors ${
+                                  isActive ? active : 'bg-gray-800 text-gray-500 border-gray-700'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                              {isActive && (
+                                <input type="number" min="0.1" step="0.1" value={val}
+                                  onChange={(e) => setWeights((p: any) => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))}
+                                  className={`w-10 bg-gray-800 border border-gray-600 rounded text-center text-xs text-white p-0.5 ${focus} outline-none`}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
                     </div>
 
                     {/* Alliance Filter Dropdown */}
