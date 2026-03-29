@@ -9,6 +9,16 @@ const { overviewUpload, honorUpload, activityUpload } = require('../config/multe
 
 const router = express.Router();
 
+function generateUploadName(date) {
+  const d = date || new Date();
+  const month = d.toLocaleString('en-US', { month: 'short' });
+  const day = d.getDate();
+  const year = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${month} ${day}, ${year}; ${hh}:${mm}`;
+}
+
 // ==================== OVERVIEW ====================
 
 router.get('/overview/files-data', authenticateToken, async (req, res) => {
@@ -36,9 +46,10 @@ router.post('/overview/upload', authenticateToken, overviewUpload.single('file')
   try {
     const { headers, data } = await parseExcel(req.file.path);
     const id = 'ov-' + Date.now();
+    const uploadedAt = new Date();
     await query(
       `INSERT INTO overview_files (id, name, filename, path, size, uploaddate, headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [id, req.file.originalname, req.file.filename, req.file.path, req.file.size, new Date().toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, req.user.id]
+      [id, generateUploadName(uploadedAt), req.file.filename, req.file.path, req.file.size, uploadedAt.toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, req.user.id]
     );
     res.json({ success: true });
   } catch (e) {
@@ -114,9 +125,10 @@ router.post('/honor/upload', authenticateToken, honorUpload.single('file'), asyn
   try {
     const { headers, data } = await parseExcel(req.file.path);
     const id = 'hon-' + Date.now();
+    const uploadedAt = new Date();
     await query(
       `INSERT INTO honor_files (id, name, filename, path, size, uploaddate, headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [id, req.file.originalname, req.file.filename, req.file.path, req.file.size, new Date().toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, req.user.id]
+      [id, generateUploadName(uploadedAt), req.file.filename, req.file.path, req.file.size, uploadedAt.toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, req.user.id]
     );
     res.json({ success: true });
   } catch (e) {
@@ -193,9 +205,10 @@ router.post('/activity/upload', authenticateToken, activityUpload.single('file')
   try {
     const { headers, data } = await parseExcel(req.file.path);
     const id = 'act-' + Date.now();
+    const uploadedAt = new Date();
     await query(
       `INSERT INTO activity_files (id, name, filename, path, size, uploaddate, headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [id, req.file.originalname, req.file.filename, req.file.path, req.file.size, new Date().toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, req.user.id]
+      [id, generateUploadName(uploadedAt), req.file.filename, req.file.path, req.file.size, uploadedAt.toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, req.user.id]
     );
     res.json({ success: true });
   } catch (e) {

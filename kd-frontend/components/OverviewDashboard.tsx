@@ -194,7 +194,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     };
     const players: PlayerInfo[] = [];
     file.data.forEach((row: any[]) => {
-      const id = getString(row, ['governorid', 'governor id', 'id']);
+      const id = getString(row, ['governorid', 'governor id', 'id']).trim().replace(/[,.\s]/g, '').replace(/^0+/, '');
       const name = getString(row, ['name', 'player name']);
       if (!id && !name) return;
       players.push({
