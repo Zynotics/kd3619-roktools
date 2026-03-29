@@ -154,6 +154,8 @@ export type ActivityPlayerInfo = {
     rssTrading: number;
     buildingScore: number;
     techDonation: number;
+    fortDestroy: number;
+    armoryPoints: number;
 };
 
 // --- MODULAR KVK SYSTEM (UPDATED) ---

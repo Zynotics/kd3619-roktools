@@ -151,9 +151,9 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
     const foundAlliances = new Set<string>();
 
     file.data.forEach(row => {
-        const id = getVal(row, ['GovernorID', 'id', 'user id', 'gov id']);
-        const name = getVal(row, ['Name', 'player', 'display name']);
-        
+        const id = getVal(row, ['Player ID', 'GovernorID', 'Governor ID', 'user id', 'gov id']);
+        const name = getVal(row, ['Player Name', 'Name', 'display name']);
+
         if (id && name) {
             const alliance = String(getVal(row, ['Alliance', 'tag']) || '').trim();
             foundAlliances.add(alliance);
@@ -164,10 +164,12 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                 alliance: alliance,
                 power: parseGermanNumber(getVal(row, ['Power', 'Macht'])),
                 killPoints: parseGermanNumber(getVal(row, ['Kill Points', 'KillPoints', 'KP'])),
-                helpTimes: parseGermanNumber(getVal(row, ['Help Times', 'Helps', 'Help'])),
-                rssTrading: parseGermanNumber(getVal(row, ['Rss Trading', 'Resources', 'Rss assistance'])),
-                buildingScore: parseGermanNumber(getVal(row, ['Building', 'Build', 'Construction'])),
-                techDonation: parseGermanNumber(getVal(row, ['Tech Donation', 'Tech', 'Technology'])),
+                helpTimes: parseGermanNumber(getVal(row, ['Help Count', 'Help Times', 'Helps'])),
+                rssTrading: parseGermanNumber(getVal(row, ['RSS Donate', 'Rss Trading', 'Resources', 'Rss assistance'])),
+                buildingScore: parseGermanNumber(getVal(row, ['Build Points', 'Building', 'Build', 'Construction'])),
+                techDonation: parseGermanNumber(getVal(row, ['Tech Points', 'Tech Donation', 'Tech', 'Technology'])),
+                fortDestroy: parseGermanNumber(getVal(row, ['Fort Destroy', 'Fort'])),
+                armoryPoints: parseGermanNumber(getVal(row, ['Armory Points', 'Armory'])),
             });
         }
     });
@@ -265,6 +267,8 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
     { header: 'Tech', accessor: 'techDonation', sortable: true, format: (v: number) => v.toLocaleString() },
     { header: 'Build', accessor: 'buildingScore', sortable: true, format: (v: number) => v.toLocaleString() },
     { header: 'RSS Assist', accessor: 'rssTrading', sortable: true, format: (v: number) => v.toLocaleString() },
+    { header: 'Fort Destroy', accessor: 'fortDestroy', sortable: true, format: (v: number) => v.toLocaleString() },
+    { header: 'Armory', accessor: 'armoryPoints', sortable: true, format: (v: number) => v.toLocaleString() },
     { header: 'Power', accessor: 'power', sortable: true, format: (v: number) => v.toLocaleString(), className: "text-gray-400" },
   ];
 

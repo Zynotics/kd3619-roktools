@@ -41,8 +41,17 @@ function parseExcel(filePath) {
         const sheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
         if (!jsonData || jsonData.length === 0) return resolve({ headers: [], data: [] });
-        const headers = jsonData[0].map((h) => (h ? h.toString() : ''));
-        const data = jsonData.slice(1).filter((row) => row.length > 0);
+        // Auto-detect header row: skip title/subtitle rows (1-2 non-empty cells)
+        let headerRowIdx = 0;
+        while (headerRowIdx < jsonData.length) {
+          const row = jsonData[headerRowIdx];
+          const nonEmpty = Array.isArray(row) ? row.filter(v => v !== '' && v !== null && v !== undefined).length : 0;
+          if (nonEmpty >= 3) break;
+          headerRowIdx++;
+        }
+        if (headerRowIdx >= jsonData.length) headerRowIdx = 0; // fallback
+        const headers = jsonData[headerRowIdx].map((h) => (h ? h.toString() : ''));
+        const data = jsonData.slice(headerRowIdx + 1).filter((row) => row.length > 0);
         resolve({ headers, data });
       }
     } catch (error) {
