@@ -13,7 +13,10 @@ function getMonday(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), diff);
 }
 function formatDateInput(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 function formatRangeLabel(from: string, to: string): string {
   const f = new Date(from + 'T00:00:00');
@@ -35,7 +38,7 @@ const ActivityFileUpload: React.FC<{ uploadUrl: string; onUploadComplete: () => 
 
   const monday = getMonday(new Date());
   const sunday = new Date(monday);
-  sunday.setDate(sunday.getDate() + 6);
+  sunday.setDate(monday.getDate() + 6);
   const [dateFrom, setDateFrom] = useState(formatDateInput(monday));
   const [dateTo, setDateTo] = useState(formatDateInput(sunday));
 
