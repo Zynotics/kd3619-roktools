@@ -206,9 +206,10 @@ router.post('/activity/upload', authenticateToken, activityUpload.single('file')
     const { headers, data } = await parseExcel(req.file.path);
     const id = 'act-' + Date.now();
     const uploadedAt = new Date();
+    const fileName = req.body.customName || generateUploadName(uploadedAt);
     await query(
       `INSERT INTO activity_files (id, name, filename, path, size, uploaddate, headers, data, kingdom_id, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [id, generateUploadName(uploadedAt), req.file.filename, req.file.path, req.file.size, uploadedAt.toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, req.user.id]
+      [id, fileName, req.file.filename, req.file.path, req.file.size, uploadedAt.toISOString(), JSON.stringify(headers), JSON.stringify(data), finalK, req.user.id]
     );
     res.json({ success: true });
   } catch (e) {

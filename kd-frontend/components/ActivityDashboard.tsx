@@ -1,11 +1,196 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import FileUpload from './FileUpload';
 import FileList from './FileList';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
 import { useAuth } from './AuthContext';
 import { useToast } from './Toast';
 import { cleanFileName, parseGermanNumber, findColumnIndex, mergeNewUploadsOnTop, hasSameFileOrder } from '../utils';
 import type { UploadedFile, ActivityPlayerInfo } from '../types';
+
+// --- Activity-specific file upload with date range popup ---
+function getMonday(d: Date): Date {
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.getFullYear(), d.getMonth(), diff);
+}
+function formatDateInput(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+function formatRangeLabel(from: string, to: string): string {
+  const f = new Date(from + 'T00:00:00');
+  const t = new Date(to + 'T00:00:00');
+  const mo = (d: Date) => d.toLocaleString('en-US', { month: 'short' });
+  const sameMonth = f.getMonth() === t.getMonth() && f.getFullYear() === t.getFullYear();
+  const sameYear = f.getFullYear() === t.getFullYear();
+  if (sameMonth) return `${mo(f)} ${f.getDate()} - ${t.getDate()}, ${f.getFullYear()}`;
+  if (sameYear) return `${mo(f)} ${f.getDate()} - ${mo(t)} ${t.getDate()}, ${f.getFullYear()}`;
+  return `${mo(f)} ${f.getDate()}, ${f.getFullYear()} - ${mo(t)} ${t.getDate()}, ${t.getFullYear()}`;
+}
+
+const ActivityFileUpload: React.FC<{ uploadUrl: string; onUploadComplete: () => void | Promise<void> }> = ({ uploadUrl, onUploadComplete }) => {
+  const { addToast } = useToast();
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const monday = getMonday(new Date());
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+  const [dateFrom, setDateFrom] = useState(formatDateInput(monday));
+  const [dateTo, setDateTo] = useState(formatDateInput(sunday));
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setPendingFile(f);
+    // Reset dates to current week
+    const mon = getMonday(new Date());
+    const sun = new Date(mon);
+    sun.setDate(sun.getDate() + 6);
+    setDateFrom(formatDateInput(mon));
+    setDateTo(formatDateInput(sun));
+  };
+
+  const handleCancel = () => {
+    setPendingFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleUpload = () => {
+    if (!pendingFile) return;
+    setIsUploading(true);
+    setUploadPercent(0);
+
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append('file', pendingFile);
+    formData.append('customName', formatRangeLabel(dateFrom, dateTo));
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) setUploadPercent(Math.round((e.loaded / e.total) * 100));
+    });
+
+    xhr.addEventListener('load', async () => {
+      setIsUploading(false);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        addToast('Activity file uploaded successfully.', 'success');
+        setPendingFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        await onUploadComplete();
+      } else {
+        let msg = xhr.statusText;
+        try { msg = JSON.parse(xhr.responseText)?.error || msg; } catch {}
+        addToast(`Upload failed: ${msg}`, 'error');
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      setIsUploading(false);
+      addToast('Network error during upload.', 'error');
+    });
+
+    const token = localStorage.getItem('authToken');
+    xhr.open('POST', uploadUrl);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.send(formData);
+  };
+
+  return (
+    <div className="w-full">
+      {/* File picker */}
+      <div className="flex items-center justify-center w-full">
+        <label
+          className={`flex flex-col items-center justify-center w-full h-32 border-2 border-gray-600 border-dashed rounded-lg cursor-pointer bg-gray-700 hover:bg-gray-600 transition-colors ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+            <svg className="w-8 h-8 mb-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+              <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                d="M13 13h3a3 3 0 000-6h-.025A5.56 5.56 0 0016 6.5a5.5 5.5 0 00-10.793-1.48C5.137 5.017 5.071 5 5 5a4 4 0 000 8h2.167M10 15V6m0 0L8 8m2-2 2 2" />
+            </svg>
+            <p className="mb-2 text-sm text-gray-400"><span className="font-semibold">Click to upload</span></p>
+            <p className="text-xs text-gray-400">XLSX, XLS, or CSV</p>
+          </div>
+          <input ref={fileInputRef} type="file" className="hidden" accept=".csv, .xlsx, .xls" onChange={handleFileSelect} disabled={isUploading} />
+        </label>
+      </div>
+
+      {/* Date range popup */}
+      {pendingFile && !isUploading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-slate-800 border border-slate-600 rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4">
+            <h3 className="text-white font-semibold text-lg mb-1">Activity Period</h3>
+            <p className="text-slate-400 text-sm mb-4">
+              Selected: <span className="text-white font-medium">{pendingFile.name}</span>
+            </p>
+
+            <div className="flex gap-3 mb-4">
+              <div className="flex-1">
+                <label className="text-xs text-slate-400 mb-1 block">From (Monday)</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    // Auto-set Sunday (+6 days)
+                    const mon = new Date(e.target.value + 'T00:00:00');
+                    const sun = new Date(mon);
+                    sun.setDate(sun.getDate() + 6);
+                    setDateTo(formatDateInput(sun));
+                  }}
+                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-sky-500 focus:outline-none"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-slate-400 mb-1 block">To (Sunday)</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-sky-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="bg-slate-900/60 rounded px-3 py-2 mb-5">
+              <p className="text-xs text-slate-400">File will be named:</p>
+              <p className="text-white font-semibold text-sm">{formatRangeLabel(dateFrom, dateTo)}</p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="flex-1 px-4 py-2 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleUpload}
+                className="flex-1 px-4 py-2 rounded bg-sky-600 text-white hover:bg-sky-500 text-sm font-medium transition-colors"
+              >
+                Upload
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload progress */}
+      {isUploading && (
+        <div className="mt-3">
+          <div className="flex justify-between text-xs text-gray-400 mb-1">
+            <span className="truncate max-w-[80%]">{pendingFile?.name}</span>
+            <span>{uploadPercent}%</span>
+          </div>
+          <div className="w-full bg-gray-600 rounded-full h-1.5">
+            <div className={`h-1.5 rounded-full transition-all duration-200 ${uploadPercent === 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${uploadPercent}%` }} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface ActivityDashboardProps {
   isAdmin: boolean;
@@ -295,7 +480,10 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                       Upload Weekly Activity
                    </h3>
                    <p className="text-sm text-gray-400 mb-4">Upload .xlsx or .csv files containing weekly activity data.</p>
-                   <FileUpload uploadUrl={`${backendUrl}/activity/upload${adminSlugQuery}`} onUploadComplete={() => fetchFiles({ placeNewUploadsOnTop: true })} />
+                   <ActivityFileUpload
+                     uploadUrl={`${backendUrl}/activity/upload${adminSlugQuery}`}
+                     onUploadComplete={() => fetchFiles({ placeNewUploadsOnTop: true })}
+                   />
                 </div>
 
                 <div>
