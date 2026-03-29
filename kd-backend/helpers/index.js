@@ -39,7 +39,7 @@ function parseExcel(filePath) {
         const workbook = XLSX.readFile(filePath);
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
         if (!jsonData || jsonData.length === 0) return resolve({ headers: [], data: [] });
         const headers = jsonData[0].map((h) => (h ? h.toString() : ''));
         const data = jsonData.slice(1).filter((row) => row.length > 0);
