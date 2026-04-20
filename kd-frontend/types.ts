@@ -1,6 +1,8 @@
 // types.ts - Full type definitions
 
-export type TableData = any[][];
+export type TableCell = string | number | boolean | null | undefined;
+export type TableRow = TableCell[];
+export type TableData = TableRow[];
 export type TableHeaders = string[];
 
 export type UploadedFile = {

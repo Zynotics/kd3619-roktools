@@ -119,7 +119,11 @@ function slugify(input) {
 async function generateUniqueSlug(base) {
   let slug = base;
   let counter = 1;
+  const MAX_ATTEMPTS = 100;
   while (slug && (await findKingdomBySlug(slug))) {
+    if (counter >= MAX_ATTEMPTS) {
+      throw new Error(`Could not generate unique slug for base "${base}" after ${MAX_ATTEMPTS} attempts`);
+    }
     counter += 1;
     slug = `${base}-${counter}`;
   }

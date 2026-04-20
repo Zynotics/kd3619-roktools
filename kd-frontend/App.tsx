@@ -500,7 +500,10 @@ const AppContent: React.FC = () => {
                         if (mySlug) {
                             const newUrl = new URL(window.location.href);
                             newUrl.searchParams.set('slug', mySlug);
-                            window.location.href = newUrl.toString();
+                            // Defense-in-depth: only navigate if origin unchanged
+                            if (newUrl.origin === window.location.origin) {
+                                window.location.href = newUrl.toString();
+                            }
                         }
                     }
                 }

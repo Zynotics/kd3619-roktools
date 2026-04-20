@@ -225,6 +225,13 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
   useEffect(() => { if (startFileId && endFileId) handleCompare(); }, [startFileId, endFileId, uploadedFiles, handleCompare]);
 
+  // Reset search/selection when the compared files change — prevents stale results from a prior comparison
+  useEffect(() => {
+    setSearchQuery('');
+    setSearchResults(null);
+    setSelectedPlayer(null);
+  }, [startFileId, endFileId]);
+
   const handleSearch = () => {
     if (!searchQuery.trim() || !comparisonStats) { setSearchResults(null); setSelectedPlayer(null); return; }
     const q = searchQuery.toLowerCase();
