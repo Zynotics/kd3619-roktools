@@ -1,9 +1,18 @@
 // middleware/auth.js – Auth-Middlewares und Berechtigungsprüfungen
 
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { get, getActiveR5Access } = require('../db-pg');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'kd3619-secret-key-change-in-production';
+let JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.warn('\n==============================================================');
+  console.warn('WARNING: JWT_SECRET env variable is NOT set!');
+  console.warn('Generating a random secret for this process — all existing sessions will be invalidated on restart.');
+  console.warn('Set JWT_SECRET in your environment for stable authentication.');
+  console.warn('==============================================================\n');
+  JWT_SECRET = crypto.randomBytes(64).toString('hex');
+}
 
 function getKingdomId(req) {
   return req.user.role === 'admin' ? null : req.user.kingdomId;
@@ -120,44 +129,35 @@ function requireKvkManager(req, res, next) {
   return res.status(403).json({ error: 'Admin, R5 or KvK Manager rights required' });
 }
 
-function requireWatchlistAccess(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
-  const { role, kingdomId, canAccessMigrationList } = req.user;
+/**
+ * Factory for middlewares that gate Admin / R5 / authorized-R4 access to a feature.
+ * Both Watchlist and MigrationList use this pattern; only difference is whether
+ * R5 users require an active access code (MigrationList does; Watchlist does not).
+ */
+function createRoleAccessMiddleware({ requireR5Active }) {
+  return function (req, res, next) {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    const { role, kingdomId, canAccessMigrationList } = req.user;
 
-  if (role === 'admin') return next();
+    if (role === 'admin') return next();
 
-  if (role === 'r5') {
-    if (!kingdomId) return res.status(403).json({ error: 'R5 user is not assigned to a kingdom.' });
-    return next();
-  }
+    if (role === 'r5') {
+      if (requireR5Active && !isActiveR5(req)) return ensureActiveR5OrDeny(res);
+      if (!kingdomId) return res.status(403).json({ error: 'R5 user is not assigned to a kingdom.' });
+      return next();
+    }
 
-  if (role === 'r4' && canAccessMigrationList) {
-    if (!kingdomId) return res.status(403).json({ error: 'R4 user is not assigned to a kingdom.' });
-    return next();
-  }
+    if (role === 'r4' && canAccessMigrationList) {
+      if (!kingdomId) return res.status(403).json({ error: 'R4 user is not assigned to a kingdom.' });
+      return next();
+    }
 
-  return res.status(403).json({ error: 'Admin, R5 or authorized R4 required' });
+    return res.status(403).json({ error: 'Admin, R5 or authorized R4 required' });
+  };
 }
 
-function requireMigrationListAccess(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
-  const { role, kingdomId, canAccessMigrationList } = req.user;
-
-  if (role === 'admin') return next();
-
-  if (role === 'r5') {
-    if (!isActiveR5(req)) return ensureActiveR5OrDeny(res);
-    if (!kingdomId) return res.status(403).json({ error: 'R5 user is not assigned to a kingdom.' });
-    return next();
-  }
-
-  if (role === 'r4' && canAccessMigrationList) {
-    if (!kingdomId) return res.status(403).json({ error: 'R4 user is not assigned to a kingdom.' });
-    return next();
-  }
-
-  return res.status(403).json({ error: 'Admin, R5 or authorized R4 required' });
-}
+const requireWatchlistAccess = createRoleAccessMiddleware({ requireR5Active: false });
+const requireMigrationListAccess = createRoleAccessMiddleware({ requireR5Active: true });
 
 function hasFileManagementAccess(req, type) {
   const { role, canManageOverviewFiles, canManageHonorFiles, canManageActivityFiles, canManageAnalyticsFiles } = req.user;

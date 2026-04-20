@@ -6,7 +6,7 @@ import PowerHistoryChart from './PowerHistoryChart';
 import PlayerSearch from './PlayerSearch';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from './Toast';
-import { cleanFileName, parseGermanNumber, findColumnIndex, mergeNewUploadsOnTop, hasSameFileOrder } from '../utils';
+import { cleanFileName, mergeNewUploadsOnTop, hasSameFileOrder, parsePlayersFromFile } from '../utils';
 import type { UploadedFile, ComparisonStats, PlayerInfo, PlayerStatChange } from '../types';
 
 interface OverviewDashboardProps {
@@ -181,34 +181,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   // ---------------------------------------------------
   // PARSING & COMPARISON LOGIC
   // ---------------------------------------------------
-  const parseFileToPlayers = (file: UploadedFile): PlayerInfo[] => {
-    if (!file || !file.headers || !file.data) return [];
-    const headers = file.headers;
-    const getNumber = (row: any[], keywords: string[]) => {
-      const idx = findColumnIndex(headers, keywords);
-      return (idx !== undefined && idx >= 0 && idx < row.length) ? parseGermanNumber(String(row[idx])) : 0;
-    };
-    const getString = (row: any[], keywords: string[]) => {
-      const idx = findColumnIndex(headers, keywords);
-      return (idx !== undefined && idx >= 0 && idx < row.length) ? String(row[idx] || '') : '';
-    };
-    const players: PlayerInfo[] = [];
-    file.data.forEach((row: any[]) => {
-      const id = getString(row, ['governorid', 'governor id', 'govid', 'gov id', 'governor_id']).trim().replace(/[,.\s]/g, '').replace(/^0+/, '');
-      const name = getString(row, ['name', 'player name']);
-      if (!id && !name) return;
-      players.push({
-        id, name, alliance: getString(row, ['alliance', 'tag']),
-        power: getNumber(row, ['power', 'macht']),
-        troopsPower: getNumber(row, ['troopspower']),
-        totalKillPoints: getNumber(row, ['total kill points', 'kp']),
-        deadTroops: getNumber(row, ['dead']),
-        t1Kills: getNumber(row, ['t1']), t2Kills: getNumber(row, ['t2']), t3Kills: getNumber(row, ['t3']), t4Kills: getNumber(row, ['t4']), t5Kills: getNumber(row, ['t5']),
-        cityHall: getNumber(row, ['cityhall']), techPower: getNumber(row, ['techpower']), buildingPower: getNumber(row, ['building']), commanderPower: getNumber(row, ['commander']),
-      });
-    });
-    return players;
-  };
+  const parseFileToPlayers = parsePlayersFromFile;
 
   const handleCompare = useCallback(() => {
     setComparisonError(null);

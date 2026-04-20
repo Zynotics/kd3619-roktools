@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
-import { cleanFileName, parseGermanNumber, findColumnIndex, formatNumber, abbreviateNumber } from '../utils';
+import { cleanFileName, formatNumber, abbreviateNumber, parsePlayersFromFile } from '../utils';
 import { useAuth } from '../components/AuthContext';
 import type { UploadedFile } from '../types';
 import Chart from 'chart.js/auto';
@@ -128,37 +128,10 @@ const PowerAnalyticsDashboard: React.FC<PowerAnalyticsDashboardProps> = ({ isAdm
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
   
   const parseFileToPlayers = (file: UploadedFile): any[] => {
-      if (!file || !file.headers || !file.data) return [];
-      const headers = file.headers.map(h => String(h));
-      const getIdx = (keys: string[]) => findColumnIndex(headers, keys);
-      const getVal = (row: any[], idx: number | undefined) => (idx !== undefined && row[idx] != null) ? String(row[idx]).trim() : '';
-      const getNum = (row: any[], idx: number | undefined) => parseGermanNumber(getVal(row, idx));
-
-      const idxId = getIdx(['governorid', 'governor id', 'id', 'gov id']);
-      const idxName = getIdx(['name', 'playername', 'player name']);
-      const idxAlly = getIdx(['alliance', 'allianz', 'tag']);
-      const idxPower = getIdx(['power', 'macht']);
-      const idxTroops = getIdx(['troopspower', 'troops power']);
-      const idxKP = getIdx(['total kill points', 'kill points', 'kp']);
-      const idxDead = getIdx(['deadtroops', 'dead troops', 'dead']);
-      const idxT1 = getIdx(['t1', 't1 kills']);
-      const idxT2 = getIdx(['t2', 't2 kills']);
-      const idxT3 = getIdx(['t3', 't3 kills']);
-      const idxT4 = getIdx(['t4', 't4 kills', 'tier4']);
-      const idxT5 = getIdx(['t5', 't5 kills', 'tier5']);
-
-      const res: any[] = [];
-      file.data.forEach(row => {
-          const id = getVal(row, idxId);
-          const name = getVal(row, idxName);
-          if (!id && !name) return;
-          const t1 = getNum(row, idxT1); const t2 = getNum(row, idxT2); const t3 = getNum(row, idxT3); const t4 = getNum(row, idxT4); const t5 = getNum(row, idxT5);
-          res.push({
-              id, name, alliance: getVal(row, idxAlly), power: getNum(row, idxPower), troopsPower: getNum(row, idxTroops), totalKillPoints: getNum(row, idxKP), deadTroops: getNum(row, idxDead),
-              t1Kills: t1, t2Kills: t2, t3Kills: t3, t4Kills: t4, t5Kills: t5, totalKills: t1+t2+t3+t4+t5
-          });
-      });
-      return res;
+    return parsePlayersFromFile(file).map(p => ({
+      ...p,
+      totalKills: p.t1Kills + p.t2Kills + p.t3Kills + p.t4Kills + p.t5Kills,
+    }));
   };
 
   const playerHistories = useMemo(() => {

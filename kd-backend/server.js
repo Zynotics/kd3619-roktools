@@ -21,9 +21,9 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
+      if (!origin) return callback(null, true); // same-origin / curl / server-to-server
       if (allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(null, true); // permissive fallback
+      return callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -47,21 +47,17 @@ app.use('/api/me', r5codesRouter);               // /api/me/kingdom
 const { getR5ShopVisibilitySetting, setR5ShopVisibilitySetting } = require('./helpers');
 const { authenticateToken, requireAdmin } = require('./middleware/auth');
 
+// Public read — used by LandingPage & App for header rendering
 app.get('/api/shop-visibility', async (req, res) => {
   try { res.json({ enabled: await getR5ShopVisibilitySetting() }); }
   catch (e) { res.status(500).json({ error: 'Failed to load shop settings' }); }
 });
-app.get('/api/r5-shop-visibility', authenticateToken, requireAdmin, async (req, res) => {
-  try { res.json({ enabled: await getR5ShopVisibilitySetting() }); }
-  catch (e) { res.status(500).json({ error: 'Failed to load shop settings' }); }
-});
+// Admin read/write — requireAdmin already enforces role check
 app.get('/api/admin/r5-shop-visibility', authenticateToken, requireAdmin, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
   try { res.json({ enabled: await getR5ShopVisibilitySetting() }); }
   catch (e) { res.status(500).json({ error: 'Failed to load shop settings' }); }
 });
 app.put('/api/admin/r5-shop-visibility', authenticateToken, requireAdmin, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Superadmin only' });
   const { enabled } = req.body;
   if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be boolean' });
   try { await setR5ShopVisibilitySetting(enabled); res.json({ success: true, enabled }); }

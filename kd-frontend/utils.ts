@@ -1,5 +1,5 @@
 // utils.ts
-import type { UploadedFile } from './types';
+import type { UploadedFile, PlayerInfo } from './types';
 
 // ... (formatNumber, parseGermanNumber, cleanFileName, abbreviateNumber bleiben gleich - hier der Fokus auf findColumnIndex)
 
@@ -139,4 +139,62 @@ export const findColumnIndex = (
   }
 
   return undefined;
+};
+
+/**
+ * Centralized parser for overview scan files.
+ * Returns PlayerInfo[] with normalized Governor IDs (trimmed, separators removed, leading zeros stripped).
+ * Used by OverviewDashboard, PowerAnalyticsDashboard, and MigrationList.
+ */
+export const parsePlayersFromFile = (file: UploadedFile): PlayerInfo[] => {
+  if (!file || !file.headers || !file.data) return [];
+  const headers = file.headers.map(h => String(h));
+  const getIdx = (keys: string[]) => findColumnIndex(headers, keys);
+  const getStr = (row: any[], idx: number | undefined) =>
+    (idx !== undefined && idx >= 0 && idx < row.length && row[idx] != null) ? String(row[idx]).trim() : '';
+  const getNum = (row: any[], idx: number | undefined) =>
+    (idx !== undefined && idx >= 0 && idx < row.length) ? parseGermanNumber(String(row[idx] ?? '')) : 0;
+
+  const idxId = getIdx(['governorid', 'governor id', 'govid', 'gov id', 'governor_id']);
+  const idxName = getIdx(['name', 'playername', 'player name']);
+  const idxAlly = getIdx(['alliance', 'allianz', 'tag']);
+  const idxPower = getIdx(['power', 'macht']);
+  const idxTroops = getIdx(['troopspower', 'troops power']);
+  const idxKP = getIdx(['total kill points', 'kill points', 'kp']);
+  const idxDead = getIdx(['deadtroops', 'dead troops', 'dead']);
+  const idxT1 = getIdx(['t1', 't1 kills']);
+  const idxT2 = getIdx(['t2', 't2 kills']);
+  const idxT3 = getIdx(['t3', 't3 kills']);
+  const idxT4 = getIdx(['t4', 't4 kills', 'tier4']);
+  const idxT5 = getIdx(['t5', 't5 kills', 'tier5']);
+  const idxCh = getIdx(['cityhall', 'city hall']);
+  const idxTech = getIdx(['techpower', 'tech power']);
+  const idxBuild = getIdx(['buildingpower', 'building power', 'building']);
+  const idxCmd = getIdx(['commanderpower', 'commander power', 'commander']);
+
+  const players: PlayerInfo[] = [];
+  file.data.forEach((row: any[]) => {
+    const rawId = getStr(row, idxId);
+    const id = rawId.replace(/[,.\s]/g, '').replace(/^0+/, '');
+    const name = getStr(row, idxName);
+    if (!id && !name) return;
+    players.push({
+      id, name,
+      alliance: getStr(row, idxAlly),
+      power: getNum(row, idxPower),
+      troopsPower: getNum(row, idxTroops),
+      totalKillPoints: getNum(row, idxKP),
+      deadTroops: getNum(row, idxDead),
+      t1Kills: getNum(row, idxT1),
+      t2Kills: getNum(row, idxT2),
+      t3Kills: getNum(row, idxT3),
+      t4Kills: getNum(row, idxT4),
+      t5Kills: getNum(row, idxT5),
+      cityHall: getNum(row, idxCh),
+      techPower: getNum(row, idxTech),
+      buildingPower: getNum(row, idxBuild),
+      commanderPower: getNum(row, idxCmd),
+    });
+  });
+  return players;
 };

@@ -172,7 +172,7 @@ const AppContent: React.FC = () => {
     if (watchlistSaveTimeoutRef.current) clearTimeout(watchlistSaveTimeoutRef.current);
     watchlistSaveTimeoutRef.current = setTimeout(() => {
       const players = watchlistedIds.map(id => ({ id, location: watchlistLocations[id] || '' }));
-      saveWatchlist(players, watchlistApiSlug).catch(() => {});
+      saveWatchlist(players, watchlistApiSlug).catch((err) => console.error('Failed to save watchlist:', err));
     }, 400);
   }, [token, watchlistedIds, watchlistLocations, watchlistApiSlug]);
 

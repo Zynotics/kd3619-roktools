@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const XLSX = require('xlsx');
-const { get, all, getAppSetting, setAppSetting } = require('../db-pg');
+const { get, getAppSetting, setAppSetting } = require('../db-pg');
 
 const R5_SHOP_VISIBILITY_KEY = 'r5_shop_enabled';
 
@@ -94,35 +94,6 @@ async function userGovIdExists(governorIdRaw) {
   }
 }
 
-async function governorIdExists(governorIdRaw) {
-  if (!governorIdRaw) return false;
-  const governorId = String(governorIdRaw).trim();
-  if (!governorId) return false;
-  const tables = ['overview_files', 'honor_files'];
-  const possibleGovHeaders = ['governor id', 'governorid', 'gov id'];
-
-  try {
-    for (const table of tables) {
-      const rows = await all(`SELECT headers, data FROM ${table}`);
-      for (const row of rows) {
-        const headers = JSON.parse(row.headers || '[]');
-        const data = JSON.parse(row.data || '[]');
-        const govIdx = findColumnIndex(headers, possibleGovHeaders);
-        if (govIdx === undefined) continue;
-        for (const r of data) {
-          const value = r[govIdx];
-          if (value == null) continue;
-          if (String(value).trim() === governorId) return true;
-        }
-      }
-    }
-  } catch (e) {
-    console.error('Error while searching governorId:', e);
-    return false;
-  }
-  return false;
-}
-
 async function findKingdomBySlug(slug) {
   if (!slug) return null;
   const normalized = String(slug).trim().toLowerCase();
@@ -210,7 +181,6 @@ module.exports = {
   setR5ShopVisibilitySetting,
   findColumnIndex,
   userGovIdExists,
-  governorIdExists,
   findKingdomBySlug,
   slugify,
   generateUniqueSlug,
