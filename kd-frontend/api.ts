@@ -300,6 +300,24 @@ export async function deleteFile(type: 'overview' | 'honor' | 'activity', fileId
     }
 }
 
+/**
+ * Benennt eine Datei um (Overview, Honor oder Activity)
+ */
+export async function renameFile(
+    type: 'overview' | 'honor' | 'activity',
+    fileId: string,
+    newName: string
+): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/${type}/files/${fileId}/rename`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ name: newName }),
+    });
+    if (!res.ok) {
+        throw new Error('Failed to rename file');
+    }
+}
+
 // ==================== R5 CODES ====================
 
 export async function fetchAdminR5ShopVisibility(): Promise<{ enabled: boolean }> {

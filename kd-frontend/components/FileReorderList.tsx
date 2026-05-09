@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UploadedFile } from '../types';
-import { reorderFiles, deleteFile } from '../api';
+import { reorderFiles, deleteFile, renameFile } from '../api';
 import { sortUploadedFilesByUploadDateAsc } from '../utils';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from './Toast';
@@ -17,6 +17,8 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
   const [loading, setLoading] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [editValue, setEditValue] = useState<string>('');
+  const [renameIndex, setRenameIndex] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState<string>('');
   const [confirmFile, setConfirmFile] = useState<UploadedFile | null>(null);
   const [confirmAutoSort, setConfirmAutoSort] = useState(false);
 
@@ -99,6 +101,30 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
       }
   };
 
+  const startRename = (idx: number, file: UploadedFile) => {
+      setRenameIndex(idx);
+      setRenameValue(file.name);
+  };
+  const cancelRename = () => {
+      setRenameIndex(null);
+      setRenameValue('');
+  };
+  const commitRename = async (file: UploadedFile) => {
+      const next = renameValue.trim();
+      if (!next || next === file.name) { cancelRename(); return; }
+      setLoading(true);
+      try {
+          await renameFile(type, file.id, next);
+          addToast('File renamed.', 'success');
+          onUpdate();
+      } catch (e) {
+          addToast('Error renaming file.', 'error');
+      } finally {
+          setLoading(false);
+          cancelRename();
+      }
+  };
+
   const titleMap: Record<FileReorderListProps['type'], string> = {
     overview: 'Analytics Data',
     honor: 'Honor Data',
@@ -168,27 +194,51 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
                     </span>
                 )}
                 
-                <div className="flex flex-col overflow-hidden select-none">
-                    <span className="text-sm text-gray-200 truncate" title={file.name}>
-                        {file.name}
-                    </span>
-                    {file.uploadDate && <span className="text-gray-500 text-[10px]">{new Date(file.uploadDate).toLocaleString()}</span>}
+                <div className="flex flex-col overflow-hidden flex-1">
+                    {renameIndex === idx ? (
+                        <input
+                            autoFocus
+                            type="text"
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') commitRename(file);
+                                if (e.key === 'Escape') cancelRename();
+                            }}
+                            onBlur={() => commitRename(file)}
+                            className="bg-gray-900 text-gray-100 border border-blue-500 rounded px-2 py-1 text-sm outline-none"
+                        />
+                    ) : (
+                        <span className="text-sm text-gray-200 truncate select-none" title={file.name}>
+                            {file.name}
+                        </span>
+                    )}
+                    {file.uploadDate && <span className="text-gray-500 text-[10px] select-none">{new Date(file.uploadDate).toLocaleString()}</span>}
                 </div>
             </div>
-            
+
             <div className="flex items-center gap-1 ml-2">
-                {/* Wir behalten die Buttons als Fallback oder für Feinjustierung */}
-                <button 
+                {renameIndex !== idx && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); startRename(idx, file); }}
+                        disabled={loading}
+                        className="p-1 hover:bg-blue-900/30 rounded text-blue-400 disabled:opacity-30"
+                        title="Rename"
+                    >
+                        ✎
+                    </button>
+                )}
+                <button
                     onClick={() => handleMove(idx, -1)}
-                    disabled={idx === 0 || loading}
+                    disabled={idx === 0 || loading || renameIndex !== null}
                     className="p-1 hover:bg-gray-600 rounded text-blue-400 disabled:opacity-30"
                     title="Move up"
                 >
                     ▲
                 </button>
-                <button 
+                <button
                     onClick={() => handleMove(idx, 1)}
-                    disabled={idx === files.length - 1 || loading}
+                    disabled={idx === files.length - 1 || loading || renameIndex !== null}
                     className="p-1 hover:bg-gray-600 rounded text-blue-400 disabled:opacity-30"
                     title="Move down"
                 >
@@ -196,7 +246,7 @@ const FileReorderList: React.FC<FileReorderListProps> = ({ type, files, onUpdate
                 </button>
                 <button
                     onClick={() => setConfirmFile(file)}
-                    disabled={loading}
+                    disabled={loading || renameIndex !== null}
                     className="ml-2 p-1 hover:bg-red-900/30 rounded text-red-400 disabled:opacity-30"
                     title="Delete"
                 >
