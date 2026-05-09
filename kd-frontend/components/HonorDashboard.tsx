@@ -235,6 +235,21 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       } catch(e) { console.error('Reorder failed', e); }
   };
 
+  const handleRenameFile = async (id: string, newName: string) => {
+      if(!canManageFiles) return;
+      try {
+          const token = localStorage.getItem('authToken');
+          const slugQuery = isAdminOverride && publicSlug ? `?slug=${publicSlug}` : '';
+          const res = await fetch(`${backendUrl}/honor/files/${id}/rename${slugQuery}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ name: newName }),
+          });
+          if (!res.ok) throw new Error('rename failed');
+          setUploadedFiles(p => p.map(f => f.id === id ? { ...f, name: newName } : f));
+      } catch(e) { console.error('Rename failed', e); }
+  };
+
 
   if (isLoading) return (
     <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -253,7 +268,7 @@ const HonorDashboard: React.FC<HonorDashboardProps> = ({ isAdmin, backendUrl, pu
       {canManageFiles && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg"><FileUpload uploadUrl={uploadUrl} onUploadComplete={handleUploadComplete} /></div>
-          <div><FileList files={uploadedFiles} onDeleteFile={handleDeleteFile} onReorder={handleReorderFiles} /></div>
+          <div><FileList files={uploadedFiles} onDeleteFile={handleDeleteFile} onReorder={handleReorderFiles} onRenameFile={handleRenameFile} /></div>
         </div>
       )}
 

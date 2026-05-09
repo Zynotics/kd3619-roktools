@@ -510,6 +510,19 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ isAdmin, backendU
                               body: JSON.stringify({ order: newFiles.map(f => f.id) })
                           });
                       }}
+                      onRenameFile={async (id, newName) => {
+                          try {
+                            const token = localStorage.getItem('authToken');
+                            const res = await fetch(`${backendUrl}/activity/files/${id}/rename${adminSlugQuery}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ name: newName }),
+                            });
+                            if (!res.ok) throw new Error('rename failed');
+                            addToast('File renamed.', 'success');
+                            fetchFiles();
+                          } catch { addToast('Failed to rename file.', 'error'); }
+                      }}
                   />
                 </div>
             </div>

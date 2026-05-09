@@ -75,6 +75,38 @@ router.delete('/overview/files/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Generic rename helper used for overview / honor / activity files.
+async function renameFile(req, res, table, accessKind) {
+  const { name } = req.body || {};
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'New name required' });
+  }
+  const trimmed = name.trim().slice(0, 200);
+  try {
+    let targetKingdomId = await resolveKingdomIdFromRequest(req, { allowDefaultForAdmin: true });
+    const f = await get(`SELECT kingdom_id FROM ${table} WHERE id=$1`, [req.params.id]);
+    if (!f) return res.status(404).json({ error: 'File not found' });
+    if (!hasFileManagementAccess(req, accessKind) && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    if (req.user.role === 'admin' && !req.query.slug) targetKingdomId = f.kingdom_id;
+    if (f.kingdom_id !== targetKingdomId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    await query(
+      `UPDATE ${table} SET name = $1 WHERE id = $2 AND kingdom_id = $3`,
+      [trimmed, req.params.id, targetKingdomId]
+    );
+    res.json({ success: true, name: trimmed });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+router.put('/overview/files/:id/rename', authenticateToken, (req, res) =>
+  renameFile(req, res, 'overview_files', 'overview')
+);
+
 router.post('/overview/files/reorder', authenticateToken, async (req, res) => {
   const { order } = req.body;
   if (!order || !Array.isArray(order) || order.length === 0) return res.status(400).json({ error: 'Invalid order' });
@@ -153,6 +185,10 @@ router.delete('/honor/files/:id', authenticateToken, async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
+
+router.put('/honor/files/:id/rename', authenticateToken, (req, res) =>
+  renameFile(req, res, 'honor_files', 'honor')
+);
 
 router.post('/honor/files/reorder', authenticateToken, async (req, res) => {
   const { order } = req.body;
@@ -235,6 +271,10 @@ router.delete('/activity/files/:id', authenticateToken, async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
+
+router.put('/activity/files/:id/rename', authenticateToken, (req, res) =>
+  renameFile(req, res, 'activity_files', 'activity')
+);
 
 router.post('/activity/files/reorder', authenticateToken, async (req, res) => {
   const { order } = req.body;

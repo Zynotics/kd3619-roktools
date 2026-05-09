@@ -178,6 +178,21 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     } catch (err) { console.error('Reorder error:', err); }
   };
 
+  const handleRenameFile = async (id: string, newName: string) => {
+    if (!canManageFiles) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const slugQuery = isAdminOverride && publicSlug ? `?slug=${publicSlug}` : '';
+      const res = await fetch(`${backendUrl}/overview/files/${id}/rename${slugQuery}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: newName }),
+      });
+      if (!res.ok) throw new Error('rename failed');
+      setUploadedFiles(p => (p || []).map(f => f.id === id ? { ...f, name: newName } : f));
+    } catch { addToast('Failed to rename file.', 'error'); }
+  };
+
   // ---------------------------------------------------
   // PARSING & COMPARISON LOGIC
   // ---------------------------------------------------
@@ -316,7 +331,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           {showDownloadSection && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
               <div className="bg-gray-800 p-6 rounded-xl shadow-lg"><FileUpload uploadUrl={uploadUrl} onUploadComplete={handleUploadComplete} /></div>
-              <div><FileList files={uploadedFiles} onDeleteFile={handleDeleteFile} onReorder={handleReorderFiles} /></div>
+              <div><FileList files={uploadedFiles} onDeleteFile={handleDeleteFile} onReorder={handleReorderFiles} onRenameFile={handleRenameFile} /></div>
             </div>
           )}
         </div>

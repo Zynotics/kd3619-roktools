@@ -6,6 +6,7 @@ interface FileListProps {
   files: UploadedFile[];
   onDeleteFile?: (id: string) => void;
   onReorder?: (reorderedFiles: UploadedFile[]) => void;
+  onRenameFile?: (id: string, newName: string) => void | Promise<void>;
 }
 
 /**
@@ -18,17 +19,37 @@ const FileList: React.FC<FileListProps> = ({
   files,
   onDeleteFile,
   onReorder,
+  onRenameFile,
 }) => {
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
   const [confirmFile, setConfirmFile] = useState<UploadedFile | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState<string>('');
 
   // Wenn keine Dateien vorhanden -> gar nichts anzeigen
   if (!files || files.length === 0) return null;
 
   const canReorder = typeof onReorder === 'function';
   const canDelete = typeof onDeleteFile === 'function';
+  const canRename = typeof onRenameFile === 'function';
+
+  const startRename = (file: UploadedFile) => {
+    setRenamingId(file.id);
+    setRenameValue(file.name);
+  };
+  const cancelRename = () => {
+    setRenamingId(null);
+    setRenameValue('');
+  };
+  const commitRename = async (file: UploadedFile) => {
+    const next = renameValue.trim();
+    if (next && next !== file.name && onRenameFile) {
+      await onRenameFile(file.id, next);
+    }
+    cancelRename();
+  };
 
   const handleDragStart = (index: number) => {
     if (!canReorder) return;
@@ -103,10 +124,25 @@ const FileList: React.FC<FileListProps> = ({
                   : 'border-gray-700 bg-gray-850 hover:bg-gray-800'
               }`}
             >
-              <div className="flex flex-col min-w-0">
-                <span className="font-medium text-gray-100 truncate">
-                  {file.name}
-                </span>
+              <div className="flex flex-col min-w-0 flex-1">
+                {renamingId === file.id ? (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitRename(file);
+                      if (e.key === 'Escape') cancelRename();
+                    }}
+                    onBlur={() => commitRename(file)}
+                    className="bg-gray-700 text-gray-100 px-2 py-1 rounded border border-blue-500 outline-none text-sm font-medium"
+                  />
+                ) : (
+                  <span className="font-medium text-gray-100 truncate">
+                    {file.name}
+                  </span>
+                )}
                 {file.uploadDate && (
                   <span className="text-xs text-gray-400">
                     {new Date(file.uploadDate).toLocaleString()}
@@ -114,28 +150,43 @@ const FileList: React.FC<FileListProps> = ({
                 )}
               </div>
 
-              {canDelete && (
-                <button
-                  onClick={() => setConfirmFile(file)}
-                  className="ml-3 inline-flex items-center justify-center p-1 rounded-md text-gray-400 hover:text-red-300 hover:bg-red-900/40 transition-colors"
-                  title="Delete file"
-                  type="button"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+              <div className="flex items-center gap-1 ml-3">
+                {canRename && renamingId !== file.id && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); startRename(file); }}
+                    className="inline-flex items-center justify-center p-1 rounded-md text-gray-400 hover:text-blue-300 hover:bg-blue-900/40 transition-colors"
+                    title="Rename file"
+                    type="button"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.8}
-                      d="M6 7h12m-9 3v7m6-7v7M9 4h6a1 1 0 011 1v2H8V5a1 1 0 011-1zm2 0h2"
-                    />
-                  </svg>
-                </button>
-              )}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={() => setConfirmFile(file)}
+                    className="inline-flex items-center justify-center p-1 rounded-md text-gray-400 hover:text-red-300 hover:bg-red-900/40 transition-colors"
+                    title="Delete file"
+                    type="button"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.8}
+                        d="M6 7h12m-9 3v7m6-7v7M9 4h6a1 1 0 011 1v2H8V5a1 1 0 011-1zm2 0h2"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
