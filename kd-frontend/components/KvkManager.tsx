@@ -44,7 +44,13 @@ const parseDecimalInput = (value: string) => {
   return truncateToTwoDecimals(parsed);
 };
 
-const KvkManager: React.FC = () => {
+interface KvkManagerProps {
+  /** Called whenever a KvK event is created, updated or deleted so parent
+   *  views (e.g. MigrationList) can refetch DKP/dead scores. */
+  onEventChanged?: () => void;
+}
+
+const KvkManager: React.FC<KvkManagerProps> = ({ onEventChanged }) => {
   const { token, user } = useAuth();
   const { addToast } = useToast();
   const queryParams = new URLSearchParams(window.location.search);
@@ -333,6 +339,7 @@ const KvkManager: React.FC = () => {
             resetForm();
         }
         loadData();
+        onEventChanged?.();
     } catch (err: any) {
         addToast(err.message || 'Error saving event', 'error');
     } finally {
@@ -345,6 +352,7 @@ const KvkManager: React.FC = () => {
       await deleteKvkEvent(id);
       addToast('Event deleted.', 'success');
       loadData();
+      onEventChanged?.();
     } catch (err) {
       addToast('Error deleting event.', 'error');
     }

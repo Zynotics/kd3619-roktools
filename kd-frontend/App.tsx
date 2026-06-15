@@ -88,6 +88,9 @@ const AppContent: React.FC = () => {
   const migrationListSaveRef = useRef<(() => void) | null>(null);
   const [overviewFileVersion, setOverviewFileVersion] = useState(0);
   const handleFileUploaded = useCallback(() => setOverviewFileVersion(v => v + 1), []);
+  // Bump on KvK event create/update/delete so MigrationList recomputes DKP scores.
+  const [kvkEventVersion, setKvkEventVersion] = useState(0);
+  const handleKvkEventChanged = useCallback(() => setKvkEventVersion(v => v + 1), []);
 
   const watchlistIds = useMemo(() => new Set(watchlistedIds), [watchlistedIds]);
 
@@ -734,7 +737,7 @@ const AppContent: React.FC = () => {
                    accessType="honor" // Wir nutzen 'honor' oder 'overview' als Basis-Recht, aber der Button ist eh versteckt
                    isAdminOverride={false}
                    >
-                     <KvkManager />
+                     <KvkManager onEventChanged={handleKvkEventChanged} />
                    </PublicOrProtectedRoute>
                 )}
                 {activeView === 'analytics' && (
@@ -770,6 +773,7 @@ const AppContent: React.FC = () => {
                           onMigrationPlayerIdsChange={setMigrationPlayerIds}
                           triggerSaveRef={migrationListSaveRef}
                           overviewFileVersion={overviewFileVersion}
+                          kvkEventVersion={kvkEventVersion}
                         />
                       </div>
                     </PublicOrProtectedRoute>

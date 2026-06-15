@@ -587,7 +587,10 @@ const PublicKvKView: React.FC<PublicKvKViewProps> = ({ kingdomSlug }) => {
         case 'alliance':
           return row.alliance;
         case 'dkpPercent':
-          return row.dkpPercent ?? NaN;
+          // Sort by the absolute DKP score, not the percentage — users find
+          // it more intuitive (e.g. a 10M-score player ranks above a player
+          // at 95% if the latter only has 500k absolute score).
+          return row.dkpScore ?? NaN;
         case 'deadPercent':
           return row.deadPercent ?? NaN;
         case 'powerDiff':

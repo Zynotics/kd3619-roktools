@@ -57,6 +57,7 @@ interface MigrationListProps {
   onUpdateWatchlistLocation?: (id: string, location: string) => void;
   onMigrationPlayerIdsChange?: (ids: Set<string>) => void;
   overviewFileVersion?: number;
+  kvkEventVersion?: number;
   triggerSaveRef?: React.MutableRefObject<(() => void) | null>;
 }
 
@@ -252,7 +253,7 @@ const isMissingGoal = (player: StatProgressRow) => {
   return dkpMissed || deadMissed;
 };
 
-const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedIds, watchlistLocations = {}, onAddToWatchlist, onRemoveFromWatchlist, onUpdateWatchlistLocation, onMigrationPlayerIdsChange, triggerSaveRef, overviewFileVersion }) => {
+const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedIds, watchlistLocations = {}, onAddToWatchlist, onRemoveFromWatchlist, onUpdateWatchlistLocation, onMigrationPlayerIdsChange, triggerSaveRef, overviewFileVersion, kvkEventVersion }) => {
   const { token, user } = useAuth();
   const [events, setEvents] = useState<KvkEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -264,6 +265,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   const [manualMigratedIds, setManualMigratedIds] = useState<string[]>([]);
   const [manualUnmigratedIds, setManualUnmigratedIds] = useState<string[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, MigrationMeta>>({});
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pendingBulkRemove, setPendingBulkRemove] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [watchlistSearchQuery, setWatchlistSearchQuery] = useState('');
   const [allianceFilter, setAllianceFilter] = useState('all');
@@ -303,7 +306,10 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
       try {
         const evs = await fetchPublicKvkEvents(kingdomSlug, token || undefined);
         setEvents(evs);
-        if (evs.length > 0) {
+        // Only auto-pick when no event has been chosen yet — otherwise the
+        // user's current selection is preserved across refetches (e.g.
+        // triggered by a KvK event being added in the KvK manager).
+        if (evs.length > 0 && !selectedEventId) {
           setSelectedEventId(evs[0].id);
         }
       } catch (err) {
@@ -312,7 +318,9 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
       }
     };
     loadEvents();
-  }, [kingdomSlug, token]);
+    // kvkEventVersion is intentionally a dependency so that creating /
+    // editing / deleting an event in the KvK manager forces a refetch here.
+  }, [kingdomSlug, token, kvkEventVersion]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!kingdomSlug || !selectedEventId) return;
@@ -580,7 +588,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
         case 'basePower':
           return (getNumber(a.basePower) - getNumber(b.basePower)) * dir;
         case 'dkpPercent':
-          return (getNumber(a.dkpPercent) - getNumber(b.dkpPercent)) * dir;
+          // Sort by absolute DKP score, not percentage.
+          return (getNumber(a.dkpScore) - getNumber(b.dkpScore)) * dir;
         case 'deadPercent':
           return (getNumber(a.deadPercent) - getNumber(b.deadPercent)) * dir;
         case 'reason':
@@ -723,6 +732,27 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   const handleRemovePlayer = (id: string) => {
     setManualIds(prev => prev.filter(existing => existing !== id));
     setExcludedIds(prev => (prev.includes(id) ? prev : [...prev, id]));
+  };
+
+  const handleBulkRemove = () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    setManualIds(prev => prev.filter(existing => !selectedIds.has(existing)));
+    setExcludedIds(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.add(id));
+      return Array.from(next);
+    });
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const handleMigratedChange = (id: string, value: 'yes' | 'no') => {
@@ -1036,9 +1066,53 @@ const requestSort = (key: SortKey) => {
                 </div>
               </div>
             </div>
+            {selectedIds.size > 0 && (
+              <div className="mb-3 flex items-center justify-between gap-3 bg-slate-900/80 border border-rose-500/40 rounded-md px-3 py-2">
+                <span className="text-sm text-slate-200">
+                  <span className="font-bold text-rose-300">{selectedIds.size}</span>{' '}
+                  player{selectedIds.size === 1 ? '' : 's'} selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds(new Set())}
+                    className="text-xs px-3 py-1.5 rounded bg-slate-700 text-slate-200 hover:bg-slate-600"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingBulkRemove(true)}
+                    className="text-xs px-3 py-1.5 rounded bg-rose-600 text-white hover:bg-rose-500 font-medium"
+                  >
+                    Remove selected
+                  </button>
+                </div>
+              </div>
+            )}
             <Table frame={false} className="table-fixed min-w-full [&_td]:px-2 [&_td]:py-2">
             <TableHeader>
               <tr>
+                <TableCell header className="w-[34px] text-center">
+                  <input
+                    type="checkbox"
+                    checked={sortedPlayers.length > 0 && sortedPlayers.every(p => selectedIds.has(p.id))}
+                    ref={el => {
+                      if (!el) return;
+                      const selectedVisible = sortedPlayers.filter(p => selectedIds.has(p.id)).length;
+                      el.indeterminate = selectedVisible > 0 && selectedVisible < sortedPlayers.length;
+                    }}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(new Set(sortedPlayers.map(p => p.id)));
+                      } else {
+                        setSelectedIds(new Set());
+                      }
+                    }}
+                    className="h-4 w-4 cursor-pointer accent-rose-500"
+                    aria-label="Select all visible players"
+                  />
+                </TableCell>
                 <TableCell header className="w-[90px] cursor-pointer select-none" onClick={() => requestSort('govId')}>Gov ID{sortIndicator('govId')}</TableCell>
                 <TableCell header className="w-[150px] whitespace-normal cursor-pointer select-none" onClick={() => requestSort('name')}>
                   Name{sortIndicator('name')}
@@ -1077,8 +1151,17 @@ const requestSort = (key: SortKey) => {
                 return (
                   <TableRow
                     key={player.id}
-                    className={`${rowIdx % 2 === 0 ? 'bg-slate-900/70' : 'bg-slate-800/40'} ${isMigrated ? 'opacity-60' : ''}`}
+                    className={`${rowIdx % 2 === 0 ? 'bg-slate-900/70' : 'bg-slate-800/40'} ${isMigrated ? 'opacity-60' : ''} ${selectedIds.has(player.id) ? 'ring-1 ring-rose-500/40' : ''}`}
                   >
+                      <TableCell className="text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(player.id)}
+                          onChange={() => toggleSelect(player.id)}
+                          className="h-4 w-4 cursor-pointer accent-rose-500"
+                          aria-label={`Select ${player.name}`}
+                        />
+                      </TableCell>
                       <TableCell>{player.id}</TableCell>
                       <TableCell className="whitespace-normal">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1606,6 +1689,19 @@ const requestSort = (key: SortKey) => {
           setPendingRemoveId(null);
         }}
         onCancel={() => setPendingRemoveId(null)}
+      />
+
+      <ConfirmDialog
+        open={pendingBulkRemove}
+        title={`Remove ${selectedIds.size} player${selectedIds.size === 1 ? '' : 's'}?`}
+        message={`The selected players will be removed from the migration list and excluded from automatic re-addition. This cannot be undone.`}
+        confirmLabel={`Remove ${selectedIds.size}`}
+        danger={true}
+        onConfirm={() => {
+          handleBulkRemove();
+          setPendingBulkRemove(false);
+        }}
+        onCancel={() => setPendingBulkRemove(false)}
       />
 
     </div>
