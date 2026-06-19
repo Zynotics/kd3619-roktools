@@ -135,7 +135,14 @@ export async function fetchShopVisibility(): Promise<{ enabled: boolean }> {
   return res.json();
 }
 
-export async function fetchMigrationList(slug?: string): Promise<{
+function buildMigrationListQuery(eventId: string, slug?: string): string {
+  const params = new URLSearchParams();
+  params.set('eventId', eventId);
+  if (slug) params.set('slug', slug);
+  return `?${params.toString()}`;
+}
+
+export async function fetchMigrationList(eventId: string, slug?: string): Promise<{
   playerId: string;
   reason?: string | null;
   contacted?: string | null;
@@ -143,8 +150,11 @@ export async function fetchMigrationList(slug?: string): Promise<{
   manuallyAdded?: boolean;
   excluded?: boolean;
   migratedOverride?: boolean | null;
+  zeroed?: boolean;
+  zeroedAt?: string | null;
 }[]> {
-  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  if (!eventId) throw new Error('eventId is required');
+  const query = buildMigrationListQuery(eventId, slug);
   const res = await fetch(`${API_BASE_URL}/api/migration-list${query}`, {
     headers: getAuthHeaders(),
   });
@@ -158,6 +168,7 @@ export async function fetchMigrationList(slug?: string): Promise<{
 }
 
 export async function saveMigrationList(
+  eventId: string,
   entries: {
     playerId: string;
     reason?: string | null;
@@ -166,14 +177,17 @@ export async function saveMigrationList(
     manuallyAdded?: boolean;
     excluded?: boolean;
     migratedOverride?: boolean | null;
+    zeroed?: boolean;
+    zeroedAt?: string | null;
   }[],
   slug?: string
 ): Promise<{ success: boolean; count: number }> {
-  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  if (!eventId) throw new Error('eventId is required');
+  const query = buildMigrationListQuery(eventId, slug);
   const res = await fetch(`${API_BASE_URL}/api/migration-list${query}`, {
     method: 'PUT',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ entries }),
+    body: JSON.stringify({ entries, eventId }),
   });
 
   if (!res.ok) {
@@ -181,6 +195,48 @@ export async function saveMigrationList(
     throw new Error(errorData.error || 'Failed to save migration list');
   }
 
+  return res.json();
+}
+
+export async function fetchCreatedMigrationListEvents(slug?: string): Promise<string[]> {
+  const params = new URLSearchParams();
+  if (slug) params.set('slug', slug);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/migration-list/created-events${query}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to load migration list events');
+  }
+  return res.json();
+}
+
+export async function createMigrationList(eventId: string, slug?: string): Promise<{ success: boolean }> {
+  if (!eventId) throw new Error('eventId is required');
+  const query = buildMigrationListQuery(eventId, slug);
+  const res = await fetch(`${API_BASE_URL}/api/migration-list${query}`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to create migration list');
+  }
+  return res.json();
+}
+
+export async function deleteMigrationList(eventId: string, slug?: string): Promise<{ success: boolean }> {
+  if (!eventId) throw new Error('eventId is required');
+  const query = buildMigrationListQuery(eventId, slug);
+  const res = await fetch(`${API_BASE_URL}/api/migration-list${query}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to delete migration list');
+  }
   return res.json();
 }
 

@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { KvkEvent, UploadedFile } from '../types';
-import { API_BASE_URL, fetchMigrationList, fetchPublicKvkEvents, saveMigrationList } from '../api';
+import {
+  API_BASE_URL,
+  fetchMigrationList,
+  fetchPublicKvkEvents,
+  saveMigrationList,
+  fetchCreatedMigrationListEvents,
+  createMigrationList,
+  deleteMigrationList,
+} from '../api';
 import { findColumnIndex, formatNumber, parseGermanNumber } from '../utils';
 import { Card } from './Card';
 import { Table, TableHeader, TableRow, TableCell } from './Table';
@@ -290,6 +298,11 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   const [activeTab, setActiveTab] = useState<'list' | 'watchlist'>('list');
   const [watchlistFilter, setWatchlistFilter] = useState<'all' | 'disappeared' | 'power-up' | 'zeroed'>('all');
   const [pendingWatchlistToggle, setPendingWatchlistToggle] = useState<{ id: string; name: string; action: 'add' | 'remove' } | null>(null);
+  const [createdEventIds, setCreatedEventIds] = useState<Set<string>>(new Set());
+  const [createdEventsLoaded, setCreatedEventsLoaded] = useState(false);
+  const [isCreatingList, setIsCreatingList] = useState(false);
+  const [pendingDeleteList, setPendingDeleteList] = useState(false);
+  const [isDeletingList, setIsDeletingList] = useState(false);
 
   const getDetailsForPlayer = (id: string): MigrationMeta => {
     return detailsById[id] || defaultMigrationMeta;
@@ -352,18 +365,60 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   }, [kingdomSlug, selectedEventId, events, overviewFileVersion]);
 
   const apiSlug = user?.role === 'admin' ? kingdomSlug || undefined : undefined;
+  const isListCreatedForCurrentEvent = !!selectedEventId && createdEventIds.has(selectedEventId);
 
+  // Load the set of events that already have an active migration list.
   useEffect(() => {
     if (!token) return;
+    let isMounted = true;
+    setCreatedEventsLoaded(false);
+    fetchCreatedMigrationListEvents(apiSlug)
+      .then(eventIds => {
+        if (!isMounted) return;
+        setCreatedEventIds(new Set(eventIds));
+        setCreatedEventsLoaded(true);
+      })
+      .catch(err => {
+        console.error(err);
+        if (isMounted) {
+          setCreatedEventIds(new Set());
+          setCreatedEventsLoaded(true);
+        }
+      });
+    return () => { isMounted = false; };
+  }, [token, apiSlug, kvkEventVersion]);
+
+  useEffect(() => {
+    if (!token || !selectedEventId) {
+      setDetailsById({});
+      setManualIds([]);
+      setExcludedIds([]);
+      setManualMigratedIds([]);
+      setManualUnmigratedIds([]);
+      setIsPersistLoaded(false);
+      return;
+    }
+    // Skip loading entries while we don't yet know if a list exists, or for
+    // events without one — entries are gated behind the "Create" button.
+    if (!createdEventsLoaded || !isListCreatedForCurrentEvent) {
+      setDetailsById({});
+      setManualIds([]);
+      setExcludedIds([]);
+      setManualMigratedIds([]);
+      setManualUnmigratedIds([]);
+      setIsPersistLoaded(false);
+      return;
+    }
+
     let isMounted = true;
     const loadPersisted = async () => {
       try {
         setPersistLoadError(null);
-        const entries = await fetchMigrationList(apiSlug);
+        setIsPersistLoaded(false);
+        const entries = await fetchMigrationList(selectedEventId, apiSlug);
         if (!isMounted) return;
         const details: Record<string, MigrationMeta> = {};
         const manualIdsNext: string[] = [];
-        const excludedIdsNext: string[] = [];
         const manualMigratedNext: string[] = [];
         const manualUnmigratedNext: string[] = [];
 
@@ -374,19 +429,19 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
           const info = entry.info || '';
           const zeroed = entry.zeroed === true;
           const zeroedAt = entry.zeroedAt || undefined;
-          const inactive = entry.inactive === true;
+          const inactive = (entry as any).inactive === true;
           if (reason !== defaultMigrationMeta.reason || contacted !== defaultMigrationMeta.contacted || info || zeroed || inactive) {
             details[id] = { reason, contacted, info, zeroed, zeroedAt, inactive };
           }
           if (entry.manuallyAdded) manualIdsNext.push(id);
-          if (entry.excluded) excludedIdsNext.push(id);
+          // `excluded` is intentionally NOT restored — session-only hide.
           if (entry.migratedOverride === true) manualMigratedNext.push(id);
           if (entry.migratedOverride === false) manualUnmigratedNext.push(id);
         });
 
         setDetailsById(details);
         setManualIds(manualIdsNext);
-        setExcludedIds(excludedIdsNext);
+        setExcludedIds([]);
         setManualMigratedIds(manualMigratedNext);
         setManualUnmigratedIds(manualUnmigratedNext);
         if (isMounted) setIsPersistLoaded(true);
@@ -401,7 +456,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
     return () => {
       isMounted = false;
     };
-  }, [token, apiSlug]);
+  }, [token, apiSlug, selectedEventId, createdEventsLoaded, isListCreatedForCurrentEvent]);
 
   useEffect(() => {
     if (!activeEvent || !activeEvent.fights?.length || overviewFiles.length === 0) {
@@ -442,9 +497,18 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
     () => manualIds.map(id => {
       const fromStats = statsData.find(player => player.id === id);
       if (fromStats) return fromStats;
-      // Player not in statsData — build row from snapshot data
+      // Player not in statsData — build row from snapshot data.
+      // Also derive dkpGoal / deadGoal from the configured KvK event so the
+      // UI shows "0 / 10M (0%)" instead of "N/A" for players who disappeared
+      // mid-event. They contributed nothing → goal definitely missed.
       const snap = allSnapshotPlayers.get(id);
       if (!snap) return null;
+      const goalsFormula = activeEvent?.goalsFormula;
+      const { dkpPercent: dkpPct, deadPercent: deadPct } = resolveGoalPercents(snap.power, goalsFormula);
+      const dkpGoalFactor = dkpPct / 100;
+      const deadGoalFactor = deadPct / 100;
+      const dkpGoal = dkpGoalFactor > 0 ? snap.power * dkpGoalFactor : undefined;
+      const deadGoal = deadGoalFactor > 0 ? snap.power * deadGoalFactor : undefined;
       return {
         id,
         name: snap.name,
@@ -456,9 +520,14 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
         t4t5KillsDiff: 0,
         deadDiff: 0,
         killPointsDiff: 0,
+        dkpScore: 0,
+        dkpGoal,
+        dkpPercent: dkpGoal !== undefined && dkpGoal > 0 ? 0 : undefined,
+        deadGoal,
+        deadPercent: deadGoal !== undefined && deadGoal > 0 ? 0 : undefined,
       } as StatProgressRow;
     }).filter(Boolean) as StatProgressRow[],
-    [manualIds, statsData, allSnapshotPlayers]
+    [manualIds, statsData, allSnapshotPlayers, activeEvent]
   );
 
   const migrationPlayers = useMemo(() => {
@@ -617,7 +686,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
     const ids = new Set<string>();
     Object.keys(detailsById).forEach(id => ids.add(id));
     manualIds.forEach(id => ids.add(id));
-    excludedIds.forEach(id => ids.add(id));
+    // excludedIds intentionally NOT included — removes are session-only,
+    // not persisted across reloads.
     manualMigratedIds.forEach(id => ids.add(id));
     manualUnmigratedIds.forEach(id => ids.add(id));
 
@@ -630,14 +700,13 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
         !details.zeroed &&
         !details.inactive;
       const manuallyAdded = manualIds.includes(id);
-      const excluded = excludedIds.includes(id);
       const migratedOverride = manualMigratedIds.includes(id)
         ? true
         : manualUnmigratedIds.includes(id)
           ? false
           : null;
 
-      if (!isDefault || manuallyAdded || excluded || migratedOverride !== null) {
+      if (!isDefault || manuallyAdded || migratedOverride !== null) {
         acc.push({
           playerId: id,
           reason: details.reason,
@@ -647,7 +716,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
           zeroedAt: details.zeroedAt || null,
           inactive: details.inactive || false,
           manuallyAdded,
-          excluded,
+          excluded: false,  // never persist excluded — session-only
           migratedOverride
         });
       }
@@ -667,7 +736,6 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   }, [
     detailsById,
     manualIds,
-    excludedIds,
     manualMigratedIds,
     manualUnmigratedIds
   ]);
@@ -779,6 +847,7 @@ const requestSort = (key: SortKey) => {
   };
 
   const triggerSave = () => {
+    if (!selectedEventId) return;
     if (saveInFlightRef.current) {
       saveQueuedRef.current = true;
       return;
@@ -787,7 +856,7 @@ const requestSort = (key: SortKey) => {
     if (!entries) return;
     saveInFlightRef.current = true;
     setSaveStatus('saving');
-    saveMigrationList(entries, apiSlug)
+    saveMigrationList(selectedEventId, entries, apiSlug)
       .then(() => {
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('idle'), 2000);
@@ -810,7 +879,7 @@ const requestSort = (key: SortKey) => {
   });
 
   useEffect(() => {
-    if (!isPersistLoaded || !token || persistLoadError) return;
+    if (!isPersistLoaded || !token || persistLoadError || !selectedEventId) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       triggerSave();
@@ -819,20 +888,22 @@ const requestSort = (key: SortKey) => {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [isPersistLoaded, token, persistLoadError, apiSlug, migrationEntries]);
+  }, [isPersistLoaded, token, persistLoadError, apiSlug, selectedEventId, migrationEntries]);
 
   useEffect(() => {
-    if (!isPersistLoaded || !token || persistLoadError) return;
+    if (!isPersistLoaded || !token || persistLoadError || !selectedEventId) return;
     const handleBeforeUnload = () => {
-      const query = apiSlug ? `?slug=${encodeURIComponent(apiSlug)}` : '';
-      const url = `${API_BASE_URL}/api/migration-list${query}`;
+      const params = new URLSearchParams();
+      params.set('eventId', selectedEventId);
+      if (apiSlug) params.set('slug', apiSlug);
+      const url = `${API_BASE_URL}/api/migration-list?${params.toString()}`;
       fetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ entries: migrationEntries }),
+        body: JSON.stringify({ entries: migrationEntries, eventId: selectedEventId }),
         keepalive: true,
       }).catch(() => {});
     };
@@ -841,7 +912,50 @@ const requestSort = (key: SortKey) => {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [isPersistLoaded, token, persistLoadError, apiSlug, migrationEntries]);
+  }, [isPersistLoaded, token, persistLoadError, apiSlug, selectedEventId, migrationEntries]);
+
+  const handleCreateMigrationList = async () => {
+    if (!selectedEventId || isCreatingList) return;
+    setIsCreatingList(true);
+    try {
+      await createMigrationList(selectedEventId, apiSlug);
+      setCreatedEventIds(prev => {
+        const next = new Set(prev);
+        next.add(selectedEventId);
+        return next;
+      });
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || 'Failed to create migration list.');
+    } finally {
+      setIsCreatingList(false);
+    }
+  };
+
+  const handleDeleteMigrationList = async () => {
+    if (!selectedEventId || isDeletingList) return;
+    setIsDeletingList(true);
+    try {
+      await deleteMigrationList(selectedEventId, apiSlug);
+      setCreatedEventIds(prev => {
+        const next = new Set(prev);
+        next.delete(selectedEventId);
+        return next;
+      });
+      setDetailsById({});
+      setManualIds([]);
+      setExcludedIds([]);
+      setManualMigratedIds([]);
+      setManualUnmigratedIds([]);
+      setIsPersistLoaded(false);
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || 'Failed to delete migration list.');
+    } finally {
+      setIsDeletingList(false);
+      setPendingDeleteList(false);
+    }
+  };
 
   const updateDetails = (id: string, updates: Partial<MigrationMeta>) => {
     setDetailsById(prev => ({
@@ -936,10 +1050,55 @@ const requestSort = (key: SortKey) => {
       )}
       </div>
 
-      {activeTab === 'list' && <>
+      {activeTab === 'list' && !isListCreatedForCurrentEvent && createdEventsLoaded && selectedEventId && (
+        <Card className="p-8">
+          <div className="flex flex-col items-center text-center gap-4">
+            <svg viewBox="0 0 24 24" className="h-12 w-12 text-slate-500" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="12" y1="18" x2="12" y2="12" />
+              <line x1="9" y1="15" x2="15" y2="15" />
+            </svg>
+            <div>
+              <h3 className="text-lg font-bold text-white">
+                No migration list for {activeEvent?.name || 'this event'} yet
+              </h3>
+              <p className="text-sm text-slate-400 mt-1 max-w-md">
+                Each KvK event gets its own independent migration list. Create one to start tracking players who miss goals, manual additions, contacted state, etc.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCreateMigrationList}
+              disabled={isCreatingList}
+              className="px-4 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium text-sm transition disabled:opacity-60"
+            >
+              {isCreatingList ? 'Creating…' : `Create Migration List for ${activeEvent?.name || 'this event'}`}
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'list' && !selectedEventId && createdEventsLoaded && (
+        <Card className="p-6">
+          <p className="text-slate-400 text-sm">Select a KvK event above to manage its migration list.</p>
+        </Card>
+      )}
+
+      {activeTab === 'list' && isListCreatedForCurrentEvent && <>
       <Card className="p-6">
         <div className="flex flex-col gap-3">
-          <label className="text-xs text-slate-400">Add player manually</label>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-xs text-slate-400">Add player manually</label>
+            <button
+              type="button"
+              onClick={() => setPendingDeleteList(true)}
+              className="text-xs text-rose-300 hover:text-rose-200 underline decoration-dotted"
+              title="Delete this event's migration list"
+            >
+              Delete migration list
+            </button>
+          </div>
           <input
             type="text"
             value={searchQuery}
@@ -1702,6 +1861,16 @@ const requestSort = (key: SortKey) => {
           setPendingBulkRemove(false);
         }}
         onCancel={() => setPendingBulkRemove(false)}
+      />
+
+      <ConfirmDialog
+        open={pendingDeleteList}
+        title={`Delete migration list for ${activeEvent?.name || 'this event'}?`}
+        message={`This permanently deletes the migration list and all entries (contacted state, notes, manual additions, etc.) for "${activeEvent?.name || 'this event'}". This cannot be undone.`}
+        confirmLabel={isDeletingList ? 'Deleting…' : 'Delete'}
+        danger={true}
+        onConfirm={handleDeleteMigrationList}
+        onCancel={() => setPendingDeleteList(false)}
       />
 
     </div>

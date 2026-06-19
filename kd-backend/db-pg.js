@@ -388,9 +388,13 @@ async function initUsersColumns() {
 
 async function initMigrationListTable() {
   try {
+    // Schema v2: Each migration-list entry is now scoped to a specific
+    // KvK event (kvk_event_id). The user requested a clean slate, so the
+    // upgrade drops any legacy rows that lack an event reference.
     await query(`
       CREATE TABLE IF NOT EXISTS migration_list_entries (
         kingdom_id TEXT NOT NULL,
+        kvk_event_id TEXT NOT NULL DEFAULT '',
         player_id TEXT NOT NULL,
         reason TEXT,
         contacted TEXT,
@@ -399,9 +403,28 @@ async function initMigrationListTable() {
         excluded BOOLEAN DEFAULT FALSE,
         migrated_override BOOLEAN,
         updated_by_user_id TEXT,
+        zeroed BOOLEAN DEFAULT FALSE,
+        zeroed_at TIMESTAMPTZ,
         updated_at TIMESTAMPTZ DEFAULT NOW(),
-        PRIMARY KEY (kingdom_id, player_id)
+        PRIMARY KEY (kingdom_id, kvk_event_id, player_id)
       )
+    `);
+    // Add kvk_event_id column if upgrading from v1
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'migration_list_entries' AND column_name = 'kvk_event_id'
+        ) THEN
+          ALTER TABLE migration_list_entries DROP CONSTRAINT IF EXISTS migration_list_entries_pkey;
+          DELETE FROM migration_list_entries;
+          ALTER TABLE migration_list_entries
+            ADD COLUMN kvk_event_id TEXT NOT NULL DEFAULT '';
+          ALTER TABLE migration_list_entries
+            ADD PRIMARY KEY (kingdom_id, kvk_event_id, player_id);
+        END IF;
+      END$$;
     `);
     await query(`
       DO $$
@@ -413,6 +436,32 @@ async function initMigrationListTable() {
         ) THEN
           ALTER TABLE migration_list_entries
             ADD CONSTRAINT migration_list_entries_kingdom_fk FOREIGN KEY (kingdom_id)
+            REFERENCES kingdoms(id) ON DELETE CASCADE;
+        END IF;
+      END$$;
+    `);
+    // Marker table — tracks which (kingdom, kvk_event) pairs have an active
+    // migration list. Lets the UI distinguish "not yet created" from "created
+    // but empty" without inserting dummy rows into migration_list_entries.
+    await query(`
+      CREATE TABLE IF NOT EXISTS migration_lists (
+        kingdom_id TEXT NOT NULL,
+        kvk_event_id TEXT NOT NULL,
+        created_by_user_id TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (kingdom_id, kvk_event_id)
+      )
+    `);
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name = 'migration_lists_kingdom_fk'
+            AND table_name = 'migration_lists'
+        ) THEN
+          ALTER TABLE migration_lists
+            ADD CONSTRAINT migration_lists_kingdom_fk FOREIGN KEY (kingdom_id)
             REFERENCES kingdoms(id) ON DELETE CASCADE;
         END IF;
       END$$;
