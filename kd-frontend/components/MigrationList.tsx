@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { KvkEvent, UploadedFile } from '../types';
 import {
   API_BASE_URL,
@@ -932,6 +933,62 @@ const requestSort = (key: SortKey) => {
     }
   };
 
+  const handleExportXlsx = () => {
+    if (sortedPlayers.length === 0) return;
+
+    const round = (val: number | undefined, digits = 1): number | string => {
+      if (val === undefined || val === null || Number.isNaN(val)) return '';
+      const factor = Math.pow(10, digits);
+      return Math.round(val * factor) / factor;
+    };
+
+    const reasonLabel = (r: MigrationMeta['reason']) =>
+      r === 'dkp-deads' ? 'DKP/Deads not reached' : r === 'rule-breaker' ? 'Rule breaker' : 'Other';
+
+    const rows = sortedPlayers.map(player => {
+      const details = getDetailsForPlayer(player.id);
+      const isMigrated = manualMigratedIds.includes(player.id);
+      return {
+        'Gov ID': player.id,
+        'Name': player.name,
+        'Alliance': player.alliance || '',
+        'Base Power': Math.round(player.basePower || 0),
+        'DKP Score': Math.round(player.dkpScore || 0),
+        'DKP Goal': Math.round(player.dkpGoal || 0),
+        'DKP %': round(player.dkpPercent),
+        'Deads': Math.round(player.deadDiff || 0),
+        'Dead Goal': Math.round(player.deadGoal || 0),
+        'Deads %': round(player.deadPercent),
+        'Reason': reasonLabel(details.reason),
+        'Notes': details.info || '',
+        'Contacted': details.contacted === 'yes' ? 'Yes' : 'No',
+        'Migrated': isMigrated ? 'Yes' : 'No',
+        'Inactive': details.inactive ? 'Yes' : 'No',
+        'Zeroed': details.zeroed ? 'Yes' : 'No',
+        'Zeroed At (UTC)': details.zeroedAt ? new Date(details.zeroedAt).toISOString() : '',
+      };
+    });
+
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    // Auto column widths
+    const colKeys = Object.keys(rows[0]);
+    sheet['!cols'] = colKeys.map(key => {
+      const max = Math.max(
+        key.length,
+        ...rows.map(r => String((r as any)[key] ?? '').length)
+      );
+      return { wch: Math.min(Math.max(max + 2, 8), 40) };
+    });
+
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, 'Migration List');
+
+    const safeEventName = (activeEvent?.name || 'Event').replace(/[\\/:*?"<>|]/g, '_');
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const filename = `MigrationList_${safeEventName}_${dateStamp}.xlsx`;
+    XLSX.writeFile(book, filename);
+  };
+
   const handleDeleteMigrationList = async () => {
     if (!selectedEventId || isDeletingList) return;
     setIsDeletingList(true);
@@ -1090,14 +1147,30 @@ const requestSort = (key: SortKey) => {
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <label className="text-xs text-slate-400">Add player manually</label>
-            <button
-              type="button"
-              onClick={() => setPendingDeleteList(true)}
-              className="text-xs text-rose-300 hover:text-rose-200 underline decoration-dotted"
-              title="Delete this event's migration list"
-            >
-              Delete migration list
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleExportXlsx}
+                disabled={sortedPlayers.length === 0}
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded bg-emerald-600/20 text-emerald-300 border border-emerald-600/40 hover:bg-emerald-600/30 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                title={sortedPlayers.length === 0 ? 'Nothing to export' : 'Export currently visible rows as XLSX'}
+              >
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Export XLSX
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingDeleteList(true)}
+                className="text-xs text-rose-300 hover:text-rose-200 underline decoration-dotted"
+                title="Delete this event's migration list"
+              >
+                Delete migration list
+              </button>
+            </div>
           </div>
           <input
             type="text"
