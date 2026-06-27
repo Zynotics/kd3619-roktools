@@ -1290,7 +1290,7 @@ const requestSort = (key: SortKey) => {
     });
   }, [enrichedCh25List]);
 
-  const [ch25Filter, setCh25Filter] = useState<'all' | 'disappeared' | 'power-up' | 'zeroed'>('all');
+  const [ch25Filter, setCh25Filter] = useState<'all' | 'disappeared' | 'zeroed'>('all');
   const [ch25SearchQuery, setCh25SearchQuery] = useState('');
   const [pendingCh25Remove, setPendingCh25Remove] = useState<{ id: string; name: string } | null>(null);
   const [pendingCh25Add, setPendingCh25Add] = useState<{ id: string; name: string } | null>(null);
@@ -1298,7 +1298,6 @@ const requestSort = (key: SortKey) => {
   const filteredCh25List = useMemo(() => {
     switch (ch25Filter) {
       case 'disappeared': return sortedCh25List.filter(e => e.disappeared);
-      case 'power-up': return sortedCh25List.filter(e => !e.disappeared && (e.powerDelta ?? 0) > 0);
       case 'zeroed': return sortedCh25List.filter(e => e.zeroed);
       default: return sortedCh25List;
     }
@@ -1328,16 +1327,13 @@ const requestSort = (key: SortKey) => {
     const rows = filteredCh25List.map(entry => {
       const status: string[] = [];
       if (entry.disappeared) status.push('Disappeared');
-      if (!entry.disappeared && (entry.powerDelta ?? 0) > 0) status.push('Power Up');
       if (entry.zeroed) status.push('Zeroed');
       return {
         'Gov ID': entry.playerId,
         'Name': entry.name,
         'Alliance': entry.alliance || '',
         'CH': entry.ch ?? '',
-        'Base Power': entry.basePower ?? '',
-        'Current Power': entry.currentPower ?? '',
-        'Δ Power': entry.powerDelta ?? '',
+        'Power': entry.currentPower ?? '',
         'Troop Power': entry.currentTroopsPower ?? '',
         'Zeroed': entry.zeroed ? 'Yes' : 'No',
         'Zeroed At (UTC)': entry.zeroedAt ? new Date(entry.zeroedAt).toISOString() : '',
@@ -2705,7 +2701,6 @@ const requestSort = (key: SortKey) => {
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold text-orange-300 mb-1">&lt;CH25 Watchlist</h3>
-                <p className="text-xs text-slate-500">Persistent — survives Top 1000 re-uploads.</p>
                 {top1000?.uploadedAt ? (
                   <p className="text-xs text-slate-400 mt-1">
                     Current values from Top 1000 upload:{' '}
@@ -2761,7 +2756,6 @@ const requestSort = (key: SortKey) => {
                   {([
                     { key: 'all', label: 'All', count: enrichedCh25List.length, activeClass: 'bg-slate-600 text-white' },
                     { key: 'disappeared', label: 'Disappeared', count: enrichedCh25List.filter(e => e.disappeared).length, activeClass: 'bg-amber-500/30 text-amber-300 border border-amber-500/40' },
-                    { key: 'power-up', label: 'Power ↑', count: enrichedCh25List.filter(e => !e.disappeared && (e.powerDelta ?? 0) > 0).length, activeClass: 'bg-red-500/30 text-red-300 border border-red-500/40' },
                     { key: 'zeroed', label: 'Zeroed', count: enrichedCh25List.filter(e => e.zeroed).length, activeClass: 'bg-red-900/40 text-red-400 border border-red-700/40' },
                   ] as const).map(f => (
                     <button
@@ -2808,20 +2802,6 @@ const requestSort = (key: SortKey) => {
                 </div>
               </div>
             )}
-            {enrichedCh25List.some(e => !e.disappeared && (e.powerDelta ?? 0) > 0) && (
-              <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
-                <svg viewBox="0 0 24 24" className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
-                </svg>
-                <div>
-                  <p className="text-sm font-semibold text-red-300">
-                    {enrichedCh25List.filter(e => !e.disappeared && (e.powerDelta ?? 0) > 0).length} players have increased power
-                  </p>
-                  <p className="text-xs text-red-400/70 mt-0.5">Watch for accounts growing past sub-CH25 status.</p>
-                </div>
-              </div>
-            )}
-
             {enrichedCh25List.length === 0 ? (
               <div className="flex flex-col items-center py-10 text-slate-500">
                 <svg viewBox="0 0 24 24" className="h-10 w-10 mb-2 opacity-40" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -2842,9 +2822,7 @@ const requestSort = (key: SortKey) => {
                     <TableCell header className="w-[160px] whitespace-normal">Name</TableCell>
                     <TableCell header className="w-[100px]">Alliance</TableCell>
                     <TableCell header className="w-[60px]">CH</TableCell>
-                    <TableCell header className="w-[120px]">Base Power</TableCell>
-                    <TableCell header className="w-[120px]">Current Power</TableCell>
-                    <TableCell header className="w-[110px]">Δ Power</TableCell>
+                    <TableCell header className="w-[120px]">Power</TableCell>
                     <TableCell header className="w-[120px]">Troop Power</TableCell>
                     <TableCell header className="w-[60px]">Zeroed</TableCell>
                     <TableCell header className="w-[150px]">Location</TableCell>
@@ -2855,8 +2833,6 @@ const requestSort = (key: SortKey) => {
                   {filteredCh25List.map((entry, rowIdx) => {
                     const rowBg = entry.disappeared
                       ? 'bg-amber-900/20'
-                      : (entry.powerDelta ?? 0) > 0
-                      ? 'bg-red-900/20'
                       : rowIdx % 2 === 0 ? 'bg-slate-900/70' : 'bg-slate-800/40';
                     return (
                       <TableRow key={entry.playerId} className={rowBg}>
@@ -2872,14 +2848,6 @@ const requestSort = (key: SortKey) => {
                                 Disappeared
                               </span>
                             )}
-                            {!entry.disappeared && (entry.powerDelta ?? 0) > 0 && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-red-500/20 text-red-300 border border-red-500/40">
-                                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                  <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
-                                </svg>
-                                Power ↑
-                              </span>
-                            )}
                             {entry.zeroed && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-red-600/20 text-red-300 border border-red-500/40">
                                 Zeroed
@@ -2893,23 +2861,11 @@ const requestSort = (key: SortKey) => {
                             <span className={entry.ch < 25 ? 'text-amber-300 font-semibold' : 'text-slate-300'}>{entry.ch}</span>
                           ) : '-'}
                         </TableCell>
-                        <TableCell>{entry.basePower !== null ? formatNumber(entry.basePower) : '-'}</TableCell>
                         <TableCell>
                           {entry.disappeared || entry.currentPower === null
                             ? <span className="text-slate-500">—</span>
                             : formatNumber(entry.currentPower)
                           }
-                        </TableCell>
-                        <TableCell>
-                          {entry.powerDelta !== null ? (
-                            <span className={`font-semibold ${
-                              entry.powerDelta > 0 ? 'text-red-400' : entry.powerDelta < 0 ? 'text-emerald-400' : 'text-slate-400'
-                            }`}>
-                              {entry.powerDelta > 0 ? '+' : ''}{formatNumber(entry.powerDelta)}
-                            </span>
-                          ) : (
-                            <span className="text-slate-500">—</span>
-                          )}
                         </TableCell>
                         <TableCell>
                           {entry.disappeared || entry.currentTroopsPower === null
