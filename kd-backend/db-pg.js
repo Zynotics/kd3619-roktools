@@ -499,6 +499,44 @@ async function initWatchlistTable() {
   }
 }
 
+async function initTop1000Table() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS top1000_uploads (
+        kingdom_id TEXT PRIMARY KEY,
+        filename TEXT,
+        uploaded_at TIMESTAMPTZ DEFAULT NOW(),
+        uploaded_by_user_id TEXT,
+        headers TEXT,
+        data TEXT,
+        FOREIGN KEY (kingdom_id) REFERENCES kingdoms(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Postgres: top1000_uploads table checked/updated.');
+  } catch (e) {
+    console.error('Error initializing top1000_uploads table:', e.message);
+  }
+}
+
+async function initCh25WatchlistTable() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS ch25_watchlist (
+        kingdom_id TEXT NOT NULL,
+        player_id TEXT NOT NULL,
+        notes TEXT,
+        added_at TIMESTAMPTZ DEFAULT NOW(),
+        added_by_user_id TEXT,
+        PRIMARY KEY (kingdom_id, player_id),
+        FOREIGN KEY (kingdom_id) REFERENCES kingdoms(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Postgres: ch25_watchlist table checked/updated.');
+  } catch (e) {
+    console.error('Error initializing ch25_watchlist table:', e.message);
+  }
+}
+
 async function initActivityLogsTable() {
   try {
     await query(`
@@ -531,6 +569,8 @@ if (process.env.DATABASE_URL) {
     initUsersColumns();
     initMigrationListTable();
     initWatchlistTable();
+    initTop1000Table();
+    initCh25WatchlistTable();
     initActivityLogsTable();
 }
 

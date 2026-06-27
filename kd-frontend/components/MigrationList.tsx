@@ -9,6 +9,14 @@ import {
   fetchCreatedMigrationListEvents,
   createMigrationList,
   deleteMigrationList,
+  fetchTop1000,
+  uploadTop1000,
+  deleteTop1000,
+  fetchCh25Watchlist,
+  addCh25WatchlistPlayer,
+  removeCh25WatchlistPlayer,
+  Top1000Payload,
+  Ch25WatchlistEntry,
 } from '../api';
 import { findColumnIndex, formatNumber, parseGermanNumber } from '../utils';
 import { Card } from './Card';
@@ -296,7 +304,18 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   const [pendingAddPlayer, setPendingAddPlayer] = useState<StatProgressRow | null>(null);
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   const [expandedNotesId, setExpandedNotesId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'list' | 'watchlist'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'top1000' | 'watchlist'>('list');
+  const [top1000, setTop1000] = useState<Top1000Payload | null>(null);
+  const [top1000Loading, setTop1000Loading] = useState(false);
+  const [top1000UploadBusy, setTop1000UploadBusy] = useState(false);
+  const [top1000Error, setTop1000Error] = useState<string | null>(null);
+  const [top1000Search, setTop1000Search] = useState('');
+  const [top1000ChFilter, setTop1000ChFilter] = useState<'all' | 'below25' | 'at25' | 'above25'>('all');
+  const [top1000Sort, setTop1000Sort] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [ch25List, setCh25List] = useState<Ch25WatchlistEntry[]>([]);
+  const [ch25Busy, setCh25Busy] = useState<Set<string>>(new Set());
+  const top1000InputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingTop1000Delete, setPendingTop1000Delete] = useState(false);
   const [watchlistFilter, setWatchlistFilter] = useState<'all' | 'disappeared' | 'power-up' | 'zeroed'>('all');
   const [pendingWatchlistToggle, setPendingWatchlistToggle] = useState<{ id: string; name: string; action: 'add' | 'remove' } | null>(null);
   const [createdEventIds, setCreatedEventIds] = useState<Set<string>>(new Set());
@@ -933,6 +952,198 @@ const requestSort = (key: SortKey) => {
     }
   };
 
+  // ===== Top 1000 + <CH25 Watchlist =====
+
+  useEffect(() => {
+    if (!token) return;
+    let isMounted = true;
+    setTop1000Loading(true);
+    setTop1000Error(null);
+    fetchTop1000(apiSlug)
+      .then(payload => { if (isMounted) setTop1000(payload); })
+      .catch(err => {
+        console.error(err);
+        if (isMounted) setTop1000Error(err?.message || 'Failed to load Top 1000.');
+      })
+      .finally(() => { if (isMounted) setTop1000Loading(false); });
+    fetchCh25Watchlist(apiSlug)
+      .then(entries => { if (isMounted) setCh25List(entries); })
+      .catch(err => console.error(err));
+    return () => { isMounted = false; };
+  }, [token, apiSlug]);
+
+  // Resolve which column index in top1000.headers holds which field.
+  const top1000Cols = useMemo(() => {
+    if (!top1000) return null;
+    const headers = top1000.headers || [];
+    return {
+      rank: findColumnIndex(headers, ['rank', 'rang', 'platz', '#']),
+      id: findColumnIndex(headers, ['id', 'governor id', 'gov id', 'user id']),
+      name: findColumnIndex(headers, ['name', 'display name', 'spieler']),
+      alliance: findColumnIndex(headers, ['alliance', 'allianz', 'tag']),
+      power: findColumnIndex(headers, ['power', 'kraft']),
+      ch: findColumnIndex(headers, ['city hall', 'ch', 'ch level', 'cityhall', 'city hall level']),
+      kp: findColumnIndex(headers, ['kill points', 'total kill points', 'kp']),
+      dead: findColumnIndex(headers, ['dead', 'deaths', 'tote', 'dead troops']),
+    };
+  }, [top1000]);
+
+  type Top1000Row = {
+    rank?: number;
+    id: string;
+    name: string;
+    alliance: string;
+    power: number;
+    ch?: number;
+    kp?: number;
+    dead?: number;
+  };
+
+  const top1000Rows = useMemo<Top1000Row[]>(() => {
+    if (!top1000 || !top1000Cols) return [];
+    const cols = top1000Cols;
+    return (top1000.data || [])
+      .map((row, idx): Top1000Row | null => {
+        const id = cols.id !== undefined ? String(row[cols.id] ?? '').trim() : '';
+        if (!id || id === 'undefined') return null;
+        const numOrUndef = (i?: number) => (i !== undefined ? parseAnyNumber(row[i]) : undefined);
+        return {
+          rank: cols.rank !== undefined ? parseAnyNumber(row[cols.rank]) || (idx + 1) : (idx + 1),
+          id,
+          name: cols.name !== undefined ? String(row[cols.name] ?? '') : '',
+          alliance: cols.alliance !== undefined ? String(row[cols.alliance] ?? '') : '',
+          power: cols.power !== undefined ? parseAnyNumber(row[cols.power]) : 0,
+          ch: numOrUndef(cols.ch),
+          kp: numOrUndef(cols.kp),
+          dead: numOrUndef(cols.dead),
+        };
+      })
+      .filter((r): r is Top1000Row => r !== null);
+  }, [top1000, top1000Cols]);
+
+  const ch25IdSet = useMemo(() => new Set(ch25List.map(e => e.playerId)), [ch25List]);
+
+  const filteredTop1000 = useMemo(() => {
+    const q = top1000Search.trim().toLowerCase();
+    return top1000Rows.filter(row => {
+      if (top1000ChFilter !== 'all') {
+        if (row.ch === undefined) return false;
+        if (top1000ChFilter === 'below25' && !(row.ch < 25)) return false;
+        if (top1000ChFilter === 'at25' && row.ch !== 25) return false;
+        if (top1000ChFilter === 'above25' && !(row.ch > 25)) return false;
+      }
+      if (q) {
+        return (
+          row.name.toLowerCase().includes(q) ||
+          row.id.toLowerCase().includes(q) ||
+          (row.alliance || '').toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [top1000Rows, top1000Search, top1000ChFilter]);
+
+  const sortedTop1000 = useMemo(() => {
+    if (!top1000Sort) return filteredTop1000;
+    const { key, direction } = top1000Sort;
+    const dir = direction === 'asc' ? 1 : -1;
+    const getString = (v?: string) => (v || '').toLowerCase();
+    const getNumber = (v?: number) => (v === undefined ? -1 : v);
+    return [...filteredTop1000].sort((a, b) => {
+      switch (key) {
+        case 'rank': return (getNumber(a.rank) - getNumber(b.rank)) * dir;
+        case 'id': return getString(a.id).localeCompare(getString(b.id), undefined, { numeric: true }) * dir;
+        case 'name': return getString(a.name).localeCompare(getString(b.name)) * dir;
+        case 'alliance': return getString(a.alliance).localeCompare(getString(b.alliance)) * dir;
+        case 'power': return (getNumber(a.power) - getNumber(b.power)) * dir;
+        case 'ch': return (getNumber(a.ch) - getNumber(b.ch)) * dir;
+        case 'kp': return (getNumber(a.kp) - getNumber(b.kp)) * dir;
+        case 'dead': return (getNumber(a.dead) - getNumber(b.dead)) * dir;
+        default: return 0;
+      }
+    });
+  }, [filteredTop1000, top1000Sort]);
+
+  const requestTop1000Sort = (key: string) => {
+    setTop1000Sort(prev => {
+      if (!prev || prev.key !== key) return { key, direction: 'asc' };
+      if (prev.direction === 'asc') return { key, direction: 'desc' };
+      return null;
+    });
+  };
+  const top1000SortIndicator = (key: string) => {
+    if (!top1000Sort || top1000Sort.key !== key) return null;
+    return top1000Sort.direction === 'asc' ? ' ▲' : ' ▼';
+  };
+
+  const handleTop1000FileSelected = async (file: File | null) => {
+    if (!file) return;
+    setTop1000UploadBusy(true);
+    setTop1000Error(null);
+    try {
+      await uploadTop1000(file, apiSlug);
+      const payload = await fetchTop1000(apiSlug);
+      setTop1000(payload);
+    } catch (err: any) {
+      console.error(err);
+      setTop1000Error(err?.message || 'Upload failed.');
+    } finally {
+      setTop1000UploadBusy(false);
+      if (top1000InputRef.current) top1000InputRef.current.value = '';
+    }
+  };
+
+  const handleTop1000Delete = async () => {
+    setTop1000UploadBusy(true);
+    setTop1000Error(null);
+    try {
+      await deleteTop1000(apiSlug);
+      setTop1000(null);
+    } catch (err: any) {
+      console.error(err);
+      setTop1000Error(err?.message || 'Delete failed.');
+    } finally {
+      setTop1000UploadBusy(false);
+      setPendingTop1000Delete(false);
+    }
+  };
+
+  const handleAddCh25 = async (playerId: string) => {
+    if (ch25IdSet.has(playerId) || ch25Busy.has(playerId)) return;
+    setCh25Busy(prev => { const n = new Set(prev); n.add(playerId); return n; });
+    try {
+      await addCh25WatchlistPlayer(playerId, undefined, apiSlug);
+      setCh25List(prev => [
+        { playerId, notes: '', addedAt: new Date().toISOString() },
+        ...prev,
+      ]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCh25Busy(prev => { const n = new Set(prev); n.delete(playerId); return n; });
+    }
+  };
+
+  const handleRemoveCh25 = async (playerId: string) => {
+    if (ch25Busy.has(playerId)) return;
+    setCh25Busy(prev => { const n = new Set(prev); n.add(playerId); return n; });
+    try {
+      await removeCh25WatchlistPlayer(playerId, apiSlug);
+      setCh25List(prev => prev.filter(e => e.playerId !== playerId));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCh25Busy(prev => { const n = new Set(prev); n.delete(playerId); return n; });
+    }
+  };
+
+  // Look up a row from the loaded Top 1000 by player id (for the watchlist sub-section).
+  const top1000ById = useMemo(() => {
+    const map = new Map<string, Top1000Row>();
+    top1000Rows.forEach(row => map.set(row.id, row));
+    return map;
+  }, [top1000Rows]);
+
   const handleExportXlsx = () => {
     if (sortedPlayers.length === 0) return;
 
@@ -1066,6 +1277,25 @@ const requestSort = (key: SortKey) => {
           <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
             activeTab === 'list' ? 'bg-slate-600 text-slate-200' : 'bg-slate-700 text-slate-400'
           }`}>{sortedPlayers.length}</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('top1000')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+            activeTab === 'top1000' ? 'bg-sky-500/20 text-sky-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Top 1000
+          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+            activeTab === 'top1000' ? 'bg-sky-500/20 text-sky-300' : 'bg-slate-700 text-slate-400'
+          }`}>{top1000Rows.length}</span>
+          {ch25List.length > 0 && (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40"
+              title={`${ch25List.length} player${ch25List.length === 1 ? '' : 's'} on <CH25 watchlist`}
+            >
+              {`<CH25 ${ch25List.length}`}
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab('watchlist')}
@@ -1619,6 +1849,265 @@ const requestSort = (key: SortKey) => {
       </Card>
       </>}
 
+      {activeTab === 'top1000' && (
+        <div className="space-y-6">
+          <Card className="p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-sky-300 mb-1">Top 1000 Power Ranking</h3>
+                {top1000 ? (
+                  <p className="text-sm text-slate-400">
+                    File: <span className="text-white font-medium">{top1000.filename}</span>
+                    {top1000.uploadedAt && (
+                      <> · uploaded {new Date(top1000.uploadedAt).toLocaleString()}</>
+                    )}
+                    {' · '}{top1000Rows.length} players
+                  </p>
+                ) : (
+                  <p className="text-sm text-slate-400">
+                    Upload the Top 1000 xlsx export from your kingdom power ranking scan.
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={top1000InputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={(e) => handleTop1000FileSelected(e.target.files?.[0] || null)}
+                />
+                <button
+                  type="button"
+                  onClick={() => top1000InputRef.current?.click()}
+                  disabled={top1000UploadBusy}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium disabled:opacity-60"
+                >
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  {top1000UploadBusy ? 'Working…' : (top1000 ? 'Replace upload' : 'Upload XLSX')}
+                </button>
+                {top1000 && !top1000UploadBusy && (
+                  <button
+                    type="button"
+                    onClick={() => setPendingTop1000Delete(true)}
+                    className="text-xs text-rose-300 hover:text-rose-200 underline decoration-dotted"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            </div>
+            {top1000Error && (
+              <p className="text-sm text-rose-300 mt-3">{top1000Error}</p>
+            )}
+            {top1000Loading && (
+              <p className="text-sm text-slate-400 mt-3">Loading…</p>
+            )}
+            {top1000 && top1000Cols && (top1000Cols.id === undefined || top1000Cols.name === undefined) && (
+              <p className="text-xs text-amber-300 mt-3">
+                Could not detect required columns. Expected at least “ID” and “Name”. Found headers: {top1000.headers.join(', ')}
+              </p>
+            )}
+          </Card>
+
+          {ch25List.length > 0 && (
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold text-amber-300">{`<CH25 Watchlist (${ch25List.length})`}</h3>
+                <p className="text-xs text-slate-500">Persistent — survives re-uploads</p>
+              </div>
+              <Table frame={false} className="table-fixed min-w-full [&_td]:px-2 [&_td]:py-2">
+                <TableHeader>
+                  <tr>
+                    <TableCell header className="w-[110px]">Gov ID</TableCell>
+                    <TableCell header className="w-[180px] whitespace-normal">Name</TableCell>
+                    <TableCell header className="w-[120px]">Alliance</TableCell>
+                    <TableCell header className="w-[80px]">CH</TableCell>
+                    <TableCell header className="w-[120px]">Power</TableCell>
+                    <TableCell header className="w-[140px]">Added</TableCell>
+                    <TableCell header className="w-[80px]">Actions</TableCell>
+                  </tr>
+                </TableHeader>
+                <tbody>
+                  {ch25List.map((entry, idx) => {
+                    const row = top1000ById.get(entry.playerId);
+                    return (
+                      <TableRow key={entry.playerId} className={idx % 2 === 0 ? 'bg-slate-900/70' : 'bg-slate-800/40'}>
+                        <TableCell>{entry.playerId}</TableCell>
+                        <TableCell className="whitespace-normal">
+                          {row?.name || <span className="text-slate-500 italic">not in current upload</span>}
+                        </TableCell>
+                        <TableCell>{row?.alliance || '-'}</TableCell>
+                        <TableCell>
+                          {row?.ch !== undefined ? (
+                            <span className={row.ch < 25 ? 'text-amber-300 font-semibold' : 'text-slate-300'}>{row.ch}</span>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell>{row?.power !== undefined ? formatNumber(row.power) : '-'}</TableCell>
+                        <TableCell className="text-xs text-slate-400">
+                          {entry.addedAt ? new Date(entry.addedAt).toLocaleDateString() : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCh25(entry.playerId)}
+                            disabled={ch25Busy.has(entry.playerId)}
+                            className="text-rose-200 hover:text-rose-100 bg-rose-500/20 hover:bg-rose-500/30 rounded px-2 py-1 disabled:opacity-40"
+                            title="Remove from <CH25 watchlist"
+                          >
+                            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </Card>
+          )}
+
+          {top1000 && top1000Rows.length > 0 && (
+            <Card className="p-6">
+              <div className="flex flex-wrap items-end gap-3 mb-4">
+                <div className="flex flex-col flex-1 min-w-[200px]">
+                  <label className="text-xs text-slate-400">Search</label>
+                  <input
+                    type="text"
+                    value={top1000Search}
+                    onChange={(e) => setTop1000Search(e.target.value)}
+                    placeholder="Name, GOV ID, or alliance"
+                    className="bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-sm text-white"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-400">City Hall</label>
+                  <div className="flex rounded overflow-hidden border border-slate-700">
+                    {([
+                      { key: 'all', label: 'All' },
+                      { key: 'below25', label: '<25' },
+                      { key: 'at25', label: '=25' },
+                      { key: 'above25', label: '>25' },
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setTop1000ChFilter(opt.key)}
+                        className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                          top1000ChFilter === opt.key
+                            ? 'bg-sky-500 text-white'
+                            : 'bg-slate-900 text-slate-400 hover:bg-slate-700 hover:text-white'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 ml-auto">
+                  Showing {sortedTop1000.length} of {top1000Rows.length}
+                </p>
+              </div>
+              <div className="max-h-[640px] overflow-auto">
+                <Table frame={false} className="table-fixed min-w-full [&_td]:px-2 [&_td]:py-2">
+                  <TableHeader>
+                    <tr>
+                      <TableCell header className="w-[60px] cursor-pointer select-none" onClick={() => requestTop1000Sort('rank')}>Rank{top1000SortIndicator('rank')}</TableCell>
+                      <TableCell header className="w-[100px] cursor-pointer select-none" onClick={() => requestTop1000Sort('id')}>Gov ID{top1000SortIndicator('id')}</TableCell>
+                      <TableCell header className="w-[160px] whitespace-normal cursor-pointer select-none" onClick={() => requestTop1000Sort('name')}>Name{top1000SortIndicator('name')}</TableCell>
+                      <TableCell header className="w-[110px] cursor-pointer select-none" onClick={() => requestTop1000Sort('alliance')}>Alliance{top1000SortIndicator('alliance')}</TableCell>
+                      {top1000Cols?.ch !== undefined && (
+                        <TableCell header className="w-[60px] cursor-pointer select-none" onClick={() => requestTop1000Sort('ch')}>CH{top1000SortIndicator('ch')}</TableCell>
+                      )}
+                      <TableCell header className="w-[120px] cursor-pointer select-none" onClick={() => requestTop1000Sort('power')}>Power{top1000SortIndicator('power')}</TableCell>
+                      {top1000Cols?.kp !== undefined && (
+                        <TableCell header className="w-[120px] cursor-pointer select-none" onClick={() => requestTop1000Sort('kp')}>Kill Points{top1000SortIndicator('kp')}</TableCell>
+                      )}
+                      {top1000Cols?.dead !== undefined && (
+                        <TableCell header className="w-[110px] cursor-pointer select-none" onClick={() => requestTop1000Sort('dead')}>Deads{top1000SortIndicator('dead')}</TableCell>
+                      )}
+                      <TableCell header className="w-[120px]">Actions</TableCell>
+                    </tr>
+                  </TableHeader>
+                  <tbody>
+                    {sortedTop1000.map((row, idx) => {
+                      const onCh25 = ch25IdSet.has(row.id);
+                      const busy = ch25Busy.has(row.id);
+                      return (
+                        <TableRow
+                          key={row.id}
+                          className={`${idx % 2 === 0 ? 'bg-slate-900/70' : 'bg-slate-800/40'} ${row.ch !== undefined && row.ch < 25 ? 'border-l-2 border-amber-400/60' : ''}`}
+                        >
+                          <TableCell>{row.rank ?? '-'}</TableCell>
+                          <TableCell>{row.id}</TableCell>
+                          <TableCell className="whitespace-normal">{row.name}</TableCell>
+                          <TableCell>{row.alliance || '-'}</TableCell>
+                          {top1000Cols?.ch !== undefined && (
+                            <TableCell>
+                              {row.ch !== undefined ? (
+                                <span className={row.ch < 25 ? 'text-amber-300 font-semibold' : 'text-slate-300'}>{row.ch}</span>
+                              ) : '-'}
+                            </TableCell>
+                          )}
+                          <TableCell>{formatNumber(row.power || 0)}</TableCell>
+                          {top1000Cols?.kp !== undefined && (
+                            <TableCell>{row.kp !== undefined ? formatNumber(row.kp) : '-'}</TableCell>
+                          )}
+                          {top1000Cols?.dead !== undefined && (
+                            <TableCell>{row.dead !== undefined ? formatNumber(row.dead) : '-'}</TableCell>
+                          )}
+                          <TableCell>
+                            {onCh25 ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                On &lt;CH25
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleAddCh25(row.id)}
+                                disabled={busy}
+                                className="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-40"
+                                title="Add to <CH25 watchlist"
+                              >
+                                + &lt;CH25
+                              </button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {sortedTop1000.length === 0 && (
+                      <TableRow>
+                        <td colSpan={9} className="px-4 py-6 text-center text-slate-400">No players match the filter.</td>
+                      </TableRow>
+                    )}
+                  </tbody>
+                </Table>
+              </div>
+            </Card>
+          )}
+
+          {!top1000 && !top1000Loading && (
+            <Card className="p-8">
+              <div className="flex flex-col items-center text-center gap-3">
+                <svg viewBox="0 0 24 24" className="h-10 w-10 text-slate-500" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="12" y1="18" x2="12" y2="12" />
+                  <line x1="9" y1="15" x2="15" y2="15" />
+                </svg>
+                <p className="text-sm text-slate-400">No Top 1000 file uploaded yet.</p>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
       {activeTab === 'watchlist' && (
         <Card className="p-6">
           <div className="space-y-4">
@@ -1934,6 +2423,16 @@ const requestSort = (key: SortKey) => {
           setPendingBulkRemove(false);
         }}
         onCancel={() => setPendingBulkRemove(false)}
+      />
+
+      <ConfirmDialog
+        open={pendingTop1000Delete}
+        title="Delete Top 1000 upload?"
+        message="The current Top 1000 file and its parsed data will be removed. The <CH25 watchlist entries are kept."
+        confirmLabel={top1000UploadBusy ? 'Deleting…' : 'Delete'}
+        danger={true}
+        onConfirm={handleTop1000Delete}
+        onCancel={() => setPendingTop1000Delete(false)}
       />
 
       <ConfirmDialog

@@ -10,10 +10,12 @@ const API_BASE_URL =
 /**
  * Hilfsfunktion für Header mit Auth-Token
  */
+function getAuthToken(): string | null {
+  return localStorage.getItem('authToken');
+}
+
 function getAuthHeaders() {
-  // Wir lesen 'authToken', wie es im AuthContext gesetzt wird
-  const token = localStorage.getItem('authToken'); 
-  
+  const token = getAuthToken();
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -236,6 +238,128 @@ export async function deleteMigrationList(eventId: string, slug?: string): Promi
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.error || 'Failed to delete migration list');
+  }
+  return res.json();
+}
+
+// ==================== TOP 1000 + <CH25 WATCHLIST ====================
+
+export type Top1000Payload = {
+  filename: string;
+  uploadedAt: string | null;
+  headers: string[];
+  data: any[][];
+};
+
+export async function fetchTop1000(slug?: string): Promise<Top1000Payload | null> {
+  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/top1000${query}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to load Top 1000');
+  }
+  return res.json();
+}
+
+export async function uploadTop1000(
+  file: File,
+  slug?: string
+): Promise<{ success: boolean; rowCount: number }> {
+  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  const form = new FormData();
+  form.append('file', file);
+  const token = getAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE_URL}/api/top1000/upload${query}`, {
+    method: 'POST',
+    headers,
+    body: form,
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to upload Top 1000');
+  }
+  return res.json();
+}
+
+export async function deleteTop1000(slug?: string): Promise<{ success: boolean }> {
+  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/top1000${query}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to delete Top 1000');
+  }
+  return res.json();
+}
+
+export type Ch25WatchlistEntry = { playerId: string; notes: string; addedAt: string | null };
+
+export async function fetchCh25Watchlist(slug?: string): Promise<Ch25WatchlistEntry[]> {
+  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/ch25-watchlist${query}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to load <CH25 watchlist');
+  }
+  return res.json();
+}
+
+export async function addCh25WatchlistPlayer(
+  playerId: string,
+  notes?: string,
+  slug?: string
+): Promise<{ success: boolean }> {
+  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/ch25-watchlist${query}`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ playerId, notes }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to add to <CH25 watchlist');
+  }
+  return res.json();
+}
+
+export async function updateCh25WatchlistNotes(
+  playerId: string,
+  notes: string,
+  slug?: string
+): Promise<{ success: boolean }> {
+  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/ch25-watchlist/${encodeURIComponent(playerId)}/notes${query}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ notes }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to update notes');
+  }
+  return res.json();
+}
+
+export async function removeCh25WatchlistPlayer(
+  playerId: string,
+  slug?: string
+): Promise<{ success: boolean }> {
+  const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/ch25-watchlist/${encodeURIComponent(playerId)}${query}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to remove from <CH25 watchlist');
   }
   return res.json();
 }

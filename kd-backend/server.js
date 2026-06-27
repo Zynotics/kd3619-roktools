@@ -67,6 +67,8 @@ app.use('/api/admin/kvk/events', require('./routes/kvk'));
 app.use('/api/admin/logs', require('./routes/admin/logs'));
 app.use('/api/migration-list', require('./routes/migration'));
 app.use('/api/watchlist', require('./routes/watchlist'));
+app.use('/api/top1000', require('./routes/top1000'));
+app.use('/api/ch25-watchlist', require('./routes/ch25watchlist'));
 app.use('/api/public', require('./routes/public'));
 app.use('/', require('./routes/files')); // /overview/*, /honor/*, /activity/*
 
