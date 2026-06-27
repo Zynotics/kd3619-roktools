@@ -310,7 +310,8 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   const [top1000UploadBusy, setTop1000UploadBusy] = useState(false);
   const [top1000Error, setTop1000Error] = useState<string | null>(null);
   const [top1000Search, setTop1000Search] = useState('');
-  const [top1000ChFilter, setTop1000ChFilter] = useState<'all' | 'below25' | 'at25' | 'above25'>('all');
+  const [top1000ChFilter, setTop1000ChFilter] = useState<'all' | 'below25' | 'at25'>('all');
+  const [top1000AllianceFilter, setTop1000AllianceFilter] = useState<string>('all');
   const [top1000Sort, setTop1000Sort] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [ch25List, setCh25List] = useState<Ch25WatchlistEntry[]>([]);
   const [ch25Busy, setCh25Busy] = useState<Set<string>>(new Set());
@@ -985,6 +986,7 @@ const requestSort = (key: SortKey) => {
       ch: findColumnIndex(headers, ['city hall', 'ch', 'ch level', 'cityhall', 'city hall level']),
       kp: findColumnIndex(headers, ['kill points', 'total kill points', 'kp']),
       dead: findColumnIndex(headers, ['dead', 'deaths', 'tote', 'dead troops']),
+      troopsPower: findColumnIndex(headers, ['troops power', 'troop power', 'troopspower', 'truppen kraft', 'truppenkraft']),
     };
   }, [top1000]);
 
@@ -997,6 +999,7 @@ const requestSort = (key: SortKey) => {
     ch?: number;
     kp?: number;
     dead?: number;
+    troopsPower?: number;
   };
 
   const top1000Rows = useMemo<Top1000Row[]>(() => {
@@ -1016,12 +1019,19 @@ const requestSort = (key: SortKey) => {
           ch: numOrUndef(cols.ch),
           kp: numOrUndef(cols.kp),
           dead: numOrUndef(cols.dead),
+          troopsPower: numOrUndef(cols.troopsPower),
         };
       })
       .filter((r): r is Top1000Row => r !== null);
   }, [top1000, top1000Cols]);
 
   const ch25IdSet = useMemo(() => new Set(ch25List.map(e => e.playerId)), [ch25List]);
+
+  const top1000AllianceOptions = useMemo(() => {
+    const alliances = new Set<string>();
+    top1000Rows.forEach(row => alliances.add(row.alliance || ''));
+    return Array.from(alliances).sort();
+  }, [top1000Rows]);
 
   const filteredTop1000 = useMemo(() => {
     const q = top1000Search.trim().toLowerCase();
@@ -1030,7 +1040,9 @@ const requestSort = (key: SortKey) => {
         if (row.ch === undefined) return false;
         if (top1000ChFilter === 'below25' && !(row.ch < 25)) return false;
         if (top1000ChFilter === 'at25' && row.ch !== 25) return false;
-        if (top1000ChFilter === 'above25' && !(row.ch > 25)) return false;
+      }
+      if (top1000AllianceFilter !== 'all' && (row.alliance || '') !== top1000AllianceFilter) {
+        return false;
       }
       if (q) {
         return (
@@ -1041,7 +1053,7 @@ const requestSort = (key: SortKey) => {
       }
       return true;
     });
-  }, [top1000Rows, top1000Search, top1000ChFilter]);
+  }, [top1000Rows, top1000Search, top1000ChFilter, top1000AllianceFilter]);
 
   const sortedTop1000 = useMemo(() => {
     if (!top1000Sort) return filteredTop1000;
@@ -1056,6 +1068,7 @@ const requestSort = (key: SortKey) => {
         case 'name': return getString(a.name).localeCompare(getString(b.name)) * dir;
         case 'alliance': return getString(a.alliance).localeCompare(getString(b.alliance)) * dir;
         case 'power': return (getNumber(a.power) - getNumber(b.power)) * dir;
+        case 'troopsPower': return (getNumber(a.troopsPower) - getNumber(b.troopsPower)) * dir;
         case 'ch': return (getNumber(a.ch) - getNumber(b.ch)) * dir;
         case 'kp': return (getNumber(a.kp) - getNumber(b.kp)) * dir;
         case 'dead': return (getNumber(a.dead) - getNumber(b.dead)) * dir;
@@ -1992,7 +2005,6 @@ const requestSort = (key: SortKey) => {
                       { key: 'all', label: 'All' },
                       { key: 'below25', label: '<25' },
                       { key: 'at25', label: '=25' },
-                      { key: 'above25', label: '>25' },
                     ] as const).map(opt => (
                       <button
                         key={opt.key}
@@ -2008,6 +2020,21 @@ const requestSort = (key: SortKey) => {
                       </button>
                     ))}
                   </div>
+                </div>
+                <div className="flex flex-col">
+                  <label className="text-xs text-slate-400">Alliance</label>
+                  <select
+                    value={top1000AllianceFilter}
+                    onChange={(e) => setTop1000AllianceFilter(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white min-w-[120px]"
+                  >
+                    <option value="all">All</option>
+                    {top1000AllianceOptions.map(alliance => (
+                      <option key={alliance || 'none'} value={alliance}>
+                        {alliance || '(No Alliance)'}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <p className="text-xs text-slate-500 ml-auto">
                   Showing {sortedTop1000.length} of {top1000Rows.length}
@@ -2025,6 +2052,9 @@ const requestSort = (key: SortKey) => {
                         <TableCell header className="w-[60px] cursor-pointer select-none" onClick={() => requestTop1000Sort('ch')}>CH{top1000SortIndicator('ch')}</TableCell>
                       )}
                       <TableCell header className="w-[120px] cursor-pointer select-none" onClick={() => requestTop1000Sort('power')}>Power{top1000SortIndicator('power')}</TableCell>
+                      {top1000Cols?.troopsPower !== undefined && (
+                        <TableCell header className="w-[120px] cursor-pointer select-none" onClick={() => requestTop1000Sort('troopsPower')}>Troop Power{top1000SortIndicator('troopsPower')}</TableCell>
+                      )}
                       {top1000Cols?.kp !== undefined && (
                         <TableCell header className="w-[120px] cursor-pointer select-none" onClick={() => requestTop1000Sort('kp')}>Kill Points{top1000SortIndicator('kp')}</TableCell>
                       )}
@@ -2055,6 +2085,9 @@ const requestSort = (key: SortKey) => {
                             </TableCell>
                           )}
                           <TableCell>{formatNumber(row.power || 0)}</TableCell>
+                          {top1000Cols?.troopsPower !== undefined && (
+                            <TableCell>{row.troopsPower !== undefined ? formatNumber(row.troopsPower) : '-'}</TableCell>
+                          )}
                           {top1000Cols?.kp !== undefined && (
                             <TableCell>{row.kp !== undefined ? formatNumber(row.kp) : '-'}</TableCell>
                           )}
@@ -2083,7 +2116,7 @@ const requestSort = (key: SortKey) => {
                     })}
                     {sortedTop1000.length === 0 && (
                       <TableRow>
-                        <td colSpan={9} className="px-4 py-6 text-center text-slate-400">No players match the filter.</td>
+                        <td colSpan={10} className="px-4 py-6 text-center text-slate-400">No players match the filter.</td>
                       </TableRow>
                     )}
                   </tbody>
