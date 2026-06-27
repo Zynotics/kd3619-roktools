@@ -527,9 +527,46 @@ async function initCh25WatchlistTable() {
         notes TEXT,
         added_at TIMESTAMPTZ DEFAULT NOW(),
         added_by_user_id TEXT,
+        location TEXT,
+        zeroed BOOLEAN DEFAULT FALSE,
+        zeroed_at TIMESTAMPTZ,
+        base_power BIGINT,
+        base_troops_power BIGINT,
+        base_name TEXT,
+        base_alliance TEXT,
+        base_ch INTEGER,
         PRIMARY KEY (kingdom_id, player_id),
         FOREIGN KEY (kingdom_id) REFERENCES kingdoms(id) ON DELETE CASCADE
       )
+    `);
+    // Upgrade existing installs that pre-date the location/zeroed/base_* cols.
+    await query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ch25_watchlist' AND column_name='location') THEN
+          ALTER TABLE ch25_watchlist ADD COLUMN location TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ch25_watchlist' AND column_name='zeroed') THEN
+          ALTER TABLE ch25_watchlist ADD COLUMN zeroed BOOLEAN DEFAULT FALSE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ch25_watchlist' AND column_name='zeroed_at') THEN
+          ALTER TABLE ch25_watchlist ADD COLUMN zeroed_at TIMESTAMPTZ;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ch25_watchlist' AND column_name='base_power') THEN
+          ALTER TABLE ch25_watchlist ADD COLUMN base_power BIGINT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ch25_watchlist' AND column_name='base_troops_power') THEN
+          ALTER TABLE ch25_watchlist ADD COLUMN base_troops_power BIGINT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ch25_watchlist' AND column_name='base_name') THEN
+          ALTER TABLE ch25_watchlist ADD COLUMN base_name TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ch25_watchlist' AND column_name='base_alliance') THEN
+          ALTER TABLE ch25_watchlist ADD COLUMN base_alliance TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ch25_watchlist' AND column_name='base_ch') THEN
+          ALTER TABLE ch25_watchlist ADD COLUMN base_ch INTEGER;
+        END IF;
+      END $$;
     `);
     console.log('Postgres: ch25_watchlist table checked/updated.');
   } catch (e) {

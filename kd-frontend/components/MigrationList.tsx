@@ -14,6 +14,7 @@ import {
   deleteTop1000,
   fetchCh25Watchlist,
   addCh25WatchlistPlayer,
+  updateCh25WatchlistEntry,
   removeCh25WatchlistPlayer,
   Top1000Payload,
   Ch25WatchlistEntry,
@@ -304,7 +305,7 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   const [pendingAddPlayer, setPendingAddPlayer] = useState<StatProgressRow | null>(null);
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   const [expandedNotesId, setExpandedNotesId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'list' | 'top1000' | 'watchlist'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'top1000' | 'watchlist' | 'ch25below'>('list');
   const [top1000, setTop1000] = useState<Top1000Payload | null>(null);
   const [top1000Loading, setTop1000Loading] = useState(false);
   const [top1000UploadBusy, setTop1000UploadBusy] = useState(false);
@@ -1140,19 +1141,88 @@ const requestSort = (key: SortKey) => {
     }
   };
 
+  // Add a Top 1000 player to the migration list for the currently selected
+  // event. If the list hasn't been created yet for this event, create the
+  // marker first so the auto-save effect will actually fire.
+  const handleAddTop1000ToMigrationList = async (playerId: string) => {
+    if (!selectedEventId) return;
+    try {
+      if (!isListCreatedForCurrentEvent) {
+        await createMigrationList(selectedEventId, apiSlug);
+        setCreatedEventIds(prev => {
+          const next = new Set(prev);
+          next.add(selectedEventId);
+          return next;
+        });
+        setIsPersistLoaded(true);
+      }
+      setExcludedIds(prev => prev.filter(existing => existing !== playerId));
+      setManualIds(prev => (prev.includes(playerId) ? prev : [...prev, playerId]));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleAddCh25 = async (playerId: string) => {
     if (ch25IdSet.has(playerId) || ch25Busy.has(playerId)) return;
     setCh25Busy(prev => { const n = new Set(prev); n.add(playerId); return n; });
     try {
-      await addCh25WatchlistPlayer(playerId, undefined, apiSlug);
+      // Snapshot the current Top 1000 row as the baseline so we can later
+      // compute Δ Power even though Top 1000 history isn't stored.
+      const snapRow = top1000Rows.find(r => r.id === playerId);
+      const payload = {
+        playerId,
+        basePower: snapRow?.power ?? null,
+        baseTroopsPower: snapRow?.troopsPower ?? null,
+        baseName: snapRow?.name ?? '',
+        baseAlliance: snapRow?.alliance ?? '',
+        baseCh: snapRow?.ch ?? null,
+      };
+      await addCh25WatchlistPlayer(payload, apiSlug);
       setCh25List(prev => [
-        { playerId, notes: '', addedAt: new Date().toISOString() },
+        {
+          playerId,
+          notes: '',
+          addedAt: new Date().toISOString(),
+          location: '',
+          zeroed: false,
+          zeroedAt: null,
+          basePower: payload.basePower,
+          baseTroopsPower: payload.baseTroopsPower,
+          baseName: payload.baseName,
+          baseAlliance: payload.baseAlliance,
+          baseCh: payload.baseCh,
+        },
         ...prev,
       ]);
     } catch (err) {
       console.error(err);
     } finally {
       setCh25Busy(prev => { const n = new Set(prev); n.delete(playerId); return n; });
+    }
+  };
+
+  // Debounced location editor — patches the server when the user stops typing.
+  const ch25LocationDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const handleCh25LocationChange = (playerId: string, value: string) => {
+    setCh25List(prev => prev.map(e => e.playerId === playerId ? { ...e, location: value } : e));
+    const existing = ch25LocationDebounceRef.current[playerId];
+    if (existing) clearTimeout(existing);
+    ch25LocationDebounceRef.current[playerId] = setTimeout(() => {
+      updateCh25WatchlistEntry(playerId, { location: value }, apiSlug).catch(console.error);
+    }, 500);
+  };
+
+  const handleCh25ToggleZeroed = async (playerId: string) => {
+    const entry = ch25List.find(e => e.playerId === playerId);
+    if (!entry) return;
+    const next = !entry.zeroed;
+    const nextAt = next ? new Date().toISOString() : null;
+    setCh25List(prev => prev.map(e => e.playerId === playerId ? { ...e, zeroed: next, zeroedAt: nextAt } : e));
+    try {
+      await updateCh25WatchlistEntry(playerId, { zeroed: next }, apiSlug);
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -1176,17 +1246,118 @@ const requestSort = (key: SortKey) => {
     return map;
   }, [top1000Rows]);
 
-  // <CH25 watchlist always sorted by troop power desc (players not in the
-  // current upload sink to the bottom).
-  const sortedCh25List = useMemo(() => {
-    return [...ch25List].sort((a, b) => {
-      const ta = top1000ById.get(a.playerId)?.troopsPower;
-      const tb = top1000ById.get(b.playerId)?.troopsPower;
-      const va = ta === undefined ? -1 : ta;
-      const vb = tb === undefined ? -1 : tb;
-      return vb - va;
+  // <CH25 watchlist enriched with current values from the latest Top 1000
+  // upload + Δ Power vs. the baseline snapshot taken at add time.
+  type EnrichedCh25Row = Ch25WatchlistEntry & {
+    name: string;
+    alliance: string;
+    ch: number | null;
+    currentPower: number | null;
+    currentTroopsPower: number | null;
+    powerDelta: number | null;
+    disappeared: boolean;
+  };
+  const enrichedCh25List = useMemo<EnrichedCh25Row[]>(() => {
+    return ch25List.map(entry => {
+      const row = top1000ById.get(entry.playerId);
+      const name = row?.name || entry.baseName || entry.playerId;
+      const alliance = row?.alliance || entry.baseAlliance || '';
+      const ch = row?.ch ?? entry.baseCh ?? null;
+      const currentPower = row?.power ?? null;
+      const currentTroopsPower = row?.troopsPower ?? null;
+      const powerDelta =
+        currentPower !== null && entry.basePower !== null && entry.basePower !== undefined
+          ? currentPower - entry.basePower
+          : null;
+      return {
+        ...entry,
+        name, alliance, ch,
+        currentPower, currentTroopsPower,
+        powerDelta,
+        disappeared: !row,
+      };
     });
   }, [ch25List, top1000ById]);
+
+  const sortedCh25List = useMemo(() => {
+    return [...enrichedCh25List].sort((a, b) => {
+      // Always troop power desc (disappeared sinks to bottom).
+      if (a.disappeared && !b.disappeared) return 1;
+      if (!a.disappeared && b.disappeared) return -1;
+      const va = a.currentTroopsPower ?? -1;
+      const vb = b.currentTroopsPower ?? -1;
+      return vb - va;
+    });
+  }, [enrichedCh25List]);
+
+  const [ch25Filter, setCh25Filter] = useState<'all' | 'disappeared' | 'power-up' | 'zeroed'>('all');
+  const [ch25SearchQuery, setCh25SearchQuery] = useState('');
+  const [pendingCh25Remove, setPendingCh25Remove] = useState<{ id: string; name: string } | null>(null);
+  const [pendingCh25Add, setPendingCh25Add] = useState<{ id: string; name: string } | null>(null);
+
+  const filteredCh25List = useMemo(() => {
+    switch (ch25Filter) {
+      case 'disappeared': return sortedCh25List.filter(e => e.disappeared);
+      case 'power-up': return sortedCh25List.filter(e => !e.disappeared && (e.powerDelta ?? 0) > 0);
+      case 'zeroed': return sortedCh25List.filter(e => e.zeroed);
+      default: return sortedCh25List;
+    }
+  }, [sortedCh25List, ch25Filter]);
+
+  // Search across the loaded Top 1000 for new <CH25 candidates. We prefer
+  // sub-CH25 hits but include unknown-CH rows too so the user is never blocked.
+  const ch25SearchResults = useMemo(() => {
+    const q = ch25SearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    const hits: typeof top1000Rows = [];
+    for (const row of top1000Rows) {
+      if (ch25IdSet.has(row.id)) continue;
+      const matches =
+        row.name.toLowerCase().includes(q) ||
+        row.id.toLowerCase().includes(q) ||
+        (row.alliance || '').toLowerCase().includes(q);
+      if (!matches) continue;
+      hits.push(row);
+      if (hits.length >= 8) break;
+    }
+    return hits;
+  }, [ch25SearchQuery, top1000Rows, ch25IdSet]);
+
+  const handleExportCh25Xlsx = () => {
+    if (filteredCh25List.length === 0) return;
+    const rows = filteredCh25List.map(entry => {
+      const status: string[] = [];
+      if (entry.disappeared) status.push('Disappeared');
+      if (!entry.disappeared && (entry.powerDelta ?? 0) > 0) status.push('Power Up');
+      if (entry.zeroed) status.push('Zeroed');
+      return {
+        'Gov ID': entry.playerId,
+        'Name': entry.name,
+        'Alliance': entry.alliance || '',
+        'CH': entry.ch ?? '',
+        'Base Power': entry.basePower ?? '',
+        'Current Power': entry.currentPower ?? '',
+        'Δ Power': entry.powerDelta ?? '',
+        'Troop Power': entry.currentTroopsPower ?? '',
+        'Zeroed': entry.zeroed ? 'Yes' : 'No',
+        'Zeroed At (UTC)': entry.zeroedAt ? new Date(entry.zeroedAt).toISOString() : '',
+        'Location': entry.location || '',
+        'Added': entry.addedAt ? new Date(entry.addedAt).toISOString() : '',
+        'Status': status.join(', '),
+      };
+    });
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    const colKeys = Object.keys(rows[0]);
+    sheet['!cols'] = colKeys.map(key => {
+      const max = Math.max(key.length, ...rows.map(r => String((r as any)[key] ?? '').length));
+      return { wch: Math.min(Math.max(max + 2, 8), 40) };
+    });
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, '<CH25 Watchlist');
+    const safeSlug = (kingdomSlug || 'kingdom').replace(/[\\/:*?"<>|]/g, '_');
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(book, `CH25below_Watchlist_${safeSlug}_${dateStamp}.xlsx`);
+  };
 
   const handleExportXlsx = () => {
     if (sortedPlayers.length === 0) return;
@@ -1380,14 +1551,6 @@ const requestSort = (key: SortKey) => {
           <span className={`text-xs px-1.5 py-0.5 rounded-full ${
             activeTab === 'top1000' ? 'bg-sky-500/20 text-sky-300' : 'bg-slate-700 text-slate-400'
           }`}>{top1000Rows.length}</span>
-          {ch25List.length > 0 && (
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40"
-              title={`${ch25List.length} player${ch25List.length === 1 ? '' : 's'} on <CH25 watchlist`}
-            >
-              {`<CH25 ${ch25List.length}`}
-            </span>
-          )}
         </button>
         <button
           onClick={() => setActiveTab('watchlist')}
@@ -1398,7 +1561,7 @@ const requestSort = (key: SortKey) => {
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
           </svg>
-          Watchlist
+          CH25 Watchlist
           <span className={`text-xs px-1.5 py-0.5 rounded-full ${
             watchlistIdSet.size > 0
               ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
@@ -1407,6 +1570,19 @@ const requestSort = (key: SortKey) => {
           {(watchlistEntries.some(e => e.disappeared) || watchlistEntries.some(e => !e.disappeared && (e.powerDelta ?? 0) > 0)) && (
             <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />
           )}
+        </button>
+        <button
+          onClick={() => setActiveTab('ch25below')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+            activeTab === 'ch25below' ? 'bg-orange-500/20 text-orange-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          &lt;CH25 Watchlist
+          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+            ch25List.length > 0
+              ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
+              : activeTab === 'ch25below' ? 'bg-orange-500/10 text-orange-400' : 'bg-slate-700 text-slate-400'
+          }`}>{ch25List.length}</span>
         </button>
       </div>
       {saveStatus === 'saving' && (
@@ -2006,82 +2182,6 @@ const requestSort = (key: SortKey) => {
             )}
           </Card>
 
-          {ch25List.length > 0 && (
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-amber-300">{`<CH25 Watchlist (${ch25List.length})`}</h3>
-                <p className="text-xs text-slate-500">Persistent — survives re-uploads</p>
-              </div>
-              <Table frame={false} className="table-fixed min-w-full [&_td]:px-2 [&_td]:py-2">
-                <TableHeader>
-                  <tr>
-                    <TableCell header className="w-[110px]">Gov ID</TableCell>
-                    <TableCell header className="w-[180px] whitespace-normal">Name</TableCell>
-                    <TableCell header className="w-[120px]">Alliance</TableCell>
-                    <TableCell header className="w-[60px]">CH</TableCell>
-                    <TableCell header className="w-[110px]">Power</TableCell>
-                    {top1000Cols?.troopsPower !== undefined && (
-                      <TableCell header className="w-[110px]">Troop Power</TableCell>
-                    )}
-                    {top1000Cols?.kp !== undefined && (
-                      <TableCell header className="w-[110px]">Kill Points</TableCell>
-                    )}
-                    {top1000Cols?.dead !== undefined && (
-                      <TableCell header className="w-[100px]">Deads</TableCell>
-                    )}
-                    <TableCell header className="w-[110px]">Added</TableCell>
-                    <TableCell header className="w-[70px]">Actions</TableCell>
-                  </tr>
-                </TableHeader>
-                <tbody>
-                  {sortedCh25List.map((entry, idx) => {
-                    const row = top1000ById.get(entry.playerId);
-                    return (
-                      <TableRow key={entry.playerId} className={idx % 2 === 0 ? 'bg-slate-900/70' : 'bg-slate-800/40'}>
-                        <TableCell>{entry.playerId}</TableCell>
-                        <TableCell className="whitespace-normal">
-                          {row?.name || <span className="text-slate-500 italic">not in current upload</span>}
-                        </TableCell>
-                        <TableCell>{row?.alliance || '-'}</TableCell>
-                        <TableCell>
-                          {row?.ch !== undefined ? (
-                            <span className={row.ch < 25 ? 'text-amber-300 font-semibold' : 'text-slate-300'}>{row.ch}</span>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell>{row?.power !== undefined ? formatNumber(row.power) : '-'}</TableCell>
-                        {top1000Cols?.troopsPower !== undefined && (
-                          <TableCell>{row?.troopsPower !== undefined ? formatNumber(row.troopsPower) : '-'}</TableCell>
-                        )}
-                        {top1000Cols?.kp !== undefined && (
-                          <TableCell>{row?.kp !== undefined ? formatNumber(row.kp) : '-'}</TableCell>
-                        )}
-                        {top1000Cols?.dead !== undefined && (
-                          <TableCell>{row?.dead !== undefined ? formatNumber(row.dead) : '-'}</TableCell>
-                        )}
-                        <TableCell className="text-xs text-slate-400">
-                          {entry.addedAt ? new Date(entry.addedAt).toLocaleDateString() : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveCh25(entry.playerId)}
-                            disabled={ch25Busy.has(entry.playerId)}
-                            className="text-rose-200 hover:text-rose-100 bg-rose-500/20 hover:bg-rose-500/30 rounded px-2 py-1 disabled:opacity-40"
-                            title="Remove from <CH25 watchlist"
-                          >
-                            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                            </svg>
-                          </button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </tbody>
-              </Table>
-            </Card>
-          )}
-
           {top1000 && top1000Rows.length > 0 && (
             <Card className="p-6">
               <div className="flex flex-wrap items-end gap-3 mb-4">
@@ -2203,13 +2303,16 @@ const requestSort = (key: SortKey) => {
                       {top1000Cols?.dead !== undefined && (
                         <TableCell header className="w-[110px] cursor-pointer select-none" onClick={() => requestTop1000Sort('dead')}>Deads{top1000SortIndicator('dead')}</TableCell>
                       )}
-                      <TableCell header className="w-[120px]">Actions</TableCell>
+                      <TableCell header className="w-[200px]">Actions</TableCell>
                     </tr>
                   </TableHeader>
                   <tbody>
                     {sortedTop1000.map((row, idx) => {
                       const onCh25 = ch25IdSet.has(row.id);
-                      const busy = ch25Busy.has(row.id);
+                      const onWatchlist = watchlistIdSet.has(row.id);
+                      const onMigrationList = migrationPlayerIds.has(row.id);
+                      const ch25IsBusy = ch25Busy.has(row.id);
+                      const canAddMl = !!selectedEventId;
                       return (
                         <TableRow
                           key={row.id}
@@ -2236,21 +2339,61 @@ const requestSort = (key: SortKey) => {
                             <TableCell>{row.dead !== undefined ? formatNumber(row.dead) : '-'}</TableCell>
                           )}
                           <TableCell>
-                            {onCh25 ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                                On &lt;CH25
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleAddCh25(row.id)}
-                                disabled={busy}
-                                className="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-40"
-                                title="Add to <CH25 watchlist"
-                              >
-                                + &lt;CH25
-                              </button>
-                            )}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {onWatchlist ? (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                  title="Already on CH25 Watchlist"
+                                >
+                                  WL
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingWatchlistToggle({ id: row.id, name: row.name, action: 'add' })}
+                                  className="text-[11px] px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30"
+                                  title="Add to CH25 Watchlist"
+                                >
+                                  + WL
+                                </button>
+                              )}
+                              {onCh25 ? (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded bg-orange-500/20 text-orange-300 border border-orange-500/40"
+                                  title="Already on <CH25 Watchlist"
+                                >
+                                  &lt;CH25
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddCh25(row.id)}
+                                  disabled={ch25IsBusy}
+                                  className="text-[11px] px-2 py-1 rounded bg-orange-500/20 text-orange-300 border border-orange-500/40 hover:bg-orange-500/30 disabled:opacity-40"
+                                  title="Add to <CH25 Watchlist"
+                                >
+                                  + &lt;CH25
+                                </button>
+                              )}
+                              {onMigrationList ? (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                                  title="Already on Migration List"
+                                >
+                                  ML
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddTop1000ToMigrationList(row.id)}
+                                  disabled={!canAddMl}
+                                  className="text-[11px] px-2 py-1 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  title={canAddMl ? 'Add to Migration List for the selected event' : 'Select a KvK event in the Migration List tab first'}
+                                >
+                                  + ML
+                                </button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -2556,6 +2699,263 @@ const requestSort = (key: SortKey) => {
         </Card>
       )}
 
+      {activeTab === 'ch25below' && (
+        <Card className="p-6">
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-orange-300 mb-1">&lt;CH25 Watchlist</h3>
+                <p className="text-xs text-slate-500">Persistent — survives Top 1000 re-uploads.</p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-start">
+                <div className="relative w-full sm:w-64">
+                  <input
+                    type="text"
+                    value={ch25SearchQuery}
+                    onChange={(e) => setCh25SearchQuery(e.target.value)}
+                    placeholder="Search player to add…"
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-sm text-white placeholder-slate-500"
+                  />
+                  {ch25SearchResults.length > 0 && (
+                    <div className="absolute z-10 top-full mt-1 w-full bg-slate-900 border border-slate-800 rounded-md divide-y divide-slate-800 shadow-lg">
+                      {ch25SearchResults.map(row => (
+                        <button
+                          key={row.id}
+                          type="button"
+                          onClick={() => { setPendingCh25Add({ id: row.id, name: row.name }); setCh25SearchQuery(''); }}
+                          className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 flex items-center justify-between"
+                        >
+                          <span>
+                            {row.name} <span className="text-slate-500">({row.id})</span>
+                            {row.ch !== undefined && (
+                              <span className={`ml-2 text-[10px] ${row.ch < 25 ? 'text-amber-300' : 'text-slate-500'}`}>
+                                CH{row.ch}
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-xs text-slate-500">{row.alliance || ''}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {([
+                    { key: 'all', label: 'All', count: enrichedCh25List.length, activeClass: 'bg-slate-600 text-white' },
+                    { key: 'disappeared', label: 'Disappeared', count: enrichedCh25List.filter(e => e.disappeared).length, activeClass: 'bg-amber-500/30 text-amber-300 border border-amber-500/40' },
+                    { key: 'power-up', label: 'Power ↑', count: enrichedCh25List.filter(e => !e.disappeared && (e.powerDelta ?? 0) > 0).length, activeClass: 'bg-red-500/30 text-red-300 border border-red-500/40' },
+                    { key: 'zeroed', label: 'Zeroed', count: enrichedCh25List.filter(e => e.zeroed).length, activeClass: 'bg-red-900/40 text-red-400 border border-red-700/40' },
+                  ] as const).map(f => (
+                    <button
+                      key={f.key}
+                      onClick={() => setCh25Filter(f.key)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                        ch25Filter === f.key ? f.activeClass : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {f.label}
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                        ch25Filter === f.key ? 'bg-white/10' : 'bg-slate-700 text-slate-500'
+                      }`}>{f.count}</span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={handleExportCh25Xlsx}
+                    disabled={filteredCh25List.length === 0}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-600/20 text-emerald-300 border border-emerald-600/40 hover:bg-emerald-600/30 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    title={filteredCh25List.length === 0 ? 'Nothing to export' : 'Export currently visible rows as XLSX'}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Export XLSX
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {enrichedCh25List.some(e => e.disappeared) && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <div>
+                  <p className="text-sm font-semibold text-amber-300">
+                    {enrichedCh25List.filter(e => e.disappeared).length} players not found in latest Top 1000
+                  </p>
+                  <p className="text-xs text-amber-400/70 mt-0.5">These players may have migrated or got inactive.</p>
+                </div>
+              </div>
+            )}
+            {enrichedCh25List.some(e => !e.disappeared && (e.powerDelta ?? 0) > 0) && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+                </svg>
+                <div>
+                  <p className="text-sm font-semibold text-red-300">
+                    {enrichedCh25List.filter(e => !e.disappeared && (e.powerDelta ?? 0) > 0).length} players have increased power
+                  </p>
+                  <p className="text-xs text-red-400/70 mt-0.5">Watch for accounts growing past sub-CH25 status.</p>
+                </div>
+              </div>
+            )}
+
+            {enrichedCh25List.length === 0 ? (
+              <div className="flex flex-col items-center py-10 text-slate-500">
+                <svg viewBox="0 0 24 24" className="h-10 w-10 mb-2 opacity-40" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+                <p className="text-sm">No players on the &lt;CH25 watchlist yet.</p>
+                <p className="text-xs mt-1">Search above or open the Top 1000 tab and click <span className="text-orange-300">+ &lt;CH25</span>.</p>
+              </div>
+            ) : filteredCh25List.length === 0 ? (
+              <div className="flex flex-col items-center py-8 text-slate-500">
+                <p className="text-sm">No players match the filter.</p>
+              </div>
+            ) : (
+              <Table frame={false} className="table-fixed min-w-full [&_td]:px-2 [&_td]:py-2">
+                <TableHeader>
+                  <tr>
+                    <TableCell header className="w-[90px]">Gov ID</TableCell>
+                    <TableCell header className="w-[160px] whitespace-normal">Name</TableCell>
+                    <TableCell header className="w-[100px]">Alliance</TableCell>
+                    <TableCell header className="w-[60px]">CH</TableCell>
+                    <TableCell header className="w-[120px]">Base Power</TableCell>
+                    <TableCell header className="w-[120px]">Current Power</TableCell>
+                    <TableCell header className="w-[110px]">Δ Power</TableCell>
+                    <TableCell header className="w-[120px]">Troop Power</TableCell>
+                    <TableCell header className="w-[60px]">Zeroed</TableCell>
+                    <TableCell header className="w-[150px]">Location</TableCell>
+                    <TableCell header className="w-[60px]"></TableCell>
+                  </tr>
+                </TableHeader>
+                <tbody>
+                  {filteredCh25List.map((entry, rowIdx) => {
+                    const rowBg = entry.disappeared
+                      ? 'bg-amber-900/20'
+                      : (entry.powerDelta ?? 0) > 0
+                      ? 'bg-red-900/20'
+                      : rowIdx % 2 === 0 ? 'bg-slate-900/70' : 'bg-slate-800/40';
+                    return (
+                      <TableRow key={entry.playerId} className={rowBg}>
+                        <TableCell>{entry.playerId}</TableCell>
+                        <TableCell className="whitespace-normal">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-white">{entry.name}</span>
+                            {entry.disappeared && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                                </svg>
+                                Disappeared
+                              </span>
+                            )}
+                            {!entry.disappeared && (entry.powerDelta ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-red-500/20 text-red-300 border border-red-500/40">
+                                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+                                </svg>
+                                Power ↑
+                              </span>
+                            )}
+                            {entry.zeroed && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-red-600/20 text-red-300 border border-red-500/40">
+                                Zeroed
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{entry.alliance || '-'}</TableCell>
+                        <TableCell>
+                          {entry.ch !== null && entry.ch !== undefined ? (
+                            <span className={entry.ch < 25 ? 'text-amber-300 font-semibold' : 'text-slate-300'}>{entry.ch}</span>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell>{entry.basePower !== null ? formatNumber(entry.basePower) : '-'}</TableCell>
+                        <TableCell>
+                          {entry.disappeared || entry.currentPower === null
+                            ? <span className="text-slate-500">—</span>
+                            : formatNumber(entry.currentPower)
+                          }
+                        </TableCell>
+                        <TableCell>
+                          {entry.powerDelta !== null ? (
+                            <span className={`font-semibold ${
+                              entry.powerDelta > 0 ? 'text-red-400' : entry.powerDelta < 0 ? 'text-emerald-400' : 'text-slate-400'
+                            }`}>
+                              {entry.powerDelta > 0 ? '+' : ''}{formatNumber(entry.powerDelta)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {entry.disappeared || entry.currentTroopsPower === null
+                            ? <span className="text-slate-500">—</span>
+                            : <span className={entry.currentTroopsPower > 0 ? 'text-slate-200' : 'text-slate-500'}>
+                                {formatNumber(entry.currentTroopsPower)}
+                              </span>
+                          }
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col items-start gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleCh25ToggleZeroed(entry.playerId)}
+                              aria-label={entry.zeroed ? 'Mark as not zeroed' : 'Mark as zeroed'}
+                              title={entry.zeroed ? 'Remove zeroed mark' : 'Mark as zeroed'}
+                              className={`rounded px-2 py-1 inline-flex items-center justify-center text-xs font-bold transition-colors ${
+                                entry.zeroed
+                                  ? 'bg-red-600 text-white hover:bg-red-500'
+                                  : 'bg-slate-700 text-slate-400 hover:bg-red-500/30 hover:text-red-300'
+                              }`}
+                            >
+                              0
+                            </button>
+                            {entry.zeroed && entry.zeroedAt && (
+                              <span className="text-[10px] text-slate-500 leading-tight flex flex-col">
+                                <span>{new Date(entry.zeroedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+                                <span>{new Date(entry.zeroedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })} UTC</span>
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <input
+                            type="text"
+                            value={entry.location || ''}
+                            onChange={(e) => handleCh25LocationChange(entry.playerId, e.target.value)}
+                            placeholder=""
+                            className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/60"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            onClick={() => setPendingCh25Remove({ id: entry.playerId, name: entry.name })}
+                            aria-label="Remove from <CH25 Watchlist"
+                            title="Remove from <CH25 Watchlist"
+                            className="text-slate-500 hover:text-rose-300 hover:bg-rose-500/20 rounded p-1 inline-flex items-center justify-center transition-colors"
+                          >
+                            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            )}
+          </div>
+        </Card>
+      )}
+
       <ConfirmDialog
         open={!!pendingWatchlistToggle}
         title={pendingWatchlistToggle?.action === 'add' ? 'Add to Watchlist?' : 'Remove from Watchlist?'}
@@ -2611,6 +3011,32 @@ const requestSort = (key: SortKey) => {
           setPendingBulkRemove(false);
         }}
         onCancel={() => setPendingBulkRemove(false)}
+      />
+
+      <ConfirmDialog
+        open={!!pendingCh25Add}
+        title="Add to <CH25 Watchlist?"
+        message={pendingCh25Add ? `Add "${pendingCh25Add.name}" (${pendingCh25Add.id}) to the <CH25 watchlist? Current power, troop power and CH level will be snapshotted as the baseline.` : ''}
+        confirmLabel="Add"
+        danger={false}
+        onConfirm={() => {
+          if (pendingCh25Add) handleAddCh25(pendingCh25Add.id);
+          setPendingCh25Add(null);
+        }}
+        onCancel={() => setPendingCh25Add(null)}
+      />
+
+      <ConfirmDialog
+        open={!!pendingCh25Remove}
+        title="Remove from <CH25 Watchlist?"
+        message={pendingCh25Remove ? `Remove "${pendingCh25Remove.name}" (${pendingCh25Remove.id}) from the <CH25 watchlist?` : ''}
+        confirmLabel="Remove"
+        danger={true}
+        onConfirm={() => {
+          if (pendingCh25Remove) handleRemoveCh25(pendingCh25Remove.id);
+          setPendingCh25Remove(null);
+        }}
+        onCancel={() => setPendingCh25Remove(null)}
       />
 
       <ConfirmDialog

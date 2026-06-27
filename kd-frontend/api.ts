@@ -298,7 +298,29 @@ export async function deleteTop1000(slug?: string): Promise<{ success: boolean }
   return res.json();
 }
 
-export type Ch25WatchlistEntry = { playerId: string; notes: string; addedAt: string | null };
+export type Ch25WatchlistEntry = {
+  playerId: string;
+  notes: string;
+  addedAt: string | null;
+  location: string;
+  zeroed: boolean;
+  zeroedAt: string | null;
+  basePower: number | null;
+  baseTroopsPower: number | null;
+  baseName: string;
+  baseAlliance: string;
+  baseCh: number | null;
+};
+
+export type Ch25WatchlistAddPayload = {
+  playerId: string;
+  notes?: string;
+  basePower?: number | null;
+  baseTroopsPower?: number | null;
+  baseName?: string;
+  baseAlliance?: string;
+  baseCh?: number | null;
+};
 
 export async function fetchCh25Watchlist(slug?: string): Promise<Ch25WatchlistEntry[]> {
   const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
@@ -313,15 +335,15 @@ export async function fetchCh25Watchlist(slug?: string): Promise<Ch25WatchlistEn
 }
 
 export async function addCh25WatchlistPlayer(
-  playerId: string,
-  notes?: string,
+  payload: Ch25WatchlistAddPayload,
   slug?: string
 ): Promise<{ success: boolean }> {
+  if (!payload?.playerId) throw new Error('playerId is required');
   const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
   const res = await fetch(`${API_BASE_URL}/api/ch25-watchlist${query}`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ playerId, notes }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -330,20 +352,27 @@ export async function addCh25WatchlistPlayer(
   return res.json();
 }
 
-export async function updateCh25WatchlistNotes(
+export type Ch25WatchlistPatch = {
+  location?: string;
+  notes?: string;
+  zeroed?: boolean;
+  zeroedAt?: string | null;
+};
+
+export async function updateCh25WatchlistEntry(
   playerId: string,
-  notes: string,
+  patch: Ch25WatchlistPatch,
   slug?: string
 ): Promise<{ success: boolean }> {
   const query = slug ? `?slug=${encodeURIComponent(slug)}` : '';
-  const res = await fetch(`${API_BASE_URL}/api/ch25-watchlist/${encodeURIComponent(playerId)}/notes${query}`, {
-    method: 'PUT',
+  const res = await fetch(`${API_BASE_URL}/api/ch25-watchlist/${encodeURIComponent(playerId)}${query}`, {
+    method: 'PATCH',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ notes }),
+    body: JSON.stringify(patch),
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to update notes');
+    throw new Error(errorData.error || 'Failed to update <CH25 watchlist entry');
   }
   return res.json();
 }
