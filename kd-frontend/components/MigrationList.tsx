@@ -1935,10 +1935,19 @@ const requestSort = (key: SortKey) => {
                     <TableCell header className="w-[110px]">Gov ID</TableCell>
                     <TableCell header className="w-[180px] whitespace-normal">Name</TableCell>
                     <TableCell header className="w-[120px]">Alliance</TableCell>
-                    <TableCell header className="w-[80px]">CH</TableCell>
-                    <TableCell header className="w-[120px]">Power</TableCell>
-                    <TableCell header className="w-[140px]">Added</TableCell>
-                    <TableCell header className="w-[80px]">Actions</TableCell>
+                    <TableCell header className="w-[60px]">CH</TableCell>
+                    <TableCell header className="w-[110px]">Power</TableCell>
+                    {top1000Cols?.troopsPower !== undefined && (
+                      <TableCell header className="w-[110px]">Troop Power</TableCell>
+                    )}
+                    {top1000Cols?.kp !== undefined && (
+                      <TableCell header className="w-[110px]">Kill Points</TableCell>
+                    )}
+                    {top1000Cols?.dead !== undefined && (
+                      <TableCell header className="w-[100px]">Deads</TableCell>
+                    )}
+                    <TableCell header className="w-[110px]">Added</TableCell>
+                    <TableCell header className="w-[70px]">Actions</TableCell>
                   </tr>
                 </TableHeader>
                 <tbody>
@@ -1957,6 +1966,15 @@ const requestSort = (key: SortKey) => {
                           ) : '-'}
                         </TableCell>
                         <TableCell>{row?.power !== undefined ? formatNumber(row.power) : '-'}</TableCell>
+                        {top1000Cols?.troopsPower !== undefined && (
+                          <TableCell>{row?.troopsPower !== undefined ? formatNumber(row.troopsPower) : '-'}</TableCell>
+                        )}
+                        {top1000Cols?.kp !== undefined && (
+                          <TableCell>{row?.kp !== undefined ? formatNumber(row.kp) : '-'}</TableCell>
+                        )}
+                        {top1000Cols?.dead !== undefined && (
+                          <TableCell>{row?.dead !== undefined ? formatNumber(row.dead) : '-'}</TableCell>
+                        )}
                         <TableCell className="text-xs text-slate-400">
                           {entry.addedAt ? new Date(entry.addedAt).toLocaleDateString() : '-'}
                         </TableCell>
