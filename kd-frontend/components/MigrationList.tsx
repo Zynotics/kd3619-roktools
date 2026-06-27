@@ -311,7 +311,9 @@ const MigrationList: React.FC<MigrationListProps> = ({ kingdomSlug, watchlistedI
   const [top1000Error, setTop1000Error] = useState<string | null>(null);
   const [top1000Search, setTop1000Search] = useState('');
   const [top1000ChFilter, setTop1000ChFilter] = useState<'all' | 'below25' | 'at25'>('all');
-  const [top1000AllianceFilter, setTop1000AllianceFilter] = useState<string>('all');
+  const [top1000AllianceSelection, setTop1000AllianceSelection] = useState<Set<string>>(new Set());
+  const [top1000AllianceMenuOpen, setTop1000AllianceMenuOpen] = useState(false);
+  const top1000AllianceMenuRef = useRef<HTMLDivElement | null>(null);
   const [top1000Sort, setTop1000Sort] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [ch25List, setCh25List] = useState<Ch25WatchlistEntry[]>([]);
   const [ch25Busy, setCh25Busy] = useState<Set<string>>(new Set());
@@ -1038,7 +1040,7 @@ const requestSort = (key: SortKey) => {
         if (top1000ChFilter === 'below25' && !(row.ch < 25)) return false;
         if (top1000ChFilter === 'at25' && row.ch !== 25) return false;
       }
-      if (top1000AllianceFilter !== 'all' && (row.alliance || '') !== top1000AllianceFilter) {
+      if (top1000AllianceSelection.size > 0 && !top1000AllianceSelection.has(row.alliance || '')) {
         return false;
       }
       if (q) {
@@ -1050,7 +1052,28 @@ const requestSort = (key: SortKey) => {
       }
       return true;
     });
-  }, [top1000Rows, top1000Search, top1000ChFilter, top1000AllianceFilter]);
+  }, [top1000Rows, top1000Search, top1000ChFilter, top1000AllianceSelection]);
+
+  // Close alliance popover when clicking outside.
+  useEffect(() => {
+    if (!top1000AllianceMenuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (top1000AllianceMenuRef.current && !top1000AllianceMenuRef.current.contains(e.target as Node)) {
+        setTop1000AllianceMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [top1000AllianceMenuOpen]);
+
+  const toggleTop1000Alliance = (alliance: string) => {
+    setTop1000AllianceSelection(prev => {
+      const next = new Set(prev);
+      if (next.has(alliance)) next.delete(alliance);
+      else next.add(alliance);
+      return next;
+    });
+  };
 
   const sortedTop1000 = useMemo(() => {
     if (!top1000Sort) return filteredTop1000;
@@ -1152,6 +1175,18 @@ const requestSort = (key: SortKey) => {
     top1000Rows.forEach(row => map.set(row.id, row));
     return map;
   }, [top1000Rows]);
+
+  // <CH25 watchlist always sorted by troop power desc (players not in the
+  // current upload sink to the bottom).
+  const sortedCh25List = useMemo(() => {
+    return [...ch25List].sort((a, b) => {
+      const ta = top1000ById.get(a.playerId)?.troopsPower;
+      const tb = top1000ById.get(b.playerId)?.troopsPower;
+      const va = ta === undefined ? -1 : ta;
+      const vb = tb === undefined ? -1 : tb;
+      return vb - va;
+    });
+  }, [ch25List, top1000ById]);
 
   const handleExportXlsx = () => {
     if (sortedPlayers.length === 0) return;
@@ -1951,7 +1986,7 @@ const requestSort = (key: SortKey) => {
                   </tr>
                 </TableHeader>
                 <tbody>
-                  {ch25List.map((entry, idx) => {
+                  {sortedCh25List.map((entry, idx) => {
                     const row = top1000ById.get(entry.playerId);
                     return (
                       <TableRow key={entry.playerId} className={idx % 2 === 0 ? 'bg-slate-900/70' : 'bg-slate-800/40'}>
@@ -2035,20 +2070,66 @@ const requestSort = (key: SortKey) => {
                     ))}
                   </div>
                 </div>
-                <div className="flex flex-col">
-                  <label className="text-xs text-slate-400">Alliance</label>
-                  <select
-                    value={top1000AllianceFilter}
-                    onChange={(e) => setTop1000AllianceFilter(e.target.value)}
-                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white min-w-[120px]"
-                  >
-                    <option value="all">All</option>
-                    {top1000AllianceOptions.map(alliance => (
-                      <option key={alliance || 'none'} value={alliance}>
-                        {alliance || '(No Alliance)'}
-                      </option>
-                    ))}
-                  </select>
+                <div className="flex flex-col" ref={top1000AllianceMenuRef}>
+                  <label className="text-xs text-slate-400">Alliances</label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setTop1000AllianceMenuOpen(open => !open)}
+                      className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white min-w-[160px] flex items-center justify-between gap-2 hover:border-slate-500"
+                    >
+                      <span>
+                        {top1000AllianceSelection.size === 0
+                          ? 'All'
+                          : `${top1000AllianceSelection.size} selected`}
+                      </span>
+                      <svg viewBox="0 0 24 24" className="h-3 w-3 opacity-70" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="6 9 12 15 18 9"/>
+                      </svg>
+                    </button>
+                    {top1000AllianceMenuOpen && (
+                      <div className="absolute z-20 top-full mt-1 right-0 min-w-[200px] max-h-[280px] overflow-auto bg-slate-900 border border-slate-700 rounded shadow-lg">
+                        <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-800 sticky top-0 bg-slate-900">
+                          <button
+                            type="button"
+                            onClick={() => setTop1000AllianceSelection(new Set(top1000AllianceOptions))}
+                            className="text-[10px] text-sky-300 hover:text-sky-200 uppercase tracking-wide"
+                          >
+                            Select all
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTop1000AllianceSelection(new Set())}
+                            className="text-[10px] text-slate-400 hover:text-slate-200 uppercase tracking-wide"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        {top1000AllianceOptions.map(alliance => {
+                          const checked = top1000AllianceSelection.has(alliance);
+                          return (
+                            <label
+                              key={alliance || 'none'}
+                              className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-800 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleTop1000Alliance(alliance)}
+                                className="h-3.5 w-3.5 accent-sky-500"
+                              />
+                              <span className={alliance ? '' : 'italic text-slate-500'}>
+                                {alliance || '(No Alliance)'}
+                              </span>
+                            </label>
+                          );
+                        })}
+                        {top1000AllianceOptions.length === 0 && (
+                          <p className="text-xs text-slate-500 px-3 py-3">No alliances in upload.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <p className="text-xs text-slate-500 ml-auto">
                   Showing {sortedTop1000.length} of {top1000Rows.length}
