@@ -1244,6 +1244,54 @@ const requestSort = (key: SortKey) => {
     XLSX.writeFile(book, filename);
   };
 
+  const handleExportWatchlistXlsx = () => {
+    if (filteredWatchlistEntries.length === 0) return;
+
+    const rows = filteredWatchlistEntries.map(entry => {
+      const details = getDetailsForPlayer(entry.id);
+      const isOnMigrationList = migrationPlayerIds.has(entry.id);
+      const status: string[] = [];
+      if (entry.disappeared) status.push('Disappeared');
+      if (!entry.disappeared && (entry.powerDelta ?? 0) > 0) status.push('Power Up');
+      if (details.zeroed) status.push('Zeroed');
+      if (isOnMigrationList) status.push('On Migration List');
+
+      return {
+        'Gov ID': entry.id,
+        'Name': entry.name,
+        'Alliance': entry.alliance || '',
+        'Base Power': Math.round(entry.basePower || 0),
+        'Current Power': entry.currentPower !== null ? Math.round(entry.currentPower) : '',
+        'Δ Power': entry.powerDelta !== null ? Math.round(entry.powerDelta) : '',
+        'Troop Power': entry.currentTroopsPower !== null && entry.currentTroopsPower !== undefined
+          ? Math.round(entry.currentTroopsPower)
+          : '',
+        'Zeroed': details.zeroed ? 'Yes' : 'No',
+        'Zeroed At (UTC)': details.zeroedAt ? new Date(details.zeroedAt).toISOString() : '',
+        'Location': watchlistLocations[entry.id] || '',
+        'Status': status.join(', '),
+      };
+    });
+
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    const colKeys = Object.keys(rows[0]);
+    sheet['!cols'] = colKeys.map(key => {
+      const max = Math.max(
+        key.length,
+        ...rows.map(r => String((r as any)[key] ?? '').length)
+      );
+      return { wch: Math.min(Math.max(max + 2, 8), 40) };
+    });
+
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, 'Watchlist');
+
+    const safeSlug = (kingdomSlug || 'kingdom').replace(/[\\/:*?"<>|]/g, '_');
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const filename = `Watchlist_${safeSlug}_${dateStamp}.xlsx`;
+    XLSX.writeFile(book, filename);
+  };
+
   const handleDeleteMigrationList = async () => {
     if (!selectedEventId || isDeletingList) return;
     setIsDeletingList(true);
@@ -2303,6 +2351,20 @@ const requestSort = (key: SortKey) => {
                     }`}>{f.count}</span>
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={handleExportWatchlistXlsx}
+                  disabled={filteredWatchlistEntries.length === 0}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-600/20 text-emerald-300 border border-emerald-600/40 hover:bg-emerald-600/30 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  title={filteredWatchlistEntries.length === 0 ? 'Nothing to export' : 'Export currently visible rows as XLSX'}
+                >
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Export XLSX
+                </button>
               </div>
               </div>
             </div>
