@@ -2706,6 +2706,24 @@ const requestSort = (key: SortKey) => {
               <div>
                 <h3 className="text-base font-semibold text-orange-300 mb-1">&lt;CH25 Watchlist</h3>
                 <p className="text-xs text-slate-500">Persistent — survives Top 1000 re-uploads.</p>
+                {top1000?.uploadedAt ? (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Current values from Top 1000 upload:{' '}
+                    <span className="text-white font-medium">
+                      {new Date(top1000.uploadedAt).toLocaleString('de-DE', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit',
+                      })}
+                    </span>
+                    {top1000.filename && (
+                      <span className="text-slate-500"> · {top1000.filename}</span>
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-400 mt-1">
+                    No Top 1000 uploaded — current power, troop power and CH level cannot be shown.
+                  </p>
+                )}
               </div>
               <div className="flex flex-col sm:flex-row gap-3 sm:items-start">
                 <div className="relative w-full sm:w-64">
