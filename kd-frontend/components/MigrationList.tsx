@@ -978,7 +978,6 @@ const requestSort = (key: SortKey) => {
     if (!top1000) return null;
     const headers = top1000.headers || [];
     return {
-      rank: findColumnIndex(headers, ['rank', 'rang', 'platz', '#']),
       id: findColumnIndex(headers, ['id', 'governor id', 'gov id', 'user id']),
       name: findColumnIndex(headers, ['name', 'display name', 'spieler']),
       alliance: findColumnIndex(headers, ['alliance', 'allianz', 'tag']),
@@ -991,7 +990,6 @@ const requestSort = (key: SortKey) => {
   }, [top1000]);
 
   type Top1000Row = {
-    rank?: number;
     id: string;
     name: string;
     alliance: string;
@@ -1006,12 +1004,11 @@ const requestSort = (key: SortKey) => {
     if (!top1000 || !top1000Cols) return [];
     const cols = top1000Cols;
     return (top1000.data || [])
-      .map((row, idx): Top1000Row | null => {
+      .map((row): Top1000Row | null => {
         const id = cols.id !== undefined ? String(row[cols.id] ?? '').trim() : '';
         if (!id || id === 'undefined') return null;
         const numOrUndef = (i?: number) => (i !== undefined ? parseAnyNumber(row[i]) : undefined);
         return {
-          rank: cols.rank !== undefined ? parseAnyNumber(row[cols.rank]) || (idx + 1) : (idx + 1),
           id,
           name: cols.name !== undefined ? String(row[cols.name] ?? '') : '',
           alliance: cols.alliance !== undefined ? String(row[cols.alliance] ?? '') : '',
@@ -1063,7 +1060,6 @@ const requestSort = (key: SortKey) => {
     const getNumber = (v?: number) => (v === undefined ? -1 : v);
     return [...filteredTop1000].sort((a, b) => {
       switch (key) {
-        case 'rank': return (getNumber(a.rank) - getNumber(b.rank)) * dir;
         case 'id': return getString(a.id).localeCompare(getString(b.id), undefined, { numeric: true }) * dir;
         case 'name': return getString(a.name).localeCompare(getString(b.name)) * dir;
         case 'alliance': return getString(a.alliance).localeCompare(getString(b.alliance)) * dir;
@@ -2044,7 +2040,6 @@ const requestSort = (key: SortKey) => {
                 <Table frame={false} className="table-fixed min-w-full [&_td]:px-2 [&_td]:py-2">
                   <TableHeader>
                     <tr>
-                      <TableCell header className="w-[60px] cursor-pointer select-none" onClick={() => requestTop1000Sort('rank')}>Rank{top1000SortIndicator('rank')}</TableCell>
                       <TableCell header className="w-[100px] cursor-pointer select-none" onClick={() => requestTop1000Sort('id')}>Gov ID{top1000SortIndicator('id')}</TableCell>
                       <TableCell header className="w-[160px] whitespace-normal cursor-pointer select-none" onClick={() => requestTop1000Sort('name')}>Name{top1000SortIndicator('name')}</TableCell>
                       <TableCell header className="w-[110px] cursor-pointer select-none" onClick={() => requestTop1000Sort('alliance')}>Alliance{top1000SortIndicator('alliance')}</TableCell>
@@ -2073,7 +2068,6 @@ const requestSort = (key: SortKey) => {
                           key={row.id}
                           className={`${idx % 2 === 0 ? 'bg-slate-900/70' : 'bg-slate-800/40'} ${row.ch !== undefined && row.ch < 25 ? 'border-l-2 border-amber-400/60' : ''}`}
                         >
-                          <TableCell>{row.rank ?? '-'}</TableCell>
                           <TableCell>{row.id}</TableCell>
                           <TableCell className="whitespace-normal">{row.name}</TableCell>
                           <TableCell>{row.alliance || '-'}</TableCell>
